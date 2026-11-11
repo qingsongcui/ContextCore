@@ -10,17 +10,18 @@ const originalTitle = document.title;
 const metaOriginal = new WeakMap();
 const ldNode = document.querySelector('script[type="application/ld+json"]');
 const originalLd = ldNode ? ldNode.textContent : '';
+const isStaticEnPage = root.getAttribute('data-static-locale') === 'en';
+const docDefaultLang = isStaticEnPage || (root.getAttribute('lang') || '').toLowerCase().startsWith('en') ? 'en' : 'zh';
 
 function detectLanguage() {
   const override = new URLSearchParams(window.location.search).get('lang');
   if (override === 'zh' || override === 'en') return override;
+  if (isStaticEnPage) return 'en';
   try {
     const stored = window.localStorage.getItem(LANG_KEY);
     if (stored === 'zh' || stored === 'en') return stored;
   } catch { /* Storage is optional. */ }
-  const primary = ((navigator.languages && navigator.languages[0]) || navigator.language || '').toLowerCase();
-  if (!primary) return 'zh';
-  return primary.startsWith('zh') ? 'zh' : 'en';
+  return docDefaultLang;
 }
 let language = detectLanguage();
 
@@ -93,22 +94,44 @@ function applyMeta(lang) {
   if (ldNode) {
     try {
       const data = JSON.parse(originalLd);
-      if (lang === 'en') {
-        data['@graph'][0].inLanguage = 'en';
-        data['@graph'][0].description = metaEn.siteDescription;
-        data['@graph'][1].description = metaEn.jsonDescription;
+      if (lang === 'en' && Array.isArray(data['@graph'])) {
+        for (const node of data['@graph']) {
+          if (node['@type'] === 'WebSite') {
+            node.inLanguage = 'en';
+            node.description = metaEn.siteDescription;
+          } else if (node['@type'] === 'SoftwareApplication') {
+            node.description = metaEn.jsonDescription;
+          } else if (node['@type'] === 'FAQPage') {
+            node.inLanguage = 'en';
+          }
+        }
       }
       ldNode.textContent = JSON.stringify(data);
     } catch { /* Keep the original structured data. */ }
   }
 }
 
-function applyLanguage(lang) {
-  applyText(lang);
-  applyMeta(lang);
-  document.querySelectorAll('[data-lang]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.lang === lang)));
+function syncLanguageControls(lang) {
+  document.querySelectorAll('[data-lang]').forEach(control => {
+    const active = control.dataset.lang === lang;
+    if (control.hasAttribute('href') || control.tagName === 'A') {
+      if (active) control.setAttribute('aria-current', 'page');
+      else control.removeAttribute('aria-current');
+    }
+    if (control.hasAttribute('aria-pressed') || control.tagName === 'BUTTON') {
+      control.setAttribute('aria-pressed', String(active));
+    }
+  });
   const group = document.querySelector('.language-switch');
   if (group) group.setAttribute('aria-label', lang === 'en' ? 'Language' : '语言');
+}
+
+function applyLanguage(lang) {
+  if (!isStaticEnPage) {
+    applyText(lang);
+    applyMeta(lang);
+  }
+  syncLanguageControls(lang);
   syncNavigationLabel();
 }
 
@@ -187,5 +210,26 @@ if ('IntersectionObserver' in window) {
   nav.querySelectorAll('a').forEach(link => { const section = document.querySelector(link.hash); if (section) sectionObserver.observe(section); });
 }
 
-document.querySelectorAll('[data-lang]').forEach(button => button.addEventListener('click', () => setLanguage(button.dataset.lang)));
-applyLanguage(language);
+document.querySelectorAll('[data-lang]').forEach(control => {
+  control.addEventListener('click', event => {
+    const next = control.dataset.lang;
+    if (next !== 'zh' && next !== 'en') return;
+    if (isStaticEnPage) {
+      try { window.localStorage.setItem(LANG_KEY, next); } catch { /* Storage is optional. */ }
+      if (next === 'en') event?.preventDefault?.();
+      return;
+    }
+    if (!event?.metaKey && !event?.ctrlKey && !event?.shiftKey && !event?.altKey) {
+      event?.preventDefault?.();
+      setLanguage(next);
+    }
+  });
+});
+if (isStaticEnPage && language === 'zh') {
+  const zhControl = document.querySelector('[data-lang="zh"]');
+  const targetHref = zhControl && zhControl.getAttribute('href');
+  if (targetHref && window.location && typeof window.location.replace === 'function') {
+    window.location.replace(targetHref);
+  }
+}
+applyLanguage(isStaticEnPage ? 'en' : language);

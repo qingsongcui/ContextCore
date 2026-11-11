@@ -1,8 +1,8 @@
-# ContextCore · Senrelay / 续境
+# Senrelay · 续境 (ContextCore)
 
 macOS 原生桌面 App、浏览器工作台与本机常驻服务，让多个 AI 编程助手围绕同一项目沉淀带来源记忆、一句话跨助手接力对话，并在一处统管模型服务商、MCP、Skills 与使用规则。
 
-[English](README.md) · [中文](README.zh-CN.md) · [产品官网](https://senrelay.com/) · [使用指南](https://senrelay.com/guide.html) · [下载最新版 (macOS)](https://github.com/qingsongcui/ContextCore/releases/latest)
+[English](README.md) · [中文](README.zh-CN.md) · [产品官网](https://senrelay.com/) · [使用指南](https://senrelay.com/guide.html) · [下载公开测试版 (`v1.0.0-beta.1`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1)
 
 ## 产品与核心范围
 
@@ -18,10 +18,21 @@ macOS 原生桌面 App、浏览器工作台与本机常驻服务，让多个 AI 
 
 ## 桌面 App 与当前分发状态
 
-原生 macOS App 内置独立 Python 运行环境、后端服务与前端工作台资源，构建与校验流程见 [桌面指南](app/macos/README.md)。当前公开候选包面向 **macOS 14.0+ Apple Silicon（`arm64`）**，采用 ad-hoc 签名（`Senrelay-macOS.zip` 仅含 `Senrelay.app` 本体）。首次启动只需两步：
+原生 macOS App 内置独立 Python 运行环境、后端服务与前端工作台资源，构建与校验流程见 [桌面指南](app/macos/README.md)。当前公开测试包（`v1.0.0-beta.1`）面向 **macOS 14.0+ Apple Silicon（`arm64`）**，采用 ad-hoc 签名（`Senrelay-macOS.zip` 仅含 `Senrelay.app` 本体）。
 
-1. 将 `Senrelay.app` 移入 `/Applications`；
+### Homebrew Tap 一键安装（macOS 14.0+ `arm64`）
+
+```bash
+brew install --cask qingsongcui/tap/senrelay
+xattr -cr /Applications/Senrelay.app
+```
+
+### 手动下载 ZIP 安装
+
+1. 从 [`v1.0.0-beta.1` 发布页](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1) 下载并解压 `Senrelay-macOS.zip`，将 `Senrelay.app` 移入 `/Applications`；
 2. 在终端执行 `xattr -cr /Applications/Senrelay.app`（或在「系统设置 → 隐私与安全性 → 仍要打开」中放行；源码检出目录亦提供 `app/macos/install-macos.sh`）。
+
+> **包名防误装提示**：本机 `contextcore` CLI 随 `Senrelay.app` 及本开源仓库（`qingsongcui/ContextCore`）内置分发。**请勿执行 `pip install contextcore`**——PyPI 上的同名 `contextcore` 包属于无关第三方项目。
 
 Developer ID 签名与 Apple 公证、全新 Mac 物理设备验收及跨版本升级验收仍作为公开前置条件保留说明，详见 [发布就绪清单](docs/release-readiness.md)。
 

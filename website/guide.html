@@ -6,9 +6,19 @@
   <meta name="theme-color" content="#121412">
   <meta name="robots" content="noindex, nofollow">
   <title>Senrelay · 续境 — 本地运行与使用指南</title>
-  <meta name="description" content="Senrelay（续境）本地服务与桌面工作台指南：多宿主配置管理与同步、伴生带来源记忆采集（附 💡 回执）与跨 Agent 对话接力。">
+  <meta name="description" content="Senrelay（续境）本地服务与桌面工作台指南：Homebrew 与安装包部署、多宿主配置管理与同步、伴生带来源记忆采集（附 💡 回执）与跨 Agent 对话接力。">
+  <meta property="og:type" content="article">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:site_name" content="Senrelay · 续境">
+  <meta property="og:title" content="Senrelay · 续境 — 本地运行与使用指南">
+  <meta property="og:description" content="Senrelay（续境）本地服务与桌面工作台指南：Homebrew 与安装包部署、多宿主配置管理与同步、伴生带来源记忆采集（附 💡 回执）与跨 Agent 对话接力。">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Senrelay · 续境 — 本地运行与使用指南">
+  <meta name="twitter:description" content="macOS 14.0+（Apple Silicon）本地安装、首次启动 xattr 指引、源码运行与跨 Agent 接力实战指南。">
   <!-- deployment-metadata -->
-  <link rel="icon" href="./assets/senrelay-logo-original-v1.png" type="image/png">
+  <link rel="icon" href="./favicon.ico" sizes="48x48">
+  <link rel="icon" href="./assets/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" sizes="180x180">
   <link rel="stylesheet" href="./assets/site.css">
   <style>
     .guide-page p code, .guide-page li code {
@@ -186,9 +196,9 @@
 <body>
 <a class="skip" href="#main" data-zh="跳到主要内容" data-en="Skip to main content">跳到主要内容</a>
 <header class="site-header"><div class="header wrap">
-<a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-zh="Senrelay 续境首页" data-aria-en="Senrelay home"><img class="brand-symbol" src="./assets/senrelay-logo-original-v1.png" alt="" aria-hidden="true">Senrelay<span class="brand-cn" data-zh="· 续境" data-en="">· 续境</span></a>
+<a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-zh="Senrelay 续境首页" data-aria-en="Senrelay home"><img class="brand-symbol" src="./assets/senrelay-logo-display-v1.png" width="28" height="35" decoding="async" alt="" aria-hidden="true">Senrelay<span class="brand-cn" data-zh="· 续境" data-en="">· 续境</span></a>
 <nav aria-label="页面导航" data-aria-zh="页面导航" data-aria-en="Page navigation"><a href="./" data-zh="← 返回首页" data-en="← Back to Home">← 返回首页</a></nav>
-<div class="header-tools"><div class="language-switch" role="group" aria-label="语言"><button type="button" data-lang="zh" aria-pressed="true" lang="zh-CN">中</button><button type="button" data-lang="en" aria-pressed="false" lang="en">EN</button></div><a class="header-github" href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span><span class="sr-only" data-zh="（新窗口）" data-en="(opens in a new window)">（新窗口）</span></a></div>
+<div class="header-tools"><div class="language-switch" role="group" aria-label="语言" data-aria-zh="语言" data-aria-en="Language"><a href="./guide.html" data-lang="zh" aria-current="page" lang="zh-CN">中</a><a href="./en/guide.html" data-lang="en" lang="en">EN</a></div><a class="header-github" href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span><span class="sr-only" data-zh="（新窗口）" data-en="(opens in a new window)">（新窗口）</span></a></div>
 </div></header>
 
 <main id="main" class="wrap guide-page">
@@ -208,12 +218,15 @@
 
     <section class="guide-section">
       <h2>1. 下载包与运行环境 <span class="badge">Download &amp; Requirements</span></h2>
-      <p>公开版本以 <a href="https://github.com/qingsongcui/ContextCore/releases">GitHub Releases</a> 中实际发布的附件为准。<code>Senrelay-macOS.zip</code> 面向 Apple Silicon（arm64）、macOS 14.0 及以上，仅打包 <code>Senrelay.app</code> 本体，内含独立 Python 后台与前端工作台资源，无需单独安装 Python 或 Node（各 AI 宿主自身的运行环境仍需具备）。</p>
-      <p>安装包当前采用 ad-hoc 签名，暂未执行 Apple 公证。下载核对 <code>SHA256SUMS</code> 并解压后，按以下<strong>两步首次启动指引</strong>打开（无需全局关闭 Gatekeeper）：</p>
+      <p>可通过 Homebrew Cask 一键安装，或前往 <a href="https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1">GitHub Releases（<code>v1.0.0-beta.1</code>）</a> 下载发布附件。<code>Senrelay-macOS.zip</code> 面向 Apple Silicon（<code>arm64</code>）、macOS 14.0 及以上，免费开源（MIT 协议），仅打包 <code>Senrelay.app</code> 本体，内含独立 Python 后台与前端工作台资源，无需单独安装 Python 或 Node（各 AI 宿主自身的运行环境仍需具备）。</p>
+      <pre class="code-block"><code><span class="code-comment"># 推荐方式：通过 Homebrew Cask 安装桌面应用</span>
+brew install --cask qingsongcui/tap/senrelay</code></pre>
+      <p>安装包当前采用 ad-hoc 签名，暂未执行 Apple 公证。手动下载核对 <code>SHA256SUMS</code> 并解压后，按以下<strong>两步首次启动指引</strong>打开（无需全局关闭 Gatekeeper）：</p>
       <ol>
         <li>将 <code>Senrelay.app</code> 移入 <code>/Applications</code>；</li>
         <li>在终端执行 <code>xattr -cr /Applications/Senrelay.app</code> 清理隔离属性（或在「系统设置 → 隐私与安全性 → 仍要打开」中放行；源码仓库亦提供 <code>app/macos/install-macos.sh</code> 供终端执行）。</li>
       </ol>
+      <p><strong>包名甄别提示</strong>：请<strong>切勿</strong>执行 <code>pip install contextcore</code>——PyPI 上的同名包为无关第三方项目；源码开发请仅在克隆本仓库后执行下方 <code>pip install -e 'app/backend[test]'</code>。</p>
       <p>数据默认保存在 <code>~/Library/Application Support/ContextCore</code>。关闭窗口（如 <code>Cmd+W</code>）不会停止后台常驻服务；需要停服务时请在设置页或 CLI 执行明确停止操作。支持通过 <code>contextcore backup</code> 生成整库 SQLite 在线备份；卸载 App 不会删除项目历史与记忆。</p>
       <h3>从源码开发</h3>
       <p>在启动本机源码服务前，请确认本地 macOS 环境满足以下依赖版本：</p>
@@ -299,12 +312,15 @@ npm --prefix app/frontend run dev:isolated</code></pre>
 
     <section class="guide-section">
       <h2>1. Download &amp; Requirements <span class="badge">macOS 14.0+ · arm64</span></h2>
-      <p>Published downloads are attached to <a href="https://github.com/qingsongcui/ContextCore/releases">GitHub Releases</a>. <code>Senrelay-macOS.zip</code> targets Apple Silicon (<code>arm64</code>) on macOS 14.0 or later and contains <code>Senrelay.app</code> with a self-contained Python backend and built web workbench—no separate Python or Node installation is required to run the app (each AI assistant still uses its own host installation).</p>
-      <p>Verify <code>SHA256SUMS</code> before extracting. Because current Beta builds are ad-hoc signed and not Apple notarized, follow these <strong>two steps for first launch on macOS 14.0+</strong> (never disable Gatekeeper globally):</p>
+      <p>Install via Homebrew Cask or download published artifacts from <a href="https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1">GitHub Releases (<code>v1.0.0-beta.1</code>)</a>. <code>Senrelay-macOS.zip</code> is free and MIT-licensed, targets Apple Silicon (<code>arm64</code>) on macOS 14.0 or later, and bundles <code>Senrelay.app</code> with a self-contained Python backend and built web workbench—no separate Python or Node installation is required to run the app (each AI assistant still uses its own host installation).</p>
+      <pre class="code-block"><code><span class="code-comment"># Recommended: install via Homebrew Cask</span>
+brew install --cask qingsongcui/tap/senrelay</code></pre>
+      <p>Verify <code>SHA256SUMS</code> before extracting manual archives. Because current Beta builds are ad-hoc signed and not Apple notarized, follow these <strong>two steps for first launch on macOS 14.0+</strong> (never disable Gatekeeper globally):</p>
       <ol>
         <li>Move <code>Senrelay.app</code> to <code>/Applications</code>;</li>
         <li>Run <code>xattr -cr /Applications/Senrelay.app</code> in Terminal to clear quarantine attributes (or allow it in <strong>System Settings → Privacy &amp; Security → Open Anyway</strong>; source checkouts also include <code>app/macos/install-macos.sh</code>).</li>
       </ol>
+      <p><strong>Package Disambiguation Note</strong>: Do <strong>not</strong> run <code>pip install contextcore</code>—the PyPI package with that name is an unrelated third-party project. For source mode, always clone this repository and run <code>pip install -e 'app/backend[test]'</code> below.</p>
       <p>User data lives in <code>~/Library/Application Support/ContextCore</code>. Closing the window (<code>Cmd+W</code>) keeps the background service running; stop it explicitly from Settings or <code>contextcore stop</code> when needed. Whole-database SQLite online backups are supported via <code>contextcore backup</code>, and removing the app bundle does not erase your saved projects, memories, or Keychain items.</p>
       <h3>Source Development Prerequisites</h3>
       <ul>
@@ -379,7 +395,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
 </main>
 
 <footer class="footer wrap">
-<a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-zh="Senrelay 续境首页" data-aria-en="Senrelay home"><img class="brand-symbol" src="./assets/senrelay-logo-original-v1.png" alt="" aria-hidden="true">Senrelay<span class="brand-cn" data-zh="· 续境" data-en="">· 续境</span></a>
+<a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-zh="Senrelay 续境首页" data-aria-en="Senrelay home"><img class="brand-symbol" src="./assets/senrelay-logo-display-v1.png" width="26" height="33" loading="lazy" decoding="async" alt="" aria-hidden="true">Senrelay<span class="brand-cn" data-zh="· 续境" data-en="">· 续境</span></a>
 <p>New agent. Same thread.</p>
 <div>
   <a href="./" data-zh="首页" data-en="Home">首页</a>
@@ -391,46 +407,62 @@ npm --prefix app/frontend run dev:isolated</code></pre>
 <script type="module">
   const LANG_KEY = 'senrelay.website.language';
   const root = document.documentElement;
+  const docDefaultLang = (root.getAttribute('lang') || '').toLowerCase().startsWith('en') ? 'en' : 'zh';
+  const hasBothSections = Boolean(document.querySelector('[data-guide-section="zh"]') && document.querySelector('[data-guide-section="en"]'));
   const zhTitle = document.title;
   const brandPrefix = zhTitle.split('—')[0].trim().replace(/\s*·\s*.*$/, '') || 'Senrelay';
   const enTitle = `${brandPrefix} — Local Setup & Workflow Guide`;
   const metaDesc = document.querySelector('meta[name="description"]');
   const zhDesc = metaDesc ? metaDesc.getAttribute('content') : '';
-  const enDesc = `${brandPrefix} local macOS service and workbench guide: multi-host configuration management, companion source-linked auto-memory, and cross-agent conversation relay.`;
+  const enDesc = `${brandPrefix} local macOS service and workbench guide: Homebrew Cask and release setup, multi-host configuration management, companion source-linked auto-memory, and cross-agent conversation relay.`;
 
   function detectLanguage() {
     const override = new URLSearchParams(window.location.search).get('lang');
     if (override === 'zh' || override === 'en') return override;
+    if (!hasBothSections) return docDefaultLang;
     try {
       const stored = window.localStorage.getItem(LANG_KEY);
       if (stored === 'zh' || stored === 'en') return stored;
     } catch { /* Storage is optional. */ }
-    const primary = ((navigator.languages && navigator.languages[0]) || navigator.language || '').toLowerCase();
-    if (!primary) return 'zh';
-    return primary.startsWith('zh') ? 'zh' : 'en';
+    return docDefaultLang;
   }
 
   let language = detectLanguage();
 
-  function applyGuideLanguage(lang) {
-    root.lang = lang === 'en' ? 'en' : 'zh-CN';
-    root.dataset.guideLang = lang;
-    document.title = lang === 'en' ? enTitle : zhTitle;
-    if (metaDesc) metaDesc.setAttribute('content', lang === 'en' ? enDesc : zhDesc);
-    document.querySelectorAll('[data-guide-section]').forEach(section => {
-      section.hidden = section.dataset.guideSection !== lang;
-    });
-    document.querySelectorAll('[data-zh][data-en]').forEach(el => {
-      el.textContent = lang === 'en' ? el.dataset.en : el.dataset.zh;
-    });
-    document.querySelectorAll('[data-aria-zh][data-aria-en]').forEach(el => {
-      el.setAttribute('aria-label', lang === 'en' ? el.dataset.ariaEn : el.dataset.ariaZh);
-    });
-    document.querySelectorAll('[data-lang]').forEach(btn => {
-      btn.setAttribute('aria-pressed', String(btn.dataset.lang === lang));
+  function syncGuideControls(lang) {
+    document.querySelectorAll('[data-lang]').forEach(ctrl => {
+      const active = ctrl.dataset.lang === lang;
+      if (ctrl.hasAttribute('href') || ctrl.tagName === 'A') {
+        if (active) ctrl.setAttribute('aria-current', 'page');
+        else ctrl.removeAttribute('aria-current');
+      }
+      if (ctrl.hasAttribute('aria-pressed') || ctrl.tagName === 'BUTTON') {
+        ctrl.setAttribute('aria-pressed', String(active));
+      }
     });
     const group = document.querySelector('.language-switch');
     if (group) group.setAttribute('aria-label', lang === 'en' ? 'Language' : '语言');
+  }
+
+  function applyGuideLanguage(lang) {
+    if (hasBothSections) {
+      root.lang = lang === 'en' ? 'en' : 'zh-CN';
+      root.dataset.guideLang = lang;
+      document.title = lang === 'en' ? enTitle : zhTitle;
+      if (metaDesc) metaDesc.setAttribute('content', lang === 'en' ? enDesc : zhDesc);
+      document.querySelectorAll('[data-guide-section]').forEach(section => {
+        section.hidden = section.dataset.guideSection !== lang;
+      });
+      document.querySelectorAll('[data-zh][data-en]').forEach(el => {
+        el.textContent = lang === 'en' ? el.dataset.en : el.dataset.zh;
+      });
+      document.querySelectorAll('[data-aria-zh][data-aria-en]').forEach(el => {
+        el.setAttribute('aria-label', lang === 'en' ? el.dataset.ariaEn : el.dataset.ariaZh);
+      });
+    } else {
+      root.dataset.guideLang = docDefaultLang;
+    }
+    syncGuideControls(hasBothSections ? lang : docDefaultLang);
   }
 
   function setGuideLanguage(next) {
@@ -448,8 +480,25 @@ npm --prefix app/frontend run dev:isolated</code></pre>
   }
 
   root.classList.add('has-js');
-  document.querySelectorAll('[data-lang]').forEach(btn => {
-    btn.addEventListener('click', () => setGuideLanguage(btn.dataset.lang));
+  if (!hasBothSections && language !== docDefaultLang) {
+    const targetCtrl = document.querySelector(`[data-lang="${language}"]`);
+    const targetHref = targetCtrl && targetCtrl.getAttribute('href');
+    if (targetHref) window.location.replace(targetHref);
+  }
+  document.querySelectorAll('[data-lang]').forEach(ctrl => {
+    ctrl.addEventListener('click', event => {
+      const next = ctrl.dataset.lang;
+      if (next !== 'zh' && next !== 'en') return;
+      try { window.localStorage.setItem(LANG_KEY, next); } catch { /* Storage is optional. */ }
+      if (!hasBothSections) {
+        if (next === docDefaultLang) event.preventDefault();
+        return;
+      }
+      if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        setGuideLanguage(next);
+      }
+    });
   });
   applyGuideLanguage(language);
 </script>

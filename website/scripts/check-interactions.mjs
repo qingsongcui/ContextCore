@@ -8,7 +8,7 @@ import { attrEn, htmlEn, metaEn, textEn } from '../assets/i18n.js';
 // layout, native disclosure keyboard behavior, and visual motion belong to QA.
 const source = (await readFile(new URL('../assets/site.js', import.meta.url), 'utf8')).replace(/^import .*;\n/gm, '');
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-function fixture({ search = '?lang=zh', stored = null, blockedStorage = false } = {}) {
+function fixture({ search = '?lang=zh', stored = null, blockedStorage = false, htmlLang = 'zh-CN', staticLocale = null } = {}) {
   let focused = null;
   const storage = new Map(stored ? [['senrelay.website.language', stored]] : []);
   function element(attrs = {}) {
@@ -27,10 +27,12 @@ function fixture({ search = '?lang=zh', stored = null, blockedStorage = false } 
       focus() { focused = this; },
     };
   }
-  const root = element();
+  const rootAttrs = { lang: htmlLang };
+  if (staticLocale) rootAttrs['data-static-locale'] = staticLocale;
+  const root = element(rootAttrs);
   const toggle = element({ 'aria-expanded': 'false', 'aria-label': '展开导航' });
   const nav = element(), group = element({ 'aria-label': '语言' });
-  const zh = element({ 'aria-pressed': 'true' }), en = element({ 'aria-pressed': 'false' });
+  const zh = element({ href: './', 'aria-current': 'page' }), en = element({ href: './en/' });
   zh.dataset.lang = 'zh'; en.dataset.lang = 'en';
   const target = element(), link = element();
   link.hash = '#assistants'; link.closest = selector => selector === 'a' ? link : null;
@@ -108,7 +110,8 @@ test('language switching changes rendered content and both metadata descriptions
   const englishLd = JSON.parse(f.ld.textContent)['@graph'];
   assert.equal(englishLd[0].description, metaEn.siteDescription);
   assert.equal(englishLd[1].description, metaEn.jsonDescription);
-  assert.equal(f.en.getAttribute('aria-pressed'), 'true');
+  assert.equal(f.en.getAttribute('aria-current'), 'page');
+  assert.equal(f.zh.getAttribute('aria-current'), null);
   assert.equal(f.storage.get('senrelay.website.language'), 'en');
   assert.equal(new URL(f.href).searchParams.has('lang'), false);
   f.zh.dispatch('click');
@@ -155,8 +158,13 @@ test('URL language wins over storage; denied storage, open disclosures, and visi
   f.document.hidden = false;
   f.document.dispatch('visibilitychange');
   assert.equal(f.root.dataset.pageVisible, 'true');
-  const denied = fixture({ search: '', blockedStorage: true });
+  const denied = fixture({ search: '', blockedStorage: true, htmlLang: 'zh-CN' });
+  assert.equal(denied.root.lang, 'zh-CN');
+  denied.en.dispatch('click');
   assert.equal(denied.root.lang, 'en');
   denied.zh.dispatch('click');
   assert.equal(denied.root.lang, 'zh-CN');
+  const staticEn = fixture({ search: '', stored: 'zh', htmlLang: 'en', staticLocale: 'en' });
+  assert.equal(staticEn.en.getAttribute('aria-current'), 'page');
+  assert.equal(staticEn.zh.getAttribute('aria-current'), null);
 });

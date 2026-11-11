@@ -2,9 +2,11 @@
 
 All notable changes to ContextCore will be documented in this file.
 
-## Unreleased
+## [Unreleased]
 
-### 1.0.0 Public Beta candidate
+## [1.0.0-beta.1] - 2026-11-11
+
+### Public Beta (`v1.0.0-beta.1` · macOS 14.0+ `arm64`)
 
 - Unified in-chat `/contextcore` cross-host conversation relay inside the Agent (selection-only loads context and summarizes with `must_not_execute=true`; attaching a task continues immediately) and streamlined the workbench around three primary navigation entries (`projects`, `agents`, `usage`, plus conditional `conflicts`) with global project search and Settings-embedded change log & semantic indexing controls.
 - Added whole-database SQLite online backup via `contextcore backup` and `POST /api/settings/backup` (`0600` permissions under `<data_dir>/backups/`).
@@ -86,3 +88,6 @@ These historical entries are not cumulative current behavior. The public specifi
   - Tauri v2 shell with backend sidecar.
   - Streamable HTTP MCP and stdio MCP entrypoints.
   - Approval inbox, audit log, backup/restore, permissions, Skills, and optional semantic search.
+
+[Unreleased]: https://github.com/qingsongcui/ContextCore/compare/v1.0.0-beta.1...HEAD
+[1.0.0-beta.1]: https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1

@@ -38,5 +38,5 @@ Bundled host evidence records a reference testbed, not security or compatibility
 To report potential security vulnerabilities or boundary violations:
 
 1. Use the ordinary bug template for non-security product issues. For a potential vulnerability, do not post exploit details, credentials, private chats, databases, or account exports in a public issue.
-2. Use GitHub Private Vulnerability Reporting only if the repository visibly offers it. Otherwise ask a maintainer for a private reporting channel using a non-sensitive description; wait for that channel before sharing sensitive findings. This repository does not currently document a verified private contact address. Do not assume Security Advisories or private reporting are enabled.
+2. Submit sensitive findings privately via [GitHub Private Vulnerability Reporting](https://github.com/qingsongcui/ContextCore/security/advisories/new), which is enabled on this repository. If GitHub advisories are temporarily unreachable, contact the maintainer first with a non-sensitive summary before sharing reproduction details.
 3. Include the affected version, macOS version, interface (Web UI, CLI, or MCP), minimal synthetic reproduction steps, expected behavior, and observed boundary failure.

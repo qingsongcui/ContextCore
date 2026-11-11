@@ -1,8 +1,8 @@
-# ContextCore · Senrelay / 续境
+# Senrelay · 续境 (ContextCore)
 
 A native macOS app, browser workbench, and local background service that lets multiple AI coding assistants accumulate source-linked project memories, relay conversations across agents in a single command, and manage providers, MCP tools, Skills, and instructions in one place.
 
-[English](README.md) · [中文](README.zh-CN.md) · [Official Website](https://senrelay.com/) · [Setup Guide](https://senrelay.com/guide.html) · [Latest Release (macOS)](https://github.com/qingsongcui/ContextCore/releases/latest)
+[English](README.md) · [中文](README.zh-CN.md) · [Official Website](https://senrelay.com/en/) · [Setup Guide](https://senrelay.com/en/guide.html) · [Public Beta Release (`v1.0.0-beta.1`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1)
 
 ## Product and scope
 
@@ -18,10 +18,21 @@ The active product lives in `app/`. The [public specification](docs/SPECIFICATIO
 
 ## Desktop app and current distribution
 
-The native macOS bundle ships a self-contained Python runtime, backend service, and frontend workbench; see [desktop build and verification](app/macos/README.md). Current public Beta candidates target **Apple Silicon (`arm64`) on macOS 14.0+** and use ad-hoc signing (`Senrelay-macOS.zip` contains `Senrelay.app` only). First launch takes two steps:
+The native macOS bundle ships a self-contained Python runtime, backend service, and frontend workbench; see [desktop build and verification](app/macos/README.md). Current public Beta candidates (`v1.0.0-beta.1`) target **Apple Silicon (`arm64`) on macOS 14.0+** and use ad-hoc signing (`Senrelay-macOS.zip` contains `Senrelay.app` only).
 
-1. Move `Senrelay.app` to `/Applications`;
+### Quick install via Homebrew Tap (macOS 14.0+ `arm64`)
+
+```bash
+brew install --cask qingsongcui/tap/senrelay
+xattr -cr /Applications/Senrelay.app
+```
+
+### Manual ZIP install
+
+1. Download `Senrelay-macOS.zip` from [`v1.0.0-beta.1`](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1), extract it, and move `Senrelay.app` to `/Applications`;
 2. Run `xattr -cr /Applications/Senrelay.app` in Terminal (or allow it under **System Settings → Privacy & Security → Open Anyway**; source checkouts also include `app/macos/install-macos.sh`).
+
+> **Package naming note**: The `contextcore` CLI ships inside `Senrelay.app` and this source repository (`qingsongcui/ContextCore`). Do **not** run `pip install contextcore` — the `contextcore` package on PyPI is an unrelated third-party project.
 
 Developer ID signing, Apple notarization, clean-Mac physical Gatekeeper acceptance, and live upgrade acceptance remain open boundaries documented in [release readiness](docs/release-readiness.md).
 

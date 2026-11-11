@@ -24,6 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -33,8 +34,11 @@ jobs:
       - name: Build deployment distribution for https://senrelay.com/
         env:
           SITE_URL: https://senrelay.com/
+          INDEXNOW_KEY: ${{ vars.INDEXNOW_KEY }}
         run: npm run build
-      - name: Verify production SEO metadata, canonical tags, JSON-LD, CNAME, sitemap and llms.txt
+      - name: Verify production SEO metadata, canonical tags, hreflang, JSON-LD, CNAME, sitemap and llms.txt
+        env:
+          INDEXNOW_KEY: ${{ vars.INDEXNOW_KEY }}
         run: |
           npm run check
           npm run check:brand
@@ -42,10 +46,15 @@ jobs:
           npm run check:i18n
           npm run check:sphere
           test -f dist/CNAME
+          test -f dist/favicon.ico
+          test -f dist/404.html
+          test -f dist/en/index.html
+          test -f dist/en/guide.html
           test -f dist/sitemap.xml
           test -f dist/robots.txt
           test -f dist/llms.txt
           test -f dist/llms-full.txt
+          if [ -n "${INDEXNOW_KEY:-}" ]; then test -f "dist/${INDEXNOW_KEY}.txt"; fi
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -62,3 +71,25 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Submit updated URLs to IndexNow
+        if: ${{ vars.INDEXNOW_KEY != '' }}
+        env:
+          INDEXNOW_KEY: ${{ vars.INDEXNOW_KEY }}
+        run: |
+          jq -n \
+            --arg key "$INDEXNOW_KEY" \
+            '{
+              host: "senrelay.com",
+              key: $key,
+              keyLocation: ("https://senrelay.com/" + $key + ".txt"),
+              urlList: [
+                "https://senrelay.com/",
+                "https://senrelay.com/en/",
+                "https://senrelay.com/guide.html",
+                "https://senrelay.com/en/guide.html",
+                "https://senrelay.com/llms.txt",
+                "https://senrelay.com/llms-full.txt"
+              ]
+            }' | curl -fsS -X POST "https://api.indexnow.org/indexnow" \
+              -H "Content-Type: application/json; charset=utf-8" \
+              -d @- || echo "::warning::IndexNow submission returned non-2xx; GitHub Pages deployment succeeded."

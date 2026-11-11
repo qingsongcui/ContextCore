@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you reference Senrelay · 续境 (ContextCore) in technical articles, benchmarks, or documentation, please cite it using the metadata below."
+type: software
+title: "Senrelay · 续境 (ContextCore): Local-First macOS Multi-Agent Conversation Relay, Source-Linked Persistent Memory, and Unified Host Workbench"
+abstract: "An MIT-licensed native macOS app, browser workbench, and loopback service enabling cross-Agent conversation relay (/contextcore), turn-cited persistent project memory, and snapshot-guarded multi-host MCP, Skills, and provider configuration across Claude Code, Codex, Cursor, Antigravity, Oh My Pi (OMP), and OpenCode."
+authors:
+  - alias: "qingsongcui"
+    name: "George O'Nair"
+repository-code: "https://github.com/qingsongcui/ContextCore"
+url: "https://senrelay.com/"
+license: MIT
+version: "1.0.0-beta.1"
+date-released: "2026-11-11"
+keywords:
+  - "senrelay"
+  - "contextcore"
+  - "ai-agents"
+  - "ai-coding"
+  - "model-context-protocol"
+  - "mcp"
+  - "session-handoff"
+  - "agent-memory"
+  - "local-first"
+  - "macos"
