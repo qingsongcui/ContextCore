@@ -2,7 +2,7 @@
 
 A native macOS app, browser workbench, and local background service that lets multiple AI coding assistants accumulate source-linked project memories, relay conversations across agents in a single command, and manage providers, MCP tools, Skills, and instructions in one place.
 
-[English](README.md) · [中文](README.zh-CN.md)
+[English](README.md) · [中文](README.zh-CN.md) · [Website](https://qingsongcui.github.io/ContextCore/) · [Workflow Guide](https://qingsongcui.github.io/ContextCore/guide.html) · [Latest Release (macOS)](https://github.com/qingsongcui/ContextCore/releases/latest)
 
 ## Product and scope
 
@@ -64,6 +64,17 @@ When switching tools (for example after hitting quota or context limits), contin
 - **Skills Safety**: Defaults to independent file copies (`copy`), with managed per-file version symlinks (`symlink`) available in advanced mode; installing a Skill never executes scripts, and generic directory symlinks remain rejected.
 - **Independent Permissions**: Reading chat history, modifying host configuration files, and downloading optional local semantic models are confirmed separately and never bundled.
 
+## Common scenarios (FAQ)
+
+- **How do I continue a Claude Code session in Cursor, Codex, or Antigravity without re-explaining context?**
+  Run **One-Click Connect** once for each host in `Agent Management`. When switching tools, type `/contextcore` (or `"continue"` / `"relay"` / `"接力"`) in the target Agent to list recent cross-host sessions. Reply with just a session number (e.g. `1`) to load context and review a concise status summary before acting, or reply with a number plus your next instruction to continue immediately.
+- **How does multi-host MCP, Skills, and prompt sync avoid overwriting manual config edits?**
+  Every configuration change records per-entry ownership hashes and saves an automatic rollback snapshot. If a host configuration file was edited externally, Senrelay pauses auto-apply and opens a Diff confirmation dialog rather than overwriting your manual changes.
+- **Where are chat transcripts, project memories, and API keys stored?**
+  All transcripts, FTS5 indexes, and versioned memories stay on your Mac in a local SQLite database (`0600` file permissions) served strictly over `127.0.0.1`, with online snapshot backups via `contextcore backup`. Managed provider API keys are isolated in macOS Keychain and excluded from configuration exports.
+- **How is Senrelay (ContextCore) different from standalone config switchers or cloud memory services?**
+  Standalone config switchers manage provider files without project context, while cloud memory plugins require uploading conversations to remote servers. Senrelay combines local-first cross-Agent session relay, turn-cited persistent project memory, and snapshot-guarded multi-host MCP / Skills / provider management in a single macOS runtime.
+
 ## Local development quick start
 
 Recommended **Python 3.12** (minimum 3.11 with SQLite `blobopen`) and **Node 24 LTS** (`>=24.15.0`; supported package engines `^22.22.2 || ^24.15.0 || >=26`). **Run all commands below from the repository root** using an isolated data directory:
@@ -107,7 +118,7 @@ app/backend/.venv/bin/contextcore generate-plist --data-dir "$HOME/.contextcore/
 
 Automated verification gates currently pass across:
 
-- **Backend suite (`pytest`)**: 1,484 passed;
+- **Backend suite (`pytest`)**: 1,485 passed;
 - **Frontend workbench (`typecheck`, `lint`, `vitest`, `check:i18n`)**: 188 Vitest tests passed, 1,334 Chinese/English UI strings verified with zero unwrapped Chinese;
 - **Website checks**: Preview and `SITE_URL` deployment checks, 112 index bilingual strings + bilingual `guide.html`, 3 interaction tests, and 5 sphere motion tests passed;
 - **Packaging, Native App & Security**: Installed non-editable wheel 11-resource verification (`check_release_readiness.py`), native `Senrelay.app` (`arm64`, `minos <= 14.0`) bundle/archive and bilingual WKWebView verification, 6-host isolated hook verification, and full working-tree + Git history security scans (`verify_repository_security.py`).

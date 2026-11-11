@@ -1,0 +1,64 @@
+name: Deploy Website to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages-website
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and verify production website (SEO + GEO)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Configure GitHub Pages base URL
+        id: pages
+        uses: actions/configure-pages@v5
+      - name: Build deployment distribution with canonical SITE_URL
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+        run: npm run build
+      - name: Verify production SEO metadata, canonical tags, JSON-LD, sitemap and llms.txt
+        run: |
+          npm run check
+          npm run check:brand
+          npm run check:interactions
+          npm run check:i18n
+          npm run check:sphere
+          test -f dist/sitemap.xml
+          test -f dist/robots.txt
+          test -f dist/llms.txt
+          test -f dist/llms-full.txt
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

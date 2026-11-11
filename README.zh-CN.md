@@ -2,7 +2,7 @@
 
 macOS 原生桌面 App、浏览器工作台与本机常驻服务，让多个 AI 编程助手围绕同一项目沉淀带来源记忆、一句话跨助手接力对话，并在一处统管模型服务商、MCP、Skills 与使用规则。
 
-[English](README.md) · [中文](README.zh-CN.md)
+[English](README.md) · [中文](README.zh-CN.md) · [产品官网](https://qingsongcui.github.io/ContextCore/) · [使用指南](https://qingsongcui.github.io/ContextCore/guide.html) · [下载最新版 (macOS)](https://github.com/qingsongcui/ContextCore/releases/latest)
 
 ## 产品与核心范围
 
@@ -64,6 +64,17 @@ Developer ID 签名与 Apple 公证、全新 Mac 物理设备验收及跨版本�
 - **技能安装边界**：默认采用独立文件副本（`copy`），高级选项支持受管单文件版本软链（`symlink`）；安装技能绝不自动执行其内部脚本，通用配置目录软链保持安全拦截。
 - **权限独立确认**：读取聊天历史记录、修改宿主配置文件、下载可选本地语义模型三类权限各自独立确认，绝不捆绑授权。
 
+## 常见场景问答（FAQ）
+
+- **如何在 Claude Code、Cursor、Codex、Antigravity 之间无缝接力对话，而不用反复复制粘贴背景？**
+  在 `Agent 管理` 中为各宿主执行一次「一键接入续境」后，切换到任意新助手只需输入 `/contextcore`（或说“接力” / “接着做” / `continue`），即可列出近期跨宿主会话候选。仅回复序号（如 `1`）会先加载上下文并汇报简短摘要待命，不会擅自改代码；回复序号并附带具体任务指令则直接续做。
+- **跨多个 AI 助手同步 MCP、Skills 与规则时，如何防止覆盖我手改过的本地配置？**
+  每次配置写入均记录受管条目哈希并自动留存快照备份。一旦检测到目标宿主的配置文件被外部手动修改，系统会自动拦截静默写入并弹出 Diff 差异对比框，由你确认或随时一键回滚。
+- **聊天记录、项目记忆和 API Key 存在哪里？会不会上传云端？**
+  全部会话、全文检索索引与带来源版本化记忆均以 `0600` 权限保存在本机 SQLite 数据库中，后台严格仅监听环回地址 `127.0.0.1`，并支持通过 `contextcore backup` 创建在线热备快照；API Key 独立保存在 macOS 系统钥匙串中，导出配置时默认剔除敏感凭据。
+- **续境（Senrelay / ContextCore）与单纯的模型配置切换器或云端记忆插件有什么区别？**
+  单纯的配置切换器不管项目上下文，而云端记忆插件需要将对话上传第三方服务器。续境在同一套 macOS 本机服务中打通了「跨 Agent 会话接力 + 原话可溯源的伴生项目记忆 + 带快照保护的多宿主模型 / MCP / Skills 统管」。
+
 ## 本机开发快速开始
 
 推荐 **Python 3.12**（最低 3.11，需 SQLite `blobopen` 支持）与 **Node 24 LTS**（`>=24.15.0`；支持引擎 `^22.22.2 || ^24.15.0 || >=26`）。**以下命令全部从仓库根目录执行**，使用独立数据目录调试，不会读取个人日常历史或改动正式服务：
@@ -107,7 +118,7 @@ app/backend/.venv/bin/contextcore generate-plist --data-dir "$HOME/.contextcore/
 
 当前自动化发布门禁覆盖：
 
-- **后端测试（`pytest`）**：1,484 项通过；
+- **后端测试（`pytest`）**：1,485 项通过；
 - **前端工作台（`typecheck` / `lint` / `vitest` / `check:i18n`）**：188 项组件与回归测试通过，1,334 条中英双语文案 100% 对齐且零未包裹中文；
 - **官网构建与交互校验**：预览与部署双模式静态校验、112 条首页双语字典 + 双语指南页、交互测试与球体动效测试全部通过；
 - **打包、原生桌面与安全扫描**：独立 wheel 11 项内置资源完整性校验（`check_release_readiness.py`）、原生 `Senrelay.app`（`arm64`，`minos <= 14.0`）包体与双语 WKWebView 渲染校验、六宿主隔离沙箱 Hook 校验，以及全仓与 Git 历史安全扫描（`verify_repository_security.py`）。

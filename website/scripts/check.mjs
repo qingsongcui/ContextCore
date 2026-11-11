@@ -27,6 +27,8 @@ try {
 }
 assert.equal(socialPngExists, false, 'unreachable duplicate social.png excluded from dist');
 await access(path.join(root, 'guide.html'));
+await access(path.join(root, 'llms.txt'));
+await access(path.join(root, 'llms-full.txt'));
 const guide = await readFile(path.join(root, 'guide.html'), 'utf8');
 // Run-guide commands must name scripts that actually exist in this checkout.
 // This catches stale instructions such as a removed staging-build alias.
