@@ -205,20 +205,20 @@
   <div class="guide-header">
     <div class="eyebrow"><span class="live-dot"></span> CONTEXTCORE / LOCAL WORKBENCH GUIDE <span class="tiny-line"></span></div>
     <h1 data-zh="本地运行与核心工作流指南" data-en="Local Setup &amp; Workflow Guide">本地运行与核心工作流指南</h1>
-    <p class="guide-lead" data-zh="Senrelay（续境）由 macOS 本机后台服务与桌面/浏览器工作台组成，集成了多宿主配置管理与本机配置同步、伴生自动记忆沉淀（附 💡 回执），以及跨 Agent 对话接力。" data-en="Senrelay combines a local macOS background service with a native/browser workbench for multi-host configuration management, source-linked companion auto-memory (with a brief 💡 receipt), and cross-agent conversation relay.">Senrelay（续境）由 macOS 本机后台服务与桌面/浏览器工作台组成，集成了多宿主配置管理与本机配置同步、伴生自动记忆沉淀（附 💡 回执），以及跨 Agent 对话接力。</p>
+    <p class="guide-lead" data-zh="Senrelay（续境）是面向 macOS 14.0+（Apple Silicon）的本机后台服务与桌面/浏览器工作台——100% 免费开源（$0，MIT 协议，无需注册账号），集成了多宿主配置管理与本机配置同步、伴生自动记忆沉淀（附 💡 回执），以及跨 Agent 对话接力。" data-en="Senrelay is a local macOS 14.0+ (Apple Silicon) background service and native/browser workbench—100% free and open source ($0, MIT License, no account required)—combining multi-host configuration management, source-linked companion auto-memory (with a brief 💡 receipt), and cross-agent conversation relay.">Senrelay（续境）是面向 macOS 14.0+（Apple Silicon）的本机后台服务与桌面/浏览器工作台——100% 免费开源（$0，MIT 协议，无需注册账号），集成了多宿主配置管理与本机配置同步、伴生自动记忆沉淀（附 💡 回执），以及跨 Agent 对话接力。</p>
   </div>
 
   <div data-guide-section="zh">
     <div class="callout" role="note">
       <div class="callout-title"><span aria-hidden="true">✦</span> 核心能力速览</div>
-      <p><strong>1. 多宿主配置管理</strong>：常驻顶栏秒切目标宿主（支持 Claude Code、Codex、Cursor、Antigravity、OMP、OpenCode 六大主力宿主及扩展宿主），支持「一键接入续境」、一键切换模型服务商及 MCP / Skills / 系统提示词，每次写入自动留存回滚快照，遇到外部手动修改冲突时弹窗核对差异；文件写入与宿主进程实际加载分别独立核验。</p>
+      <p><strong>1. 多宿主配置管理</strong>：常驻顶栏秒切目标宿主（支持 Claude Code、Codex、Cursor、Antigravity、OMP、OpenCode 六大主力宿主及扩展宿主，详见<a class="inline-link" href="./#connections">首页 6+9 宿主支持矩阵</a>），支持「一键接入续境」、一键切换模型服务商及 MCP / Skills / 系统提示词，每次写入自动留存回滚快照，遇到外部手动修改冲突时弹窗核对差异；文件写入与宿主进程实际加载分别独立核验。</p>
       <p><strong>2. 伴生自动记忆沉淀</strong>：日常对话中由伴生 MCP 与 Skills 采集偏好、架构决定、约束、进度与踩坑经验（保留原话出处并给出简短 <code>💡</code> 回执），并在工作台支持 📌 核心规则置顶、<code>AGENTS.md</code> 规则手册生成与多格式资料导入。</p>
-      <p><strong>3. 跨 Agent 对话接力</strong>：打开任意新 Agent 输入 <code>/contextcore</code> 或说「接力 / 接着做 / relay」，自动列出近期对话记录候选（含序号、来源 Agent、所属项目、标题与摘要）——仅选序号先加载上下文并汇报摘要待命，附带具体任务指令则直接续做。</p>
+      <p><strong>3. 跨 Agent 对话接力</strong>：打开任意新 Agent 输入 <code>/contextcore</code> 或说「接力 / 接着做 / relay」，自动列出近期对话记录候选（含序号、来源 Agent、所属项目、标题与摘要，详见<a class="inline-link" href="./#handoff">跨 Agent 六要素接力说明</a>）——仅选序号先加载上下文并汇报摘要待命，附带具体任务指令则直接续做。</p>
     </div>
 
-    <section class="guide-section">
+    <section class="guide-section" id="download-requirements">
       <h2>1. 下载包与运行环境 <span class="badge">Download &amp; Requirements</span></h2>
-      <p>可通过 Homebrew Cask 一键安装，或前往 <a href="https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1">GitHub Releases（<code>v1.0.0-beta.1</code>）</a> 下载发布附件。<code>Senrelay-macOS.zip</code> 面向 Apple Silicon（<code>arm64</code>）、macOS 14.0 及以上，免费开源（MIT 协议），仅打包 <code>Senrelay.app</code> 本体，内含独立 Python 后台与前端工作台资源，无需单独安装 Python 或 Node（各 AI 宿主自身的运行环境仍需具备）。</p>
+      <p>可通过 Homebrew Cask 一键安装，或前往 <a href="https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1">GitHub Releases（<code>v1.0.0-beta.1</code>）</a> 下载发布附件。<code>Senrelay-macOS.zip</code> 面向 Apple Silicon（<code>arm64</code>）、macOS 14.0 及以上，<strong>100% 免费开源（$0，MIT 协议，无需注册账号）</strong>，仅打包 <code>Senrelay.app</code> 本体，内含独立 Python 后台与前端工作台资源，无需单独安装 Python 或 Node（各 AI 宿主自身的运行环境仍需具备）。</p>
       <pre class="code-block"><code><span class="code-comment"># 推荐方式：通过 Homebrew Cask 安装桌面应用</span>
 brew install --cask qingsongcui/tap/senrelay</code></pre>
       <p>安装包当前采用 ad-hoc 签名，暂未执行 Apple 公证。手动下载核对 <code>SHA256SUMS</code> 并解压后，按以下<strong>两步首次启动指引</strong>打开（无需全局关闭 Gatekeeper）：</p>
@@ -237,7 +237,7 @@ brew install --cask qingsongcui/tap/senrelay</code></pre>
       </ul>
     </section>
 
-    <section class="guide-section">
+    <section class="guide-section" id="install-dependencies">
       <h2>2. 安装依赖 <span class="badge">Installation</span></h2>
       <p>请在<strong>仓库根目录</strong>下执行以下安装命令：</p>
       <pre class="code-block"><code><span class="code-comment"># 1. 创建后端独立虚拟环境并安装产品包（自动注册 contextcore CLI 命令）</span>
@@ -248,7 +248,7 @@ app/backend/.venv/bin/python -m pip install -e 'app/backend[test]'
 npm --prefix app/frontend ci --ignore-scripts</code></pre>
     </section>
 
-    <section class="guide-section">
+    <section class="guide-section" id="launch-workbench">
       <h2>3. 启动工作台 <span class="badge">Running</span></h2>
       <p>提供两种启动方式：集成运行模式（适合日常主力使用）与前后端热重载模式（适合界面开发调试）。</p>
 
@@ -287,7 +287,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
       </div>
     </section>
 
-    <section class="guide-section">
+    <section class="guide-section" id="security-boundaries">
       <h2>5. 本机数据与安全边界 <span class="badge">Data &amp; Security</span></h2>
       <div class="boundary-card">
         <h3>本机优先存储与钥匙串隔离</h3>
@@ -298,6 +298,18 @@ npm --prefix app/frontend run dev:isolated</code></pre>
         <p>读取会话历史、修改宿主配置文件、下载可选本地语义模型三类权限彼此独立，绝不捆绑。单个宿主可按需切换直连、本机代理转发（含优先级备用链）或模型聚合；每次宿主配置文件更改均自动留存快照以便回滚，遇到外部手动修改会阻止覆盖并弹窗提示核对差异。</p>
       </div>
     </section>
+
+    <section class="guide-section" id="about-privacy">
+      <h2>6. 定价、真实局限与作者声明 <span class="badge">Fact Sheet &amp; Author</span></h2>
+      <div class="boundary-card">
+        <h3>官方事实与纯文本定价（Checked on 2026-11-11）</h3>
+        <p><strong>价格：$0（100% 免费开源，MIT License，无需注册账号）</strong>。当前版本 <code>v1.0.0-beta.1</code>。<strong>真实局限与不适用边界</strong>：① 仅支持 <code>macOS 14.0+</code>（Apple Silicon <code>arm64</code>），不支持 Windows、Linux 或 Intel Mac；② 纯本机单机运行（<code>127.0.0.1:8420</code>），不提供跨设备云端同步；③ 九类扩展宿主仅支持配置文件预览与写入（详见<a class="inline-link" href="./#fact-sheet">首页官方事实核对表</a>与<a class="inline-link" href="./#faq">常见问题解答</a>）。</p>
+      </div>
+      <div class="boundary-card">
+        <h3>关于作者与本机隐私法律声明</h3>
+        <p>Senrelay（续境，开源仓库 <a class="inline-link" href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">qingsongcui/ContextCore</a>）由独立开发者 <strong>Qingsong Cui（George O'Nair）</strong>（<a class="inline-link" href="https://github.com/qingsongcui" target="_blank" rel="noopener noreferrer">GitHub @qingsongcui</a> · <a class="inline-link" href="https://x.com/George_ONair" target="_blank" rel="noopener noreferrer">X @George_ONair</a>）创建并维护。本软件不收集任何遥测、不上传会话或代码，基于 <a class="inline-link" href="https://github.com/qingsongcui/ContextCore/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a> 按“原样（AS IS）”提供。</p>
+      </div>
+    </section>
   </div>
 
   <hr class="lang-divider">
@@ -305,14 +317,14 @@ npm --prefix app/frontend run dev:isolated</code></pre>
   <div data-guide-section="en" lang="en">
     <div class="callout" role="note">
       <div class="callout-title"><span aria-hidden="true">✦</span> Core Pillars Overview</div>
-      <p><strong>1. Multi-Host Configuration Management</strong>: Switch target hosts from the permanent top bar (covering the six core context hosts—Claude Code, Codex, Cursor, Antigravity, OMP, and OpenCode—plus extended config hosts), run One-Click Connect, and switch or sync providers, MCP tools, Skills, and prompts with automatic rollback snapshots and external conflict diff protection. File writes and live host process reloads are tracked separately.</p>
+      <p><strong>1. Multi-Host Configuration Management</strong>: Switch target hosts from the permanent top bar (covering the six core context hosts—Claude Code, Codex, Cursor, Antigravity, OMP, and OpenCode—plus extended config hosts; see the <a class="inline-link" href="./#connections">homepage 6+9 host support matrix</a>), run One-Click Connect, and switch or sync providers, MCP tools, Skills, and prompts with automatic rollback snapshots and external conflict diff protection. File writes and live host process reloads are tracked separately.</p>
       <p><strong>2. Companion Auto-Memory</strong>: During everyday chats, companion MCP tools and Skills capture source-linked structured memories (preferences, architecture decisions, constraints, progress, and lessons learned) with a brief <code>💡</code> receipt, complemented by 📌 core-rule pinning, <code>AGENTS.md</code> handbook generation, and multi-format document imports.</p>
-      <p><strong>3. Cross-Agent Conversation Relay</strong>: Type <code>/contextcore</code> or say "Relay" in a new agent to list recent cross-host conversation candidates (with index, source agent, project, title, and summary)—replying with only a number loads context and reports a brief summary while waiting for your next instruction, while attaching a concrete task continues directly.</p>
+      <p><strong>3. Cross-Agent Conversation Relay</strong>: Type <code>/contextcore</code> or say "Relay" in a new agent to list recent cross-host conversation candidates (with index, source agent, project, title, and summary; see the <a class="inline-link" href="./#handoff">6-point cross-agent relay checklist</a>)—replying with only a number loads context and reports a brief summary while waiting for your next instruction, while attaching a concrete task continues directly.</p>
     </div>
 
-    <section class="guide-section">
+    <section class="guide-section" id="download-requirements">
       <h2>1. Download &amp; Requirements <span class="badge">macOS 14.0+ · arm64</span></h2>
-      <p>Install via Homebrew Cask or download published artifacts from <a href="https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1">GitHub Releases (<code>v1.0.0-beta.1</code>)</a>. <code>Senrelay-macOS.zip</code> is free and MIT-licensed, targets Apple Silicon (<code>arm64</code>) on macOS 14.0 or later, and bundles <code>Senrelay.app</code> with a self-contained Python backend and built web workbench—no separate Python or Node installation is required to run the app (each AI assistant still uses its own host installation).</p>
+      <p>Install via Homebrew Cask or download published artifacts from <a href="https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1">GitHub Releases (<code>v1.0.0-beta.1</code>)</a>. <code>Senrelay-macOS.zip</code> is <strong>100% free and open source ($0, MIT License, no account required)</strong>, targets Apple Silicon (<code>arm64</code>) on macOS 14.0 or later, and bundles <code>Senrelay.app</code> with a self-contained Python backend and built web workbench—no separate Python or Node installation is required to run the app (each AI assistant still uses its own host installation).</p>
       <pre class="code-block"><code><span class="code-comment"># Recommended: install via Homebrew Cask</span>
 brew install --cask qingsongcui/tap/senrelay</code></pre>
       <p>Verify <code>SHA256SUMS</code> before extracting manual archives. Because current Beta builds are ad-hoc signed and not Apple notarized, follow these <strong>two steps for first launch on macOS 14.0+</strong> (never disable Gatekeeper globally):</p>
@@ -330,7 +342,7 @@ brew install --cask qingsongcui/tap/senrelay</code></pre>
       </ul>
     </section>
 
-    <section class="guide-section">
+    <section class="guide-section" id="install-dependencies">
       <h2>2. Install Dependencies <span class="badge">From Repository Root</span></h2>
       <p>Run all setup commands from the <strong>repository root</strong>:</p>
       <pre class="code-block"><code><span class="code-comment"># 1. Create the backend virtualenv and install the package (registers the contextcore CLI)</span>
@@ -341,7 +353,7 @@ app/backend/.venv/bin/python -m pip install -e 'app/backend[test]'
 npm --prefix app/frontend ci --ignore-scripts</code></pre>
     </section>
 
-    <section class="guide-section">
+    <section class="guide-section" id="launch-workbench">
       <h2>3. Launch the Workbench <span class="badge">Mode A &amp; Mode B</span></h2>
       <p>Choose between integrated serving (for everyday local use) or split Vite hot-reload mode (for frontend development).</p>
 
@@ -362,7 +374,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
       <p>Open <code>http://localhost:15173</code> in your browser.</p>
     </section>
 
-    <section class="guide-section">
+    <section class="guide-section" id="everyday-use">
       <h2>4. Core Workflows in Practice <span class="badge">Core Workflows</span></h2>
       <div class="pillar-grid">
         <div class="boundary-card">
@@ -380,7 +392,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
       </div>
     </section>
 
-    <section class="guide-section">
+    <section class="guide-section" id="security-boundaries">
       <h2>5. Local Data &amp; Security Boundaries <span class="badge">Data &amp; Keychain</span></h2>
       <div class="boundary-card">
         <h3>Local-First Storage &amp; macOS Keychain Isolation</h3>
@@ -389,6 +401,18 @@ npm --prefix app/frontend run dev:isolated</code></pre>
       <div class="boundary-card">
         <h3>Separate Permissions, Routing &amp; Config Guard</h3>
         <p>Reading conversation history, modifying host configuration files, and downloading optional local semantic models require separate permissions that are never bundled. Each host supports Direct, Local Proxy Routing (with ordered fallback chains), or Model Aggregation, and every host file write saves an automatic rollback snapshot while blocking silent overwrites on external manual edits.</p>
+      </div>
+    </section>
+
+    <section class="guide-section" id="about-privacy">
+      <h2>6. Pricing, Real Limitations &amp; Creator Notice <span class="badge">Fact Sheet &amp; Author</span></h2>
+      <div class="boundary-card">
+        <h3>Official Fact Sheet &amp; Plain-Text Pricing (Checked on 2026-11-11)</h3>
+        <p><strong>Pricing: $0 (100% Free &amp; Open Source under the MIT License, no account required)</strong>. Current release: <code>v1.0.0-beta.1</code>. <strong>Known Limitations &amp; When NOT to Use</strong>: (1) Runs exclusively on <code>macOS 14.0+</code> (Apple Silicon <code>arm64</code>)—no Windows, Linux, or Intel Mac support; (2) Single-machine local loopback architecture (<code>127.0.0.1:8420</code>) without multi-device cloud sync; (3) 9 extended hosts support config file management only (see the <a class="inline-link" href="./#fact-sheet">homepage Official Fact Sheet</a> and <a class="inline-link" href="./#faq">FAQ</a>).</p>
+      </div>
+      <div class="boundary-card">
+        <h3>About the Creator &amp; Local Privacy Legal Notice</h3>
+        <p>Senrelay (open-source repository <a class="inline-link" href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">qingsongcui/ContextCore</a>) is created and maintained by independent developer <strong>Qingsong Cui (George O'Nair)</strong> (<a class="inline-link" href="https://github.com/qingsongcui" target="_blank" rel="noopener noreferrer">GitHub @qingsongcui</a> · <a class="inline-link" href="https://x.com/George_ONair" target="_blank" rel="noopener noreferrer">X @George_ONair</a>). The software collects zero telemetry, never uploads transcripts or code, and is distributed "AS IS" under the <a class="inline-link" href="https://github.com/qingsongcui/ContextCore/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a>.</p>
       </div>
     </section>
   </div>

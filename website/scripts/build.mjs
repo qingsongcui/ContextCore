@@ -214,6 +214,18 @@ function extractFaqEntities(faqBlockHtml) {
   return entities;
 }
 
+function buildPersonNode() {
+  const creatorId = site ? `${site.href}#creator` : '#creator';
+  return {
+    '@type': 'Person',
+    '@id': creatorId,
+    name: "Qingsong Cui (George O'Nair)",
+    alternateName: ['Qingsong Cui', "George O'Nair", 'George_ONair', 'qingsongcui'],
+    url: 'https://github.com/qingsongcui',
+    sameAs: ['https://github.com/qingsongcui', 'https://x.com/George_ONair'],
+  };
+}
+
 function buildHomepageSchema({ lang, pageUrl, siteDesc, appDesc, faqEntities, lastmod }) {
   const zhFullName = `${brand.name} · ${brand.chineseName}`;
   const displayName = lang === 'en' ? brand.name : zhFullName;
@@ -222,6 +234,8 @@ function buildHomepageSchema({ lang, pageUrl, siteDesc, appDesc, faqEntities, la
   const orgId = site ? `${site.href}#organization` : '#organization';
   const websiteId = site ? `${pageUrl}#website` : '#website';
   const appId = site ? `${site.href}#software` : '#software';
+  const personNode = buildPersonNode();
+  const creatorId = personNode['@id'];
 
   const webSiteNode = {
     '@type': 'WebSite',
@@ -260,7 +274,7 @@ function buildHomepageSchema({ lang, pageUrl, siteDesc, appDesc, faqEntities, la
     codeRepository: brand.github,
     sameAs: [brand.github, releaseTagUrl],
     license: `${brand.github}/blob/main/LICENSE`,
-    author: { '@id': orgId },
+    author: [{ '@id': orgId }, { '@id': creatorId }],
   };
 
   const orgNode = {
@@ -268,6 +282,7 @@ function buildHomepageSchema({ lang, pageUrl, siteDesc, appDesc, faqEntities, la
     '@id': orgId,
     name: zhFullName,
     alternateName: altNames,
+    founder: { '@id': creatorId },
     ...(site
       ? {
           url: site.href,
@@ -279,7 +294,7 @@ function buildHomepageSchema({ lang, pageUrl, siteDesc, appDesc, faqEntities, la
           },
         }
       : {}),
-    sameAs: [brand.github],
+    sameAs: [brand.github, 'https://github.com/qingsongcui', 'https://x.com/George_ONair'],
   };
 
   const faqNode = {
@@ -291,7 +306,7 @@ function buildHomepageSchema({ lang, pageUrl, siteDesc, appDesc, faqEntities, la
 
   return {
     '@context': 'https://schema.org',
-    '@graph': [webSiteNode, appNode, orgNode, faqNode],
+    '@graph': [webSiteNode, appNode, orgNode, personNode, faqNode],
   };
 }
 
@@ -299,6 +314,8 @@ function buildGuideSchema({ lang, pageUrl, homeUrl, headline, description, lastm
   const zhFullName = `${brand.name} · ${brand.chineseName}`;
   const orgId = site ? `${site.href}#organization` : '#organization';
   const appId = site ? `${site.href}#software` : '#software';
+  const personNode = buildPersonNode();
+  const creatorId = personNode['@id'];
 
   const articleNode = {
     '@type': 'TechArticle',
@@ -308,7 +325,7 @@ function buildGuideSchema({ lang, pageUrl, homeUrl, headline, description, lastm
     inLanguage: lang === 'en' ? 'en' : 'zh-CN',
     dateModified: lastmod,
     proficiencyLevel: 'Beginner',
-    author: { '@type': 'Organization', '@id': orgId, name: zhFullName },
+    author: { '@type': 'Person', '@id': creatorId, name: personNode.name },
     publisher: { '@type': 'Organization', '@id': orgId, name: zhFullName },
     about: { '@type': 'SoftwareApplication', '@id': appId, name: lang === 'en' ? brand.name : zhFullName },
   };
@@ -333,7 +350,7 @@ function buildGuideSchema({ lang, pageUrl, homeUrl, headline, description, lastm
 
   return {
     '@context': 'https://schema.org',
-    '@graph': [articleNode, breadcrumbNode],
+    '@graph': [articleNode, breadcrumbNode, personNode],
   };
 }
 
@@ -651,11 +668,17 @@ ${brand.name} (${brand.chineseName}) runs natively on macOS 14.0+ (Sonoma or lat
 - **Companion Source-Linked Auto-Memory**: Companion MCP tools and Skills capture structured memories across six categories (Preferences, Background, Constraints, Tasks, Lessons, References) with exact conversation-turn or document provenance and a brief \`💡\` receipt, plus core-rule pinning (\`📌\`), conflict inbox review, version rollback, \`AGENTS.md\` handbook preview, and multi-format document imports (Markdown, TXT, JSON, PDF, DOCX, DOC).
 - **Unified Multi-Host Configuration Management**: Switch across 6 core context hosts and 9 extended configuration hosts from a permanent top bar, run One-Click Connect, apply provider presets, test endpoint latency, isolate API keys in macOS Keychain, and sync MCP servers, Skills, and system prompts with automatic rollback snapshots and external-edit Diff protection.
 
-## System Requirements & Privacy Boundaries
+## System Requirements, Pricing & Real Boundaries (Checked on 2026-11-11)
 
-- **Platform & Pricing**: macOS 14.0+ on Apple Silicon (\`arm64\`) · Public Beta \`v${RELEASE_VERSION}\` · Free (\`$0\`, MIT License).
+- **Pricing & License**: **$0 (100% Free & Open Source under the MIT License)**. No account registration, no subscription tiers, and no cloud paywall.
+- **Platform & Release**: macOS 14.0+ on Apple Silicon (\`arm64\`) · Public Beta \`v${RELEASE_VERSION}\`.
 - **Quick Install**: \`brew install --cask qingsongcui/tap/senrelay\` (first launch for ad-hoc signed bundle: \`xattr -cr /Applications/Senrelay.app\`).
-- **Privacy & Storage**: Loopback-only HTTP/MCP service (\`127.0.0.1:8420\`, dev \`127.0.0.1:18420\`), local SQLite + FTS5 full-text search (\`~/Library/Application Support/ContextCore\`, directory mode \`0700\`, DB mode \`0600\`), online SQLite backups (\`contextcore backup\`), and macOS Keychain secret isolation. No mandatory cloud account or background cloud upload.
+- **Known Limitations (When NOT to Use ${brand.name})**:
+  1. **No Windows, Linux, or Intel Mac support**: Requires macOS 14.0+ on Apple Silicon (\`arm64\`).
+  2. **Single-machine local architecture only**: Runs strictly on \`127.0.0.1:8420\` without multi-device cloud sync or hosted team SaaS collaboration.
+  3. **9 Extended Hosts are config-only**: Session capture, auto-memory, and \`/contextcore\` relay work on the 6 Core Context Hosts only.
+  4. **Public Beta ad-hoc signing**: Requires a one-time \`xattr -cr /Applications/Senrelay.app\` command on first launch before Apple Developer ID notarization is added.
+- **Privacy, Storage & Creator**: Loopback-only HTTP/MCP service (\`127.0.0.1:8420\`, dev \`127.0.0.1:18420\`), local SQLite + FTS5 full-text search (\`~/Library/Application Support/ContextCore\`, directory mode \`0700\`, DB mode \`0600\`), online SQLite backups (\`contextcore backup\`), and macOS Keychain secret isolation. Created and maintained by **Qingsong Cui (George O'Nair)** (\`https://github.com/qingsongcui\` · \`https://x.com/George_ONair\`).
 
 ## Resources
 

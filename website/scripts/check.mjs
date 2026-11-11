@@ -35,7 +35,7 @@ const css = await readFile(path.join(root, 'assets/site.css'), 'utf8');
 assert.match(css, /prefers-reduced-motion/);
 assert.match(css, /focus-visible/);
 
-for (const [label, doc] of [['index.html', html], ['en/index.html', enHtml]]) {
+for (const [label, doc] of [['index.html', html], ['en/index.html', enHtml], ['guide.html', guide], ['en/guide.html', enGuide]]) {
   const ids = [...doc.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
   assert.equal(ids.length, new Set(ids).size, `IDs unique in ${label}`);
   for (const [, target] of doc.matchAll(/href="#([^"\s]+)"/g)) {
@@ -47,10 +47,24 @@ for (const [label, doc] of [['index.html', html], ['en/index.html', enHtml]]) {
 }
 
 for (const [, asset] of html.matchAll(/(?:href|src)="\.\/([^"\s]+)"/g)) {
-  await access(path.join(root, asset));
+  const [relPath, hash] = asset.split('#');
+  if (relPath) {
+    const targetPath = path.join(root, relPath);
+    await access(targetPath);
+    if (hash && relPath.endsWith('.html')) {
+      const targetDoc = await readFile(targetPath, 'utf8');
+      assert.ok(targetDoc.includes(`id="${hash}"`), `cross-page anchor #${hash} exists in ${relPath}`);
+    }
+  }
 }
 for (const [, asset] of enHtml.matchAll(/(?:href|src)="(\.\.?\/[^"\s]+)"/g)) {
-  await access(path.resolve(root, 'en', asset));
+  const [relPath, hash] = asset.split('#');
+  const resolved = path.resolve(root, 'en', relPath || 'index.html');
+  await access(resolved);
+  if (hash && resolved.endsWith('.html')) {
+    const targetDoc = await readFile(resolved, 'utf8');
+    assert.ok(targetDoc.includes(`id="${hash}"`), `cross-page anchor #${hash} exists in ${resolved}`);
+  }
 }
 
 await access(path.join(root, 'favicon.ico'));
@@ -113,22 +127,46 @@ for (const doc of [html, enHtml, guide, enGuide, notFound]) {
 const graph = JSON.parse(html.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1]);
 assert.deepEqual(
   graph['@graph'].map((n) => n['@type']),
-  ['WebSite', 'SoftwareApplication', 'Organization', 'FAQPage'],
+  ['WebSite', 'SoftwareApplication', 'Organization', 'Person', 'FAQPage'],
 );
-assert.equal(graph['@graph'][3].mainEntity.length, 6, 'six FAQ entities in zh JSON-LD');
+assert.equal(graph['@graph'][3].url, 'https://github.com/qingsongcui');
+assert.ok(graph['@graph'][3].sameAs.includes('https://x.com/George_ONair'));
+assert.equal(graph['@graph'][4].mainEntity.length, 8, 'eight FAQ entities in zh JSON-LD');
 
 const enGraph = JSON.parse(enHtml.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1]);
 assert.deepEqual(
   enGraph['@graph'].map((n) => n['@type']),
-  ['WebSite', 'SoftwareApplication', 'Organization', 'FAQPage'],
+  ['WebSite', 'SoftwareApplication', 'Organization', 'Person', 'FAQPage'],
 );
 assert.equal(enGraph['@graph'][0].inLanguage, 'en');
-assert.equal(enGraph['@graph'][3].mainEntity.length, 6, 'six FAQ entities in en JSON-LD');
+assert.equal(enGraph['@graph'][4].mainEntity.length, 8, 'eight FAQ entities in en JSON-LD');
 
 const guideGraph = JSON.parse(guide.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1]);
-assert.deepEqual(guideGraph['@graph'].map((n) => n['@type']), ['TechArticle', 'BreadcrumbList']);
+assert.deepEqual(guideGraph['@graph'].map((n) => n['@type']), ['TechArticle', 'BreadcrumbList', 'Person']);
 const enGuideGraph = JSON.parse(enGuide.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1]);
-assert.deepEqual(enGuideGraph['@graph'].map((n) => n['@type']), ['TechArticle', 'BreadcrumbList']);
+assert.deepEqual(enGuideGraph['@graph'].map((n) => n['@type']), ['TechArticle', 'BreadcrumbList', 'Person']);
+
+// SEO / GEO Baseline & Anti-Regression Veto Guardrails (Titles <=60 chars, 4-Element Hero, Plain-Text $0 Pricing, Dated Fact Sheet, Real Limitations, Creator E-E-A-T, Internal Links & Content Floor)
+for (const [label, doc] of [['index.html', html], ['en/index.html', enHtml], ['guide.html', guide], ['en/guide.html', enGuide]]) {
+  const titleText = doc.match(/<title>(.*?)<\/title>/s)[1].replace(/&amp;/g, '&').trim();
+  assert.ok(titleText.length >= 20 && titleText.length <= 60, `title length (${titleText.length}) must be 20..60 chars in ${label}: "${titleText}"`);
+  const visibleOnly = doc.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  assert.ok(visibleOnly.includes('$0'), `plain-text $0 pricing must appear in visible HTML of ${label}`);
+  assert.ok(visibleOnly.includes('MIT'), `MIT license must appear in visible HTML of ${label}`);
+  assert.ok(visibleOnly.includes('2026-11-11'), `fact-checked date 2026-11-11 must appear in visible HTML of ${label}`);
+  assert.ok(visibleOnly.includes('Windows') && visibleOnly.includes('Linux'), `honest OS limitations must appear in visible HTML of ${label}`);
+  assert.ok(visibleOnly.includes('xattr -cr'), `first-launch xattr -cr note must appear in visible HTML of ${label}`);
+  assert.ok(visibleOnly.includes('Qingsong Cui') && visibleOnly.includes('George_ONair'), `creator attribution must appear in visible HTML of ${label}`);
+  const minChars = label.includes('guide') ? 2200 : 3200;
+  assert.ok(visibleOnly.length >= minChars, `anti-shrink content floor (${visibleOnly.length} >= ${minChars}) in ${label}`);
+}
+
+for (const [label, doc] of [['index.html', html], ['en/index.html', enHtml]]) {
+  assert.match(doc, /id="fact-sheet"/, `Official Fact Sheet table exists in ${label}`);
+  assert.match(doc, /id="about-privacy"/, `About & Privacy box exists in ${label}`);
+  const bodyInternalLinks = [...doc.matchAll(/<a\b[^>]*class="inline-link"[^>]*href="(?:#|\.?\/guide\.html)[^"]*"/g)];
+  assert.ok(bodyInternalLinks.length >= 5, `at least 5 descriptive inline internal links in ${label} (found ${bodyInternalLinks.length})`);
+}
 
 assert.match(guide, /class="language-switch"/);
 assert.match(enGuide, /class="language-switch"/);

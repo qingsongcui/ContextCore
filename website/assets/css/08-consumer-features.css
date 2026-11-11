@@ -600,6 +600,52 @@ html[lang="en"] .section-label {
 .host-matrix-table tbody tr:last-child td {
   border-bottom: 0;
 }
+.fact-sheet-table {
+  border-top: 1px solid var(--line);
+}
+.inline-link {
+  color: var(--sage);
+  text-decoration: underline;
+  text-decoration-color: rgba(183, 196, 161, 0.42);
+  text-underline-offset: 3px;
+  transition: color var(--dur-1) var(--ease-out), text-decoration-color var(--dur-1) var(--ease-out);
+}
+.inline-link:hover {
+  color: #eef3e8;
+  text-decoration-color: var(--sage);
+}
+.trust-box {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 28px;
+  padding: 20px 24px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(20, 24, 18, 0.72);
+  text-align: left;
+}
+.trust-col strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sage);
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+.trust-col p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.72;
+  color: var(--muted);
+}
+@media (max-width: 760px) {
+  .trust-box {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 16px 18px;
+  }
+}
 .host-matrix-table code,
 .brew-snippet code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
