@@ -2,7 +2,7 @@
 
 A native macOS app, browser workbench, and local background service that lets multiple AI coding assistants accumulate source-linked project memories, relay conversations across agents in a single command, and manage providers, MCP tools, Skills, and instructions in one place.
 
-[English](README.md) · [中文](README.zh-CN.md) · [Website](https://qingsongcui.github.io/ContextCore/) · [Workflow Guide](https://qingsongcui.github.io/ContextCore/guide.html) · [Latest Release (macOS)](https://github.com/qingsongcui/ContextCore/releases/latest)
+[English](README.md) · [中文](README.zh-CN.md) · [Latest Release (macOS)](https://github.com/qingsongcui/ContextCore/releases/latest)
 
 ## Product and scope
 

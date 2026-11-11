@@ -2,7 +2,7 @@
 
 macOS 原生桌面 App、浏览器工作台与本机常驻服务，让多个 AI 编程助手围绕同一项目沉淀带来源记忆、一句话跨助手接力对话，并在一处统管模型服务商、MCP、Skills 与使用规则。
 
-[English](README.md) · [中文](README.zh-CN.md) · [产品官网](https://qingsongcui.github.io/ContextCore/) · [使用指南](https://qingsongcui.github.io/ContextCore/guide.html) · [下载最新版 (macOS)](https://github.com/qingsongcui/ContextCore/releases/latest)
+[English](README.md) · [中文](README.zh-CN.md) · [下载最新版 (macOS)](https://github.com/qingsongcui/ContextCore/releases/latest)
 
 ## 产品与核心范围
 
