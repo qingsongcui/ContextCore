@@ -87,6 +87,7 @@ await writeFile(path.join(out, 'guide.html'), guide);
 
 await writeFile(path.join(out, 'robots.txt'), site ? `User-agent: *\nAllow: ${site.pathname}\nSitemap: ${new URL('sitemap.xml', site).href}\n` : 'User-agent: *\nDisallow: /\n');
 if (site) await writeFile(path.join(out, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${escapeHtml(site.href)}</loc></url><url><loc>${escapeHtml(guideUrl)}</loc></url></urlset>\n`);
+if (site && !site.hostname.endsWith('.github.io')) await writeFile(path.join(out, 'CNAME'), `${site.hostname}\n`);
 
 const llmsFullUrl = site ? new URL('llms-full.txt', site).href : './llms-full.txt';
 const llmsContent = `# ${brand.name} · ${brand.chineseName} (ContextCore)
