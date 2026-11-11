@@ -1,0 +1,105 @@
+{
+  "schema": "senrelay.host_capability_evidence/1",
+  "updated": "2026-10-25",
+  "notes": [
+    "Configured is not verified. Live conclusions do not transfer across hosts.",
+    "Claude Code and OpenCode cannot inherit Codex/Cursor/OMP/Antigravity pass results.",
+    "Hooks are silent lifecycle reporters. Context is opt-in through MCP or an explicit skill/command.",
+    "confirm_then_continue is verified as live_host on codex, omp, antigravity, and opencode, and as live_protocol on cursor and claude-code against production 127.0.0.1:8420.",
+    "Bundled acceptance evidence records reference testbed verification results; a fresh local installation does not inherit verified=true without local runtime observation."
+  ],
+  "context_handoff": {
+    "codex": {
+      "history_read": {"grade": "live_protocol", "verified": true, "host_version": "codex-cli 0.158.0", "evidence": "Local rollout JSONL reader synced 159 conversations in production DB."},
+      "new_capture": {"grade": "live_host", "verified": true, "host_version": "codex-cli 0.158.0", "evidence": "SessionStart, UserPromptSubmit, and Stop hooks fired in live codex exec sessions 01a171c7-3eb8-75a1-a55f-d20d38f40ad4 and 01a171cb-47e2-7f72-9804-619391044bc9 (conv_ae51b58239b6, conv_f5b19866a535)."},
+      "tool_load": {"grade": "live_host", "verified": true, "host_version": "codex-cli 0.158.0", "evidence": "codex mcp list verified contextcore enabled; live MCP calls succeeded in threads 01a16c24-e963-7823-9a8b-ecb6e4065fb3 and 01a171cb-47e2-7f72-9804-619391044bc9."},
+      "memory_read": {"grade": "live_host", "verified": true, "host_version": "codex-cli 0.158.0", "evidence": "Verified in live codex exec session (01a171cb-47e2-7f72-9804-619391044bc9) invoking MCP assemble_context (pack_d18033827462) to read shared context."},
+      "memory_write": {"grade": "synthetic_tested", "verified": false, "host_version": "codex-cli 0.158.0", "evidence": "Codex MCP save_memory tool implemented; live host write invocation unverified."},
+      "handoff_readback": {"grade": "live_host", "verified": true, "host_version": "codex-cli 0.158.0", "evidence": "Six-field readback and must_not_execute=true wait verified on cards hnd_dd99a99749b2 and hnd_99b1c7457870."},
+      "confirm_then_continue": {"grade": "live_host", "verified": true, "host_version": "codex-cli 0.158.0", "evidence": "Live session 01a171cb-47e2-7f72-9804-619391044bc9 confirmed hnd_99b1c7457870 (2026-10-25T06:41:59.566651+00:00), verified read_handoff and assemble_context pack_d18033827462 (continuation.status=ready), and wrote synthetic-acceptance/codex/paper-bridge-checklist.md."}
+    },
+    "omp": {
+      "history_read": {"grade": "live_protocol", "verified": true, "host_version": "CLI 18.10.4; desktop-engine 18.12.6", "evidence": "JSONL v3 reader synced 1,145 sessions in production DB including new acceptance sessions conv_f39b66ee7cb9 and conv_3370d2cda3f9."},
+      "new_capture": {"grade": "live_protocol", "verified": true, "host_version": "CLI 18.10.4", "evidence": "Extension events and session JSONL auto-captured conv_f39b66ee7cb9 and conv_3370d2cda3f9 into proj_02826a250c42."},
+      "tool_load": {"grade": "live_host", "verified": true, "host_version": "CLI 18.10.4", "evidence": "Live omp -p sessions loaded and called get_project_brief, assemble_context, confirm_handoff, and read_handoff against 127.0.0.1:8420/mcp/."},
+      "memory_read": {"grade": "live_host", "verified": true, "host_version": "CLI 18.10.4", "evidence": "Verified in live omp -p sessions calling MCP assemble_context and get_project_brief against local MCP endpoint."},
+      "memory_write": {"grade": "synthetic_tested", "verified": false, "host_version": "CLI 18.10.4", "evidence": "OMP MCP save_memory tool implemented; live host write invocation unverified."},
+      "handoff_readback": {"grade": "live_host", "verified": true, "host_version": "CLI 18.10.4", "evidence": "Live omp -p session (conv_f39b66ee7cb9) read back all six fields of hnd_4d79d7f8af27 and stopped at awaiting_confirmation without writing files."},
+      "confirm_then_continue": {"grade": "live_host", "verified": true, "host_version": "CLI 18.10.4", "evidence": "Live omp -p session (conv_3370d2cda3f9) confirmed hnd_4d79d7f8af27 (2026-10-25T06:44:52.191385+00:00), verified read_handoff and assemble_context pack_bddeb40418db (continuation.status=ready), and wrote synthetic-acceptance/omp/paper-bridge-checklist.md."}
+    },
+    "cursor": {
+      "history_read": {"grade": "live_protocol", "verified": true, "host_version": "Cursor Desktop state.vscdb / CLI store.db", "evidence": "state.vscdb reader synced 33 sessions in production DB; Cursor CLI store.db (meta + protobuf/JSON blobs) reader implemented."},
+      "new_capture": {"grade": "live_protocol", "verified": true, "host_version": "Cursor Desktop state.vscdb", "evidence": "New conv_e306774c80c5 ingested. Hook consumption not claimed."},
+      "tool_load": {"grade": "live_host", "verified": true, "host_version": "Cursor Desktop", "evidence": "Live MCP plus six-field card hnd_7c3754ee0469."},
+      "memory_read": {"grade": "live_protocol", "verified": true, "host_version": "Cursor Desktop", "evidence": "Verified via live Streamable HTTP MCP (127.0.0.1:8420/mcp/) using cursor bearer token calling assemble_context (pack_115c74a071f4, pack_273d5ce57150)."},
+      "memory_write": {"grade": "synthetic_tested", "verified": false, "host_version": "Cursor Desktop", "evidence": "Cursor MCP save_memory tool implemented; live host write invocation unverified."},
+      "handoff_readback": {"grade": "live_host", "verified": true, "host_version": "Cursor Desktop", "evidence": "Readback and wait observed on hnd_7c3754ee0469. beforeSubmitPrompt cannot inject; skill/MCP required."},
+      "confirm_then_continue": {"grade": "live_protocol", "verified": true, "host_version": "Cursor Desktop", "evidence": "Verified over live production Streamable HTTP MCP (127.0.0.1:8420/mcp/) using cursor bearer token: pre_pack_id pack_115c74a071f4 (awaiting_confirmation) -> confirm_handoff(hnd_7c3754ee0469) -> read_handoff (ready) -> post_pack_id pack_273d5ce57150 (ready, must_not_execute=false) -> wrote synthetic-acceptance/cursor/paper-bridge-checklist.md."}
+    },
+    "antigravity": {
+      "history_read": {"grade": "live_protocol", "verified": true, "host_version": "Antigravity Desktop", "evidence": "transcript JSONL reader synced 775 readable sessions including live session conv_88341e743f23; 3 damaged legacy sources remain isolated as partial_sync."},
+      "new_capture": {"grade": "live_protocol", "verified": true, "host_version": "Antigravity Desktop", "evidence": "Live session 1c27d731-6dbd-4ce2-9139-85606e64aebc captured via transcript_full.jsonl sync as conv_88341e743f23; hooks carry metadata only."},
+      "tool_load": {"grade": "live_host", "verified": true, "host_version": "Antigravity Desktop", "evidence": "Live Antigravity Desktop session invoked assemble_context, get_project_brief, confirm_handoff, and read_handoff on 127.0.0.1:8420/mcp/."},
+      "memory_read": {"grade": "live_host", "verified": true, "host_version": "Antigravity Desktop", "evidence": "Verified in live Antigravity Desktop session invoking assemble_context (pack_a5be445d694e, pack_4164260e1359) and get_project_brief on local MCP endpoint."},
+      "memory_write": {"grade": "synthetic_tested", "verified": false, "host_version": "Antigravity Desktop", "evidence": "Antigravity MCP save_memory tool implemented; live host write invocation unverified."},
+      "handoff_readback": {"grade": "live_host", "verified": true, "host_version": "Antigravity Desktop", "evidence": "Live Antigravity Desktop session inspected pack_a5be445d694e and read back all six fields of hnd_325c33198431 before confirmation."},
+      "confirm_then_continue": {"grade": "live_host", "verified": true, "host_version": "Antigravity Desktop", "evidence": "Live Antigravity Desktop session confirmed hnd_325c33198431 (2026-10-25T06:24:26.027645+00:00), verified read_handoff and assemble_context pack_4164260e1359 (continuation.status=ready), and wrote synthetic-acceptance/antigravity/paper-bridge-checklist.md."}
+    },
+    "claude-code": {
+      "history_read": {"grade": "live_protocol", "verified": true, "host_version": "2.1.284 (Claude Code)", "evidence": "Synced 26 sessions from ~/.claude/projects into production DB with DAG active-branch pruning."},
+      "new_capture": {"grade": "live_host", "verified": true, "host_version": "2.1.284 (Claude Code)", "evidence": "Live claude -p invocation in synthetic-acceptance/claude-code fired UserPromptSubmit hook and captured conv_061042a933ad into proj_4021884c5761."},
+      "tool_load": {"grade": "live_host", "verified": true, "host_version": "2.1.284 (Claude Code)", "evidence": "claude mcp list verified contextcore: http://127.0.0.1:8420/mcp/ (HTTP) - Connected alongside existing foreign MCP servers."},
+      "memory_read": {"grade": "live_protocol", "verified": true, "host_version": "2.1.284 (Claude Code)", "evidence": "Verified via live Streamable HTTP MCP (127.0.0.1:8420/mcp/) using claude-code bearer token calling assemble_context (pack_af982a155d31, pack_3978f552cc48)."},
+      "memory_write": {"grade": "synthetic_tested", "verified": false, "host_version": "2.1.284 (Claude Code)", "evidence": "Claude Code MCP save_memory tool implemented; live host write invocation unverified."},
+      "handoff_readback": {"grade": "live_protocol", "verified": true, "host_version": "2.1.284 (Claude Code)", "evidence": "Model completion returned provider 402 balance error; start_handoff (hnd_86dff0436650) and pre-confirmation assemble_context (pack_af982a155d31, awaiting_confirmation, must_not_execute=true) verified over live production MCP using claude-code bearer token."},
+      "confirm_then_continue": {"grade": "live_protocol", "verified": true, "host_version": "2.1.284 (Claude Code)", "evidence": "Verified over live production Streamable HTTP MCP (127.0.0.1:8420/mcp/) using claude-code bearer token: confirm_handoff(hnd_86dff0436650) -> read_handoff (ready) -> assemble_context pack_3978f552cc48 (continuation.status=ready, must_not_execute=false) -> wrote synthetic-acceptance/claude-code/paper-bridge-checklist.md."}
+    },
+    "opencode": {
+      "history_read": {"grade": "live_protocol", "verified": true, "host_version": "1.18.35", "evidence": "Synced 32 main sessions from ~/.local/share/opencode/opencode.db into production DB including new live sessions conv_a13866df43e7 and conv_93ac249c37d6."},
+      "new_capture": {"grade": "live_host", "verified": true, "host_version": "1.18.35", "evidence": "Live opencode run sessions in synthetic-acceptance/opencode captured as conv_a13866df43e7 and conv_93ac249c37d6 in proj_457b91353526."},
+      "tool_load": {"grade": "live_host", "verified": true, "host_version": "1.18.35", "evidence": "opencode mcp list verified contextcore connected (http://127.0.0.1:8420/mcp/); live opencode run sessions invoked start_handoff, confirm_handoff, read_handoff, and assemble_context."},
+      "memory_read": {"grade": "live_host", "verified": true, "host_version": "1.18.35", "evidence": "Verified in live opencode run sessions invoking MCP assemble_context (pack_6bb9db321b8a)."},
+      "memory_write": {"grade": "synthetic_tested", "verified": false, "host_version": "1.18.35", "evidence": "OpenCode MCP save_memory tool implemented; live host write invocation unverified."},
+      "handoff_readback": {"grade": "live_host", "verified": true, "host_version": "1.18.35", "evidence": "Live opencode run Turn 1 (conv_a13866df43e7) created hnd_6697a2e18540, verified read_handoff was rejected before confirmation, read back all six fields, and stopped at awaiting_confirmation."},
+      "confirm_then_continue": {"grade": "live_host", "verified": true, "host_version": "1.18.35", "evidence": "Live opencode run Turn 2 (conv_93ac249c37d6) confirmed hnd_6697a2e18540 (2026-10-25T06:42:05.335830+00:00), verified read_handoff and assemble_context pack_6bb9db321b8a (continuation.status=ready), and wrote synthetic-acceptance/opencode/paper-bridge-checklist.md."}
+    }
+  },
+  "config_tools": {
+    "codex": {
+      "model_switch": {"grade": "code_present", "verified": false, "host_version": "codex-cli 0.158.0", "evidence": "Management activation exists; Codex UI model switch not live-verified."},
+      "third_party_mcp": {"grade": "live_host", "verified": true, "host_version": "codex-cli 0.158.0", "evidence": "codex mcp list verified contextcore coexisting alongside pre-existing configured MCP servers."},
+      "skills_prompts": {"grade": "live_protocol", "verified": true, "host_version": "codex-cli 0.158.0", "evidence": "Installed contextcore-handoff skill at ~/.codex/skills/contextcore-handoff/SKILL.md."},
+      "uninstall_restore": {"grade": "synthetic_tested", "verified": false, "host_version": "codex-cli 0.158.0", "evidence": "test_installer_safety.py isolated HOME."}
+    },
+    "omp": {
+      "model_switch": {"grade": "live_protocol", "verified": true, "host_version": "CLI 18.10.4", "evidence": "omp_overlay.yaml modelRoles.default resolution verified in live --no-tools distillation (use_026a87b25039, use_97a66f91318b, use_c3eafe1e2150)."},
+      "third_party_mcp": {"grade": "synthetic_tested", "verified": false, "host_version": "CLI 18.10.4", "evidence": "JSON merge preserves existing ~/.omp/agent/mcp.json servers."},
+      "skills_prompts": {"grade": "live_protocol", "verified": true, "host_version": "CLI 18.10.4", "evidence": "/contextcore command installed at ~/.omp/agent/commands/contextcore.md."},
+      "uninstall_restore": {"grade": "synthetic_tested", "verified": false, "host_version": "CLI 18.10.4", "evidence": "Modified extension retained; isolated HOME."}
+    },
+    "cursor": {
+      "model_switch": {"grade": "unverified", "verified": false, "host_version": null, "evidence": "Live test kept Auto. File apply is not host load."},
+      "third_party_mcp": {"grade": "synthetic_tested", "verified": false, "host_version": null, "evidence": "Installer merge only."},
+      "skills_prompts": {"grade": "code_present", "verified": false, "host_version": null, "evidence": "Skill path installed; host load unverified."},
+      "uninstall_restore": {"grade": "synthetic_tested", "verified": false, "host_version": null, "evidence": "test_installer_safety.py isolated HOME."}
+    },
+    "antigravity": {
+      "model_switch": {"grade": "code_present", "verified": false, "host_version": "Antigravity Desktop", "evidence": "agy provider via settings.json is unsupported in host_formats_v2."},
+      "third_party_mcp": {"grade": "live_host", "verified": true, "host_version": "Antigravity Desktop", "evidence": "Live Antigravity Desktop session loaded contextcore alongside pre-existing configured MCP servers."},
+      "skills_prompts": {"grade": "live_host", "verified": true, "host_version": "Antigravity Desktop", "evidence": "contextcore-handoff skill and contextcore MCP schemas loaded in live Antigravity Desktop session."},
+      "uninstall_restore": {"grade": "synthetic_tested", "verified": false, "host_version": "Antigravity Desktop", "evidence": "Isolated HOME."}
+    },
+    "claude-code": {
+      "model_switch": {"grade": "unverified", "verified": false, "host_version": "2.1.284 (Claude Code)", "evidence": "Model switch not tested due to provider 402 balance error."},
+      "third_party_mcp": {"grade": "live_host", "verified": true, "host_version": "2.1.284 (Claude Code)", "evidence": "claude mcp list verified contextcore Connected alongside pre-existing configured MCP servers."},
+      "skills_prompts": {"grade": "live_protocol", "verified": true, "host_version": "2.1.284 (Claude Code)", "evidence": "Installed ~/.claude/skills/contextcore-handoff/SKILL.md and merged hooks into ~/.claude/settings.json."},
+      "uninstall_restore": {"grade": "synthetic_tested", "verified": false, "host_version": "2.1.284 (Claude Code)", "evidence": "Isolated HOME."}
+    },
+    "opencode": {
+      "model_switch": {"grade": "unverified", "verified": false, "host_version": "1.18.35", "evidence": "Ran with configured deepseek-v4.1-flash model."},
+      "third_party_mcp": {"grade": "live_host", "verified": true, "host_version": "1.18.35", "evidence": "opencode mcp list verified contextcore connected alongside pre-existing configured MCP servers."},
+      "skills_prompts": {"grade": "live_protocol", "verified": true, "host_version": "1.18.35", "evidence": "Installed ~/.config/opencode/commands/contextcore.md and ~/.config/opencode/plugins/contextcore.ts."},
+      "uninstall_restore": {"grade": "synthetic_tested", "verified": false, "host_version": "1.18.35", "evidence": "Isolated HOME."}
+    }
+  }
+}

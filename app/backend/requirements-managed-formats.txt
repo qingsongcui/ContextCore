@@ -1,0 +1,8 @@
+# Optional native management formats. PyPI metadata verified 2026-10-24.
+# ruamel.yaml: MIT; https://pypi.org/project/ruamel.yaml/0.19.1/
+# json-five: Apache-2.0; https://pypi.org/project/json-five/1.1.2/
+# json-five owns the import name json5; do not install the distinct json5 package.
+ruamel.yaml==0.19.1
+json-five==1.1.2
+regex==2026.9.29
+sly==0.5

@@ -1,0 +1,18 @@
+{
+  "name": "contextcore-website",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/check.mjs",
+    "preview": "node scripts/serve.mjs",
+    "check:brand": "node scripts/check-brand.mjs",
+    "check:interactions": "node --test scripts/check-interactions.mjs",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "check:sphere": "node --test scripts/check-sphere.mjs"
+  }
+}

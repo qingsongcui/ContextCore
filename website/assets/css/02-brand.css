@@ -1,0 +1,49 @@
+.brand-symbol {
+  display: block;
+  flex-shrink: 0;
+}
+.brand-cn {
+  font-size: 11px;
+  font-weight: 430;
+  letter-spacing: 0.03em;
+  color: var(--sage);
+  margin-left: 1px;
+}
+.footer .brand-symbol {
+  transform: none;
+}
+.hero h1 {
+  letter-spacing: -3px;
+}
+@media (max-width: 800px) {
+  .core-inner .brand-symbol {
+    width: 27px;
+    height: 36px;
+  }
+}
+@media (max-width: 600px) {
+  .brand-cn {
+    font-size: 11px;
+  }
+  .core-inner .brand-symbol {
+    width: 27px;
+    height: 36px;
+  }
+}
+.brand-symbol {
+  width: 28px;
+  height: 35px;
+  object-fit: contain;
+}
+.core-inner .brand-symbol {
+  width: 31px;
+  height: 39px;
+}
+.memory-ring-core .brand-symbol {
+  width: 29px;
+  height: 36px;
+}
+.footer .brand-symbol {
+  width: 26px;
+  height: 33px;
+}

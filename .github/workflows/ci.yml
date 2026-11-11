@@ -1,0 +1,195 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+    inputs:
+      checkout_ref:
+        description: Exact commit validated by the release caller
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ inputs.checkout_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_call' }}
+
+jobs:
+  backend:
+    name: Backend (locked runtime + test extras / 100k)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Verify canonical dependency lock
+        run: uv lock --check
+      - name: Install exact locked runtime and test extra
+        run: uv sync --frozen --extra test
+      - name: Run unit and integration tests (including Node 24 TS host contracts)
+        run: .venv/bin/pytest -q
+      - name: Verify bounded 100k synthetic usage queries
+        env:
+          SENRELAY_USAGE_PERF: "1"
+        run: .venv/bin/pytest -q -s tests/test_usage_performance.py::test_100k_synthetic_usage_bounded_queries
+
+  frontend:
+    name: Frontend (lint / type / regression suite / i18n / build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+      - name: Install locked dependencies from official npm registry
+        run: npm ci --registry=https://registry.npmjs.org
+      - name: Require zero known npm advisories
+        run: npm audit --registry=https://registry.npmjs.org --audit-level=low
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: i18n coverage
+        run: npm run check:i18n
+      - name: Run complete frontend suite
+        run: npm test
+      - name: Build isolated staging
+        run: npm run build
+
+  website:
+    name: Website (8-check baseline and build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Build static distribution
+        run: npm run build
+      - name: Check static structure and semantic handoff fields
+        run: npm run check
+      - name: Check brand consistency
+        run: npm run check:brand
+      - name: Check interactive flows
+        run: npm run check:interactions
+      - name: Check i18n coverage
+        run: npm run check:i18n
+      - name: Check memory sphere render and math
+        run: npm run check:sphere
+
+  macos-smoke:
+    name: macOS isolated HOME lifecycle and installed-wheel smoke
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install exact locked runtime and test extra
+        run: uv sync --project app/backend --frozen --extra test
+      - name: Build frontend dist-staging
+        working-directory: app/frontend
+        run: |
+          npm ci --registry=https://registry.npmjs.org
+          npm run build
+      - name: Isolate all smoke HOME and data paths
+        run: |
+          mkdir -p "$RUNNER_TEMP/contextcore-home" "$RUNNER_TEMP/contextcore-data"
+          echo "HOME=$RUNNER_TEMP/contextcore-home" >> "$GITHUB_ENV"
+          echo "CONTEXTCORE_DATA_DIR=$RUNNER_TEMP/contextcore-data" >> "$GITHUB_ENV"
+      - name: Run real repo-root venv release smoke (HTTP, wheel resources and activation safeguards)
+        run: app/backend/.venv/bin/python app/scripts/check_release_readiness.py
+      - name: Run behavioral distribution regression tests
+        working-directory: app/backend
+        run: .venv/bin/pytest tests/test_release_distribution.py -v
+      - name: Install locked desktop build extra
+        run: uv sync --project app/backend --frozen --extra test --extra build
+      - name: Build the native app from clean source without an installed service
+        run: app/backend/.venv/bin/python app/macos/build.py --from-source --output-dir "$RUNNER_TEMP/senrelay-native" --build-number "$([ "$GITHUB_RUN_NUMBER" = "999" ] && echo "998.1" || echo "$GITHUB_RUN_NUMBER")"
+      - name: Verify the actual bundled runtime and frontend
+        run: app/backend/.venv/bin/python app/macos/verify_bundle.py --bundle "$RUNNER_TEMP/senrelay-native/Senrelay.app"
+      - name: Execute installed hooks from the bundled runtime
+        run: app/backend/.venv/bin/python app/macos/verify_hook_distribution.py --bundle "$RUNNER_TEMP/senrelay-native/Senrelay.app" --output-dir "$RUNNER_TEMP/senrelay-hook-check"
+      - name: Verify exact native ZIP identity and bounded privacy checks
+        run: app/backend/.venv/bin/python app/macos/verify_archive.py --directory "$RUNNER_TEMP/senrelay-native"
+      - name: Verify bundled persistence and deletion across restarts
+        run: app/backend/.venv/bin/python app/macos/verify_data_lifecycle.py --bundle "$RUNNER_TEMP/senrelay-native/Senrelay.app"
+      - name: Require an ad-hoc arm64 Beta receipt
+        run: |
+          python3 - <<'PY'
+          import json, platform, os
+          from pathlib import Path
+          if platform.machine() != "arm64":
+              raise SystemExit(f"Beta native smoke requires Apple Silicon, got {platform.machine()}")
+          record = json.loads((Path(os.environ["RUNNER_TEMP"]) / "senrelay-native" / "BUILD.json").read_text())
+          if record.get("architecture") != "arm64" or record.get("signature") != "ad-hoc" or record.get("notarized") is not False:
+              raise SystemExit(f"Unexpected native receipt: {record}")
+          if record.get("minimum_macos") != "14.0":
+              raise SystemExit("Native minimum macOS must remain 14.0")
+          PY
+      - name: Verify isolated service status without installing or starting launchd
+        run: ./app/scripts/contextcore-service status
+
+  security:
+    name: Fail-closed public dependency and bounded hygiene gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Exercise scanner failure and coverage negative controls
+        run: python -m unittest discover -s scripts/tests -v
+      - name: Run strict audits (unknown or advisory results block)
+        run: python scripts/verify_repository_security.py

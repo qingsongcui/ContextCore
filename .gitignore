@@ -1,0 +1,49 @@
+__pycache__/
+*.pyc
+.DS_Store
+*.tmp
+*.bak
+.pytest_cache/
+
+# 私人知识库产物与运行期状态，不入分发包
+workspace/
+.design/
+
+# ContextCore app runtime
+app/backend/*.db
+app/backend/*.db-shm
+app/backend/*.db-wal
+app/backend/.venv/
+app/backend/build/
+app/backend/dist/
+app/backend/.pytest_cache/
+node_modules/
+app/frontend/node_modules/
+app/frontend/dist/
+app/frontend/dist-staging/
+app/frontend/coverage/
+app/backend/uploads/
+website/dist/
+
+# 根目录散落的临时图片导出，不入分发包
+ChatGPT Image*.png
+
+# 本地 IDE / agent 配置，不入分发
+.claude/
+
+# Local repair checkpoints; never include private evidence in a release.
+.slim/
+.env
+.env.*
+!.env.example
+*.egg-info/
+
+# macOS application artifacts
+app/macos/build/
+app/macos/dist/
+
+# Signing and notarization material. Never add these for the ad-hoc Beta.
+*.p12
+*.p8
+AuthKey_*.p8
+*.notarytool-keychain

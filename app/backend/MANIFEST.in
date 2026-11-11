@@ -1,0 +1,5 @@
+include README.md
+include requirements*.txt
+recursive-include app/integrations *.json *.ts
+recursive-include app/integrations/skills *.md
+recursive-include app/services *.json *.txt

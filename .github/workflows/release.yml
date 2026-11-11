@@ -1,0 +1,300 @@
+name: Release Candidate Artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact existing version tag to validate and package (for example v1.0.0)
+        required: true
+        type: string
+
+# This workflow only uploads workflow-run candidate artifacts. Publishing a
+# public GitHub Release is deliberately a separate, explicitly approved action.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Validate exact tag, commit and package versions
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.target.outputs.tag }}
+      version: ${{ steps.target.outputs.version }}
+      commit: ${{ steps.target.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Resolve and validate release target (never interpolate input into shell)
+        id: target
+        env:
+          REQUESTED_TAG: ${{ inputs.tag || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          EVENT_REF_TYPE: ${{ github.ref_type }}
+        run: |
+          python - <<'PY'
+          import json, os, re, subprocess, sys, tomllib
+          from pathlib import Path
+          sys.path.insert(0, 'app/scripts')
+          from release_versions import validate_versions
+          tag = os.environ["REQUESTED_TAG"]
+          if not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?", tag):
+              raise SystemExit("Invalid version tag; expected an exact vMAJOR.MINOR.PATCH tag")
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          commit = git("rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}")
+          if not re.fullmatch(r"[0-9a-f]{40}", commit):
+              raise SystemExit("Tag did not resolve to an exact commit")
+          if os.environ["EVENT_NAME"] == "push":
+              if os.environ["EVENT_REF_TYPE"] != "tag" or commit != git("rev-parse", f'{os.environ["EVENT_SHA"]}^{{commit}}'):
+                  raise SystemExit("Push event does not match requested tag commit")
+          # Read versions from the selected commit, not the dispatch branch.
+          backend = tomllib.loads(git("show", f"{commit}:app/backend/pyproject.toml"))["project"]["version"]
+          frontend = json.loads(git("show", f"{commit}:app/frontend/package.json"))["version"]
+          version = tag[1:]
+          validate_versions(frontend=frontend, backend=backend, tag=tag)
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
+              output.write(f"tag={tag}\nversion={version}\ncommit={commit}\n")
+          PY
+
+  gates:
+    name: Required full CI on validated release commit
+    needs: resolve
+    uses: ./.github/workflows/ci.yml
+    with:
+      checkout_ref: ${{ needs.resolve.outputs.commit }}
+    permissions:
+      contents: read
+
+  package:
+    name: Portable source plus prebuilt UI candidate (no publication)
+    needs: [resolve, gates]
+    runs-on: xcode-27
+    env:
+      RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+      VERSION: ${{ needs.resolve.outputs.version }}
+      RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Recheck immutable target before building
+        run: |
+          python - <<'PY'
+          import json, os, subprocess, sys, tomllib
+          from pathlib import Path
+          sys.path.insert(0, 'app/scripts')
+          from release_versions import validate_versions
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          expected = os.environ["RELEASE_COMMIT"]
+          if git("rev-parse", "HEAD") != expected or git("rev-parse", "--verify", f'refs/tags/{os.environ["RELEASE_TAG"]}^{{commit}}') != expected:
+              raise SystemExit("Release tag moved or checkout differs from gated commit")
+          validate_versions(frontend=os.environ['VERSION'], backend=tomllib.loads(Path("app/backend/pyproject.toml").read_text())["project"]["version"], tag=os.environ['RELEASE_TAG'])
+          if json.loads(Path("app/frontend/package.json").read_text())["version"] != os.environ["VERSION"]:
+              raise SystemExit("Frontend version mismatch")
+          PY
+      - name: Install exact locked backend runtime and test extra
+        run: uv sync --project app/backend --frozen --extra test --extra build
+      - name: Build prebuilt frontend from locked official dependencies
+        working-directory: app/frontend
+        run: |
+          npm ci --registry=https://registry.npmjs.org
+          npm run build
+      - name: Build distributable backend wheel
+        run: uv build --wheel --out-dir dist/wheels app/backend
+      - name: Isolate packaging smoke HOME and data
+        run: |
+          mkdir -p "$RUNNER_TEMP/contextcore-package-home" "$RUNNER_TEMP/contextcore-package-data"
+          echo "HOME=$RUNNER_TEMP/contextcore-package-home" >> "$GITHUB_ENV"
+          echo "CONTEXTCORE_DATA_DIR=$RUNNER_TEMP/contextcore-package-data" >> "$GITHUB_ENV"
+      - name: Run repo-root venv installed-wheel and lifecycle smoke
+        run: app/backend/.venv/bin/python app/scripts/check_release_readiness.py
+      - name: Assemble and inspect relocatable source plus prebuilt frontend
+        run: |
+          app/backend/.venv/bin/python - <<'PY'
+          import hashlib, importlib.util, io, json, os, shutil, subprocess, sys, tarfile, tempfile, zipfile
+          from email.parser import BytesParser
+          from pathlib import Path, PurePosixPath
+          sys.path.insert(0, 'app/scripts')
+          from release_versions import release_versions
+          spec = importlib.util.spec_from_file_location("security", "scripts/verify_repository_security.py")
+          security = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(security)
+          version, commit = os.environ["VERSION"], os.environ["RELEASE_COMMIT"]
+          artifacts = Path("dist/artifacts")
+          artifacts.mkdir(parents=True, exist_ok=False)
+          wheels = list(Path("dist/wheels").glob("*.whl"))
+          if len(wheels) != 1:
+              raise SystemExit("Expected exactly one backend wheel")
+          def inspect(relative, content):
+              path = PurePosixPath(relative)
+              if path.is_absolute() or ".." in path.parts or security.prohibited_path(relative):
+                  raise SystemExit("Unsafe/private/runtime artifact path; candidate blocked")
+              if len(content) > security.MAX_SOURCE_BYTES or security.content_findings(content, relative):
+                  raise SystemExit("Oversized or potential credential-bearing artifact; candidate blocked")
+          with zipfile.ZipFile(wheels[0]) as wheel:
+              names = wheel.namelist()
+              if len(names) != len(set(names)):
+                  raise SystemExit("Duplicate wheel members")
+              metadata = [name for name in names if name.endswith(".dist-info/METADATA")]
+              if len(metadata) != 1 or BytesParser().parsebytes(wheel.read(metadata[0]))["Version"] != release_versions(version)['python_version']:
+                  raise SystemExit("Wheel metadata version mismatch")
+              for member in wheel.infolist():
+                  if (member.external_attr >> 16) & 0o170000 == 0o120000:
+                      raise SystemExit("Wheel symlinks are not allowed")
+                  if not member.is_dir():
+                      inspect(member.filename, wheel.read(member))
+          shutil.copyfile(wheels[0], artifacts / wheels[0].name)
+          # prepare_release.py is a local installation API with absolute paths.
+          # Never ship its current-release/manifest as a portable distribution.
+          # Include rebuild inputs and the documentation linked by the app/root
+          # READMEs. The shared brand configuration lives under website/, not
+          # at the repository root. Only Git-tracked sources enter this archive.
+          source_paths = ["app/backend", "app/frontend", "app/scripts", "app/macos",
+                          "app/README.md", "scripts",
+                          "docs", "brand", "website", ".env.example", "AGENTS.md",
+                          "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "README.md", "README.zh-CN.md",
+                          "SECURITY.md", "CONTRIBUTING.md"]
+          source = subprocess.check_output(["git", "archive", "--format=tar", commit, "--", *source_paths])
+          with tempfile.TemporaryDirectory(prefix="cc-portable-") as temporary:
+              root = Path(temporary) / f"contextcore-{version}"
+              root.mkdir()
+              with tarfile.open(fileobj=io.BytesIO(source)) as archive:
+                  seen = set()
+                  for member in archive.getmembers():
+                      if member.isdir():
+                          continue
+                      if not member.isfile() or member.name in seen or security.generated_path(member.name):
+                          raise SystemExit("Unexpected source archive entry; candidate blocked")
+                      seen.add(member.name)
+                      content = archive.extractfile(member).read()
+                      inspect(member.name, content)
+                      target = root / member.name
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      target.write_bytes(content)
+                      target.chmod(member.mode & 0o777)
+              frontend = Path("app/frontend/dist-staging")
+              if not (frontend / "index.html").is_file():
+                  raise SystemExit("Missing prebuilt frontend")
+              for path in sorted(frontend.rglob("*")):
+                  if path.is_symlink():
+                      raise SystemExit("Prebuilt frontend symlink; candidate blocked")
+                  if path.is_file():
+                      relative = path.as_posix()
+                      content = path.read_bytes()
+                      inspect(relative, content)
+                      target = root / relative
+                      if target.exists():
+                          raise SystemExit("Frontend overwrites tracked source")
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      target.write_bytes(content)
+              # All manifest paths are relative to the extracted bundle root.
+              hashes = {path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                        for path in sorted(root.rglob("*")) if path.is_file()}
+              manifest = {"format": "contextcore-source-prebuilt-ui", "version": version,
+                          "tag": os.environ["RELEASE_TAG"], "source_commit": commit, "sha256": hashes,
+                          "install": "uv sync --project app/backend --frozen",
+                          "serve": ".venv/bin/python -m app.cli serve --host 127.0.0.1 --port 8420 --data-dir <explicit-local-data-dir>",
+                          "serve_working_directory": "app/backend",
+                          "note": "Create runtime state on the destination; no host config, credentials, venv or current-release manifest is included."}
+              (root / "BUNDLE.json").write_text(json.dumps(manifest, indent=2) + "\n")
+              bundle = artifacts / f"contextcore-{version}-source-prebuilt-ui.tar.gz"
+              with tarfile.open(bundle, "w:gz") as archive:
+                  archive.add(root, arcname=root.name, recursive=True)
+              # Read back every packaged byte; check membership and per-file hashes.
+              expected = dict(hashes)
+              expected["BUNDLE.json"] = hashlib.sha256((root / "BUNDLE.json").read_bytes()).hexdigest()
+              observed = {}
+              with tarfile.open(bundle, "r:gz") as archive:
+                  for member in archive.getmembers():
+                      if member.isdir():
+                          continue
+                      if not member.isfile() or not member.name.startswith(root.name + "/"):
+                          raise SystemExit("Unsafe final bundle member")
+                      relative = member.name[len(root.name) + 1:]
+                      if relative == "app/scripts/contextcore-service" and not member.mode & 0o111:
+                          raise SystemExit("Portable service helper lost its executable mode")
+                      if relative in observed:
+                          raise SystemExit("Duplicate final bundle member")
+                      content = archive.extractfile(member).read()
+                      inspect(relative, content)
+                      observed[relative] = hashlib.sha256(content).hexdigest()
+              if observed != expected:
+                  raise SystemExit("Portable bundle membership/checksum verification failed")
+          sums = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(artifacts.iterdir())}
+          (artifacts / "SHA256SUMS").write_text("".join(f"{digest}  {name}\n" for name, digest in sums.items()))
+          for name, digest in sums.items():
+              if hashlib.sha256((artifacts / name).read_bytes()).hexdigest() != digest:
+                  raise SystemExit("Artifact checksum readback failed")
+          PY
+      - name: Build native candidate from the same gated source
+        run: app/backend/.venv/bin/python app/macos/build.py --from-source --output-dir "$RUNNER_TEMP/senrelay-native" --build-number "$([ "$GITHUB_RUN_NUMBER" = "999" ] && echo "998.1" || echo "$GITHUB_RUN_NUMBER")"
+      - name: Verify native candidate runtime and static assets
+        run: app/backend/.venv/bin/python app/macos/verify_bundle.py --bundle "$RUNNER_TEMP/senrelay-native/Senrelay.app"
+      - name: Execute installed hooks from native candidate in isolated HOME
+        run: app/backend/.venv/bin/python app/macos/verify_hook_distribution.py --bundle "$RUNNER_TEMP/senrelay-native/Senrelay.app" --output-dir "$RUNNER_TEMP/senrelay-hook-check"
+      - name: Verify exact native ZIP identity and bounded privacy checks
+        run: app/backend/.venv/bin/python app/macos/verify_archive.py --directory "$RUNNER_TEMP/senrelay-native"
+      - name: Verify bundled persistence and deletion across restarts
+        run: app/backend/.venv/bin/python app/macos/verify_data_lifecycle.py --bundle "$RUNNER_TEMP/senrelay-native/Senrelay.app"
+      - name: Require an ad-hoc arm64 Beta receipt
+        run: |
+          python3 - <<'PY'
+          import json, platform, os
+          from pathlib import Path
+          if platform.machine() != "arm64":
+              raise SystemExit(f"Beta packaging requires Apple Silicon, got {platform.machine()}")
+          record = json.loads((Path(os.environ["RUNNER_TEMP"]) / "senrelay-native" / "BUILD.json").read_text())
+          if record.get("architecture") != "arm64" or record.get("signature") != "ad-hoc" or record.get("notarized") is not False:
+              raise SystemExit(f"Unexpected native receipt: {record}")
+          if record.get("minimum_macos") != "14.0":
+              raise SystemExit("Native minimum macOS must remain 14.0")
+          PY
+      - name: Add native candidate and regenerate all artifact checksums
+        run: |
+          app/backend/.venv/bin/python - <<'PY'
+          import hashlib, json, os, shutil
+          from pathlib import Path
+          native = Path(os.environ["RUNNER_TEMP"]) / "senrelay-native"
+          record = json.loads((native / "BUILD.json").read_text())
+          artifacts = Path("dist/artifacts")
+          filename = f'Senrelay-{os.environ["VERSION"]}-macOS-{record["architecture"]}.zip'
+          shutil.copyfile(native / "Senrelay-macOS.zip", artifacts / filename)
+          if hashlib.sha256((artifacts / filename).read_bytes()).hexdigest() != record["sha256"]:
+              raise SystemExit("Native candidate checksum mismatch")
+          record.update(source_commit=os.environ["RELEASE_COMMIT"], tag=os.environ["RELEASE_TAG"], artifact=filename)
+          (artifacts / "NATIVE-BUILD.json").write_text(json.dumps(record, indent=2) + "\n")
+          sums = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(artifacts.iterdir()) if p.name != "SHA256SUMS"}
+          (artifacts / "SHA256SUMS").write_text("".join(f"{digest}  {name}\n" for name, digest in sums.items()))
+          PY
+      - name: Upload gated candidate artifacts only (no public release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextcore-candidate-${{ needs.resolve.outputs.version }}-${{ needs.resolve.outputs.commit }}
+          path: dist/artifacts/*
+          if-no-files-found: error
+          retention-days: 14

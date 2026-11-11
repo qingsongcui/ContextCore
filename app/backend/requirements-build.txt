@@ -1,0 +1,2 @@
+# Build extras for ContextCore Backend
+pyinstaller==6.20.0

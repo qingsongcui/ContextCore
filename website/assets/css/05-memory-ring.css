@@ -1,0 +1,14 @@
+@media (max-width: 600px) {
+  .memory-ring > span {
+    font-size: 11px;
+    letter-spacing: 0.2px;
+  }
+}
+@media (max-width: 360px) {
+  .memory-visual {
+    height: 300px;
+  }
+  .memory-ring {
+    transform: scale(0.75);
+  }
+}

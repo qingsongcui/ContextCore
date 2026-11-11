@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121412">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Senrelay · 续境 — 本地运行与使用指南</title>
+  <meta name="description" content="Senrelay（续境）本地服务与桌面工作台指南：多宿主配置管理与同步、伴生带来源记忆采集（附 💡 回执）与跨 Agent 对话接力。">
+  <!-- deployment-metadata -->
+  <link rel="icon" href="./assets/senrelay-logo-original-v1.png" type="image/png">
+  <link rel="stylesheet" href="./assets/site.css">
+  <style>
+    .guide-page p code, .guide-page li code {
+      overflow-wrap: anywhere;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12.5px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(183, 196, 161, 0.09);
+      border: 1px solid rgba(183, 196, 161, 0.18);
+      color: #dce6cc;
+    }
+    .guide-page {
+      padding: 48px 0 96px;
+    }
+    .guide-header {
+      margin-bottom: 36px;
+      padding-bottom: 28px;
+      border-bottom: 1px solid var(--line);
+    }
+    .guide-header h1 {
+      font-size: clamp(28px, 3.8vw, 42px);
+      line-height: 1.25;
+      letter-spacing: -0.03em;
+      margin: 14px 0 14px;
+      color: var(--ink);
+    }
+    .guide-lead {
+      color: var(--muted);
+      font-size: 15.5px;
+      line-height: 1.75;
+      max-width: 820px;
+    }
+    .callout {
+      background: linear-gradient(180deg, rgba(38, 45, 34, 0.72), rgba(26, 30, 23, 0.88));
+      border: 1px solid rgba(183, 196, 161, 0.24);
+      border-left: 3px solid var(--sage);
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin: 24px 0 36px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+    }
+    .callout-title {
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+      color: var(--sage);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .callout p {
+      color: var(--ink);
+      font-size: 13.5px;
+      line-height: 1.7;
+      margin: 6px 0;
+    }
+    .guide-section {
+      margin: 44px 0;
+    }
+    .guide-section h2 {
+      font-size: 21px;
+      font-weight: 560;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .guide-section h2 .badge {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 5px;
+      background: rgba(183, 196, 161, 0.1);
+      border: 1px solid rgba(183, 196, 161, 0.22);
+      color: var(--sage);
+      font-weight: 500;
+    }
+    .guide-section h3 {
+      font-size: 16px;
+      font-weight: 550;
+      color: #dce5ce;
+      margin: 22px 0 10px;
+    }
+    .guide-section p {
+      color: var(--muted);
+      margin-bottom: 12px;
+      font-size: 14.5px;
+      line-height: 1.75;
+    }
+    .guide-section ul, .guide-section ol {
+      margin: 12px 0 20px 22px;
+      padding: 0;
+      color: var(--ink);
+      font-size: 14.5px;
+      line-height: 1.75;
+    }
+    .guide-section li {
+      margin-bottom: 8px;
+    }
+    pre.code-block {
+      background: #111310;
+      border: 1px solid rgba(183, 196, 161, 0.18);
+      border-radius: 8px;
+      padding: 18px 20px;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #dce5ce;
+      margin: 12px 0 20px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+    pre.code-block code {
+      font-family: inherit;
+      background: none;
+      border: 0;
+      padding: 0;
+    }
+    .code-comment {
+      color: #7c8770;
+    }
+    .pillar-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin: 16px 0 24px;
+    }
+    .boundary-card {
+      background: linear-gradient(180deg, rgba(34, 38, 31, 0.82), rgba(25, 28, 23, 0.92));
+      border: 1px solid rgba(183, 196, 161, 0.16);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+    }
+    .pillar-grid .boundary-card {
+      margin-bottom: 0;
+    }
+    .boundary-card h3 {
+      font-size: 15px;
+      color: var(--sage);
+      margin: 0 0 8px;
+    }
+    .boundary-card p {
+      font-size: 13.5px;
+      color: var(--muted);
+      margin: 0;
+      line-height: 1.68;
+    }
+    .lang-divider {
+      margin: 56px 0 40px;
+      border: 0;
+      border-top: 1px solid var(--line);
+    }
+    html.has-js .lang-divider {
+      display: none;
+    }
+    html.has-js[data-guide-lang="zh"] [data-guide-section="en"],
+    html.has-js[data-guide-lang="en"] [data-guide-section="zh"] {
+      display: none;
+    }
+    @media (max-width: 860px) {
+      .pillar-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+<a class="skip" href="#main" data-zh="跳到主要内容" data-en="Skip to main content">跳到主要内容</a>
+<header class="site-header"><div class="header wrap">
+<a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-zh="Senrelay 续境首页" data-aria-en="Senrelay home"><img class="brand-symbol" src="./assets/senrelay-logo-original-v1.png" alt="" aria-hidden="true">Senrelay<span class="brand-cn" data-zh="· 续境" data-en="">· 续境</span></a>
+<nav aria-label="页面导航" data-aria-zh="页面导航" data-aria-en="Page navigation"><a href="./" data-zh="← 返回首页" data-en="← Back to Home">← 返回首页</a></nav>
+<div class="header-tools"><div class="language-switch" role="group" aria-label="语言"><button type="button" data-lang="zh" aria-pressed="true" lang="zh-CN">中</button><button type="button" data-lang="en" aria-pressed="false" lang="en">EN</button></div><a class="header-github" href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span><span class="sr-only" data-zh="（新窗口）" data-en="(opens in a new window)">（新窗口）</span></a></div>
+</div></header>
+
+<main id="main" class="wrap guide-page">
+  <div class="guide-header">
+    <div class="eyebrow"><span class="live-dot"></span> CONTEXTCORE / LOCAL WORKBENCH GUIDE <span class="tiny-line"></span></div>
+    <h1 data-zh="本地运行与核心工作流指南" data-en="Local Setup &amp; Workflow Guide">本地运行与核心工作流指南</h1>
+    <p class="guide-lead" data-zh="Senrelay（续境）由 macOS 本机后台服务与桌面/浏览器工作台组成，集成了多宿主配置管理与本机配置同步、伴生自动记忆沉淀（附 💡 回执），以及跨 Agent 对话接力。" data-en="Senrelay combines a local macOS background service with a native/browser workbench for multi-host configuration management, source-linked companion auto-memory (with a brief 💡 receipt), and cross-agent conversation relay.">Senrelay（续境）由 macOS 本机后台服务与桌面/浏览器工作台组成，集成了多宿主配置管理与本机配置同步、伴生自动记忆沉淀（附 💡 回执），以及跨 Agent 对话接力。</p>
+  </div>
+
+  <div data-guide-section="zh">
+    <div class="callout" role="note">
+      <div class="callout-title"><span aria-hidden="true">✦</span> 核心能力速览</div>
+      <p><strong>1. 多宿主配置管理</strong>：常驻顶栏秒切目标宿主（支持 Claude Code、Codex、Cursor、Antigravity、OMP、OpenCode 六大主力宿主及扩展宿主），支持「一键接入续境」、一键切换模型服务商及 MCP / Skills / 系统提示词，每次写入自动留存回滚快照，遇到外部手动修改冲突时弹窗核对差异；文件写入与宿主进程实际加载分别独立核验。</p>
+      <p><strong>2. 伴生自动记忆沉淀</strong>：日常对话中由伴生 MCP 与 Skills 采集偏好、架构决定、约束、进度与踩坑经验（保留原话出处并给出简短 <code>💡</code> 回执），并在工作台支持 📌 核心规则置顶、<code>AGENTS.md</code> 规则手册生成与多格式资料导入。</p>
+      <p><strong>3. 跨 Agent 对话接力</strong>：打开任意新 Agent 输入 <code>/contextcore</code> 或说「接力 / 接着做 / relay」，自动列出近期对话记录候选（含序号、来源 Agent、所属项目、标题与摘要）——仅选序号先加载上下文并汇报摘要待命，附带具体任务指令则直接续做。</p>
+    </div>
+
+    <section class="guide-section">
+      <h2>1. 下载包与运行环境 <span class="badge">Download &amp; Requirements</span></h2>
+      <p>公开版本以 <a href="https://github.com/qingsongcui/ContextCore/releases">GitHub Releases</a> 中实际发布的附件为准。<code>Senrelay-macOS.zip</code> 面向 Apple Silicon（arm64）、macOS 14.0 及以上，仅打包 <code>Senrelay.app</code> 本体，内含独立 Python 后台与前端工作台资源，无需单独安装 Python 或 Node（各 AI 宿主自身的运行环境仍需具备）。</p>
+      <p>安装包当前采用 ad-hoc 签名，暂未执行 Apple 公证。下载核对 <code>SHA256SUMS</code> 并解压后，按以下<strong>两步首次启动指引</strong>打开（无需全局关闭 Gatekeeper）：</p>
+      <ol>
+        <li>将 <code>Senrelay.app</code> 移入 <code>/Applications</code>；</li>
+        <li>在终端执行 <code>xattr -cr /Applications/Senrelay.app</code> 清理隔离属性（或在「系统设置 → 隐私与安全性 → 仍要打开」中放行；源码仓库亦提供 <code>app/macos/install-macos.sh</code> 供终端执行）。</li>
+      </ol>
+      <p>数据默认保存在 <code>~/Library/Application Support/ContextCore</code>。关闭窗口（如 <code>Cmd+W</code>）不会停止后台常驻服务；需要停服务时请在设置页或 CLI 执行明确停止操作。支持通过 <code>contextcore backup</code> 生成整库 SQLite 在线备份；卸载 App 不会删除项目历史与记忆。</p>
+      <h3>从源码开发</h3>
+      <p>在启动本机源码服务前，请确认本地 macOS 环境满足以下依赖版本：</p>
+      <ul>
+        <li><strong>操作系统</strong>：macOS 14.0 及以上（Apple Silicon，支持系统钥匙串独立凭据托管与 LaunchAgent 守护）。</li>
+        <li><strong>Python</strong>：Python 3.12 推荐（最低 3.11，需 SQLite <code>blobopen</code> 支持）。</li>
+        <li><strong>Node.js</strong>：Node 22 LTS 或 Node 24 LTS（支持引擎 <code>^22.22.2 || ^24.15.0 || &gt;=26</code>）。</li>
+      </ul>
+    </section>
+
+    <section class="guide-section">
+      <h2>2. 安装依赖 <span class="badge">Installation</span></h2>
+      <p>请在<strong>仓库根目录</strong>下执行以下安装命令：</p>
+      <pre class="code-block"><code><span class="code-comment"># 1. 创建后端独立虚拟环境并安装产品包（自动注册 contextcore CLI 命令）</span>
+python3.12 -m venv app/backend/.venv
+app/backend/.venv/bin/python -m pip install -e 'app/backend[test]'
+
+<span class="code-comment"># 2. 安装前端依赖</span>
+npm --prefix app/frontend ci --ignore-scripts</code></pre>
+    </section>
+
+    <section class="guide-section">
+      <h2>3. 启动工作台 <span class="badge">Running</span></h2>
+      <p>提供两种启动方式：集成运行模式（适合日常主力使用）与前后端热重载模式（适合界面开发调试）。</p>
+
+      <h3>模式 A：集成部署（后端直接托管前端工作台）</h3>
+      <pre class="code-block"><code><span class="code-comment"># 步骤 1：构建前端包（输出至 app/frontend/dist-staging）</span>
+npm --prefix app/frontend run build
+
+<span class="code-comment"># 步骤 2：启动本机服务（监听 127.0.0.1:18420，或常驻产品端口 8420）</span>
+app/backend/.venv/bin/contextcore serve --host 127.0.0.1 --port 18420 --data-dir "$HOME/.contextcore/dev-data" --frontend-dir app/frontend/dist-staging</code></pre>
+      <p>启动后在浏览器打开：<code>http://127.0.0.1:18420</code>（若已配置 macOS 常驻服务则可直接访问 <code>http://127.0.0.1:8420</code>）。</p>
+
+      <h3>模式 B：前后端独立调试（Vite 开发热重载）</h3>
+      <pre class="code-block"><code><span class="code-comment"># 终端 1：启动纯后端 API 与 MCP 服务</span>
+app/backend/.venv/bin/contextcore serve --host 127.0.0.1 --port 18420 --data-dir "$HOME/.contextcore/dev-data" --no-static
+
+<span class="code-comment"># 终端 2：启动前端 Vite 开发服务器（端口 15173，自动代理至 18420）</span>
+npm --prefix app/frontend run dev:isolated</code></pre>
+      <p>启动后在浏览器打开：<code>http://localhost:15173</code></p>
+    </section>
+
+    <section class="guide-section" id="everyday-use">
+      <h2>4. 三大核心工作流实战 <span class="badge">Core Workflows</span></h2>
+      <div class="pillar-grid">
+        <div class="boundary-card">
+          <h3>① 多宿主配置切换与同步</h3>
+          <p>进入「Agent 管理」，在常驻顶栏选定目标宿主（Claude Code、Codex、Cursor、Antigravity、OMP、OpenCode 等），点击「一键接入续境」完成接入。可一键填入供应商预设模板并测速验证，一键切换模型、MCP 工具、Skills 与使用规则（自动留存快照，冲突时弹窗核对差异），并支持同步与导入本机已有配置。</p>
+        </div>
+        <div class="boundary-card">
+          <h3>② 伴生自动记忆沉淀</h3>
+          <p>在已绑定伴生 MCP 与 Skills 的 Agent 中正常对话工作。当讨论产生架构决定、个人偏好、边界约束、阶段进展或踩坑教训时，伴生组件会采集带来源引用的结构化记忆并附上简短 <code>💡</code> 回执；分歧项进入「待确认」处理。</p>
+        </div>
+        <div class="boundary-card">
+          <h3>③ 跨 Agent 对话接力</h3>
+          <p>在新 Agent 输入 <code>/contextcore</code> 或说「接力 / 接着做」列出近期对话候选：只选序号先加载上下文汇报摘要并等待下一句指令，附带具体任务指令则直接续做。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="guide-section">
+      <h2>5. 本机数据与安全边界 <span class="badge">Data &amp; Security</span></h2>
+      <div class="boundary-card">
+        <h3>本机优先存储与钥匙串隔离</h3>
+        <p>会话索引、项目记忆与配置快照全部保存在你的 Mac 本机目录（目录权限 <code>0700</code>，数据库文件 <code>0600</code>），支持通过设置页或 <code>contextcore backup</code> 创建整库 SQLite 在线备份；API Key 独立保存在 macOS 系统钥匙串中，配置导出包默认排除已托管的密钥凭据。</p>
+      </div>
+      <div class="boundary-card">
+        <h3>独立授权、多模路由与配置守护</h3>
+        <p>读取会话历史、修改宿主配置文件、下载可选本地语义模型三类权限彼此独立，绝不捆绑。单个宿主可按需切换直连、本机代理转发（含优先级备用链）或模型聚合；每次宿主配置文件更改均自动留存快照以便回滚，遇到外部手动修改会阻止覆盖并弹窗提示核对差异。</p>
+      </div>
+    </section>
+  </div>
+
+  <hr class="lang-divider">
+
+  <div data-guide-section="en" lang="en">
+    <div class="callout" role="note">
+      <div class="callout-title"><span aria-hidden="true">✦</span> Core Pillars Overview</div>
+      <p><strong>1. Multi-Host Configuration Management</strong>: Switch target hosts from the permanent top bar (covering the six core context hosts—Claude Code, Codex, Cursor, Antigravity, OMP, and OpenCode—plus extended config hosts), run One-Click Connect, and switch or sync providers, MCP tools, Skills, and prompts with automatic rollback snapshots and external conflict diff protection. File writes and live host process reloads are tracked separately.</p>
+      <p><strong>2. Companion Auto-Memory</strong>: During everyday chats, companion MCP tools and Skills capture source-linked structured memories (preferences, architecture decisions, constraints, progress, and lessons learned) with a brief <code>💡</code> receipt, complemented by 📌 core-rule pinning, <code>AGENTS.md</code> handbook generation, and multi-format document imports.</p>
+      <p><strong>3. Cross-Agent Conversation Relay</strong>: Type <code>/contextcore</code> or say "Relay" in a new agent to list recent cross-host conversation candidates (with index, source agent, project, title, and summary)—replying with only a number loads context and reports a brief summary while waiting for your next instruction, while attaching a concrete task continues directly.</p>
+    </div>
+
+    <section class="guide-section">
+      <h2>1. Download &amp; Requirements <span class="badge">macOS 14.0+ · arm64</span></h2>
+      <p>Published downloads are attached to <a href="https://github.com/qingsongcui/ContextCore/releases">GitHub Releases</a>. <code>Senrelay-macOS.zip</code> targets Apple Silicon (<code>arm64</code>) on macOS 14.0 or later and contains <code>Senrelay.app</code> with a self-contained Python backend and built web workbench—no separate Python or Node installation is required to run the app (each AI assistant still uses its own host installation).</p>
+      <p>Verify <code>SHA256SUMS</code> before extracting. Because current Beta builds are ad-hoc signed and not Apple notarized, follow these <strong>two steps for first launch on macOS 14.0+</strong> (never disable Gatekeeper globally):</p>
+      <ol>
+        <li>Move <code>Senrelay.app</code> to <code>/Applications</code>;</li>
+        <li>Run <code>xattr -cr /Applications/Senrelay.app</code> in Terminal to clear quarantine attributes (or allow it in <strong>System Settings → Privacy &amp; Security → Open Anyway</strong>; source checkouts also include <code>app/macos/install-macos.sh</code>).</li>
+      </ol>
+      <p>User data lives in <code>~/Library/Application Support/ContextCore</code>. Closing the window (<code>Cmd+W</code>) keeps the background service running; stop it explicitly from Settings or <code>contextcore stop</code> when needed. Whole-database SQLite online backups are supported via <code>contextcore backup</code>, and removing the app bundle does not erase your saved projects, memories, or Keychain items.</p>
+      <h3>Source Development Prerequisites</h3>
+      <ul>
+        <li><strong>OS</strong>: macOS 14.0 or later on Apple Silicon (supports macOS Keychain credential isolation and LaunchAgent supervision).</li>
+        <li><strong>Python</strong>: Python 3.12 recommended (minimum 3.11 with SQLite <code>blobopen</code> support).</li>
+        <li><strong>Node.js</strong>: Node 22 LTS or Node 24 LTS (package engines <code>^22.22.2 || ^24.15.0 || &gt;=26</code>).</li>
+      </ul>
+    </section>
+
+    <section class="guide-section">
+      <h2>2. Install Dependencies <span class="badge">From Repository Root</span></h2>
+      <p>Run all setup commands from the <strong>repository root</strong>:</p>
+      <pre class="code-block"><code><span class="code-comment"># 1. Create the backend virtualenv and install the package (registers the contextcore CLI)</span>
+python3.12 -m venv app/backend/.venv
+app/backend/.venv/bin/python -m pip install -e 'app/backend[test]'
+
+<span class="code-comment"># 2. Install locked frontend dependencies</span>
+npm --prefix app/frontend ci --ignore-scripts</code></pre>
+    </section>
+
+    <section class="guide-section">
+      <h2>3. Launch the Workbench <span class="badge">Mode A &amp; Mode B</span></h2>
+      <p>Choose between integrated serving (for everyday local use) or split Vite hot-reload mode (for frontend development).</p>
+
+      <h3>Mode A: Integrated Workbench (Backend serves built frontend)</h3>
+      <pre class="code-block"><code><span class="code-comment"># Step 1: Build the frontend bundle into app/frontend/dist-staging</span>
+npm --prefix app/frontend run build
+
+<span class="code-comment"># Step 2: Start the local service on 127.0.0.1:18420 (or 8420 for daily service)</span>
+app/backend/.venv/bin/contextcore serve --host 127.0.0.1 --port 18420 --data-dir "$HOME/.contextcore/dev-data" --frontend-dir app/frontend/dist-staging</code></pre>
+      <p>Open <code>http://127.0.0.1:18420</code> in your browser (or <code>http://127.0.0.1:8420</code> when running the persistent launchd service).</p>
+
+      <h3>Mode B: Split Frontend &amp; Backend Dev Mode (<code>dev:isolated</code> HMR)</h3>
+      <pre class="code-block"><code><span class="code-comment"># Terminal 1: Start API &amp; MCP backend without static serving</span>
+app/backend/.venv/bin/contextcore serve --host 127.0.0.1 --port 18420 --data-dir "$HOME/.contextcore/dev-data" --no-static
+
+<span class="code-comment"># Terminal 2: Start isolated Vite dev server on port 15173 (proxies to 18420)</span>
+npm --prefix app/frontend run dev:isolated</code></pre>
+      <p>Open <code>http://localhost:15173</code> in your browser.</p>
+    </section>
+
+    <section class="guide-section">
+      <h2>4. Core Workflows in Practice <span class="badge">Core Workflows</span></h2>
+      <div class="pillar-grid">
+        <div class="boundary-card">
+          <h3>① Multi-Host Config Switching &amp; Sync</h3>
+          <p>Open Agent Management, select a target host in the permanent top bar (Claude Code, Codex, Cursor, Antigravity, OMP, OpenCode, or extended hosts), and run One-Click Connect. Fill provider presets, run endpoint latency checks, switch or sync providers, MCP tools, Skills, and prompts with automatic snapshots and conflict diff checks, and import existing local configurations on demand.</p>
+        </div>
+        <div class="boundary-card">
+          <h3>② Companion Auto-Memory</h3>
+          <p>Work naturally in any agent connected with companion MCP tools and Skills. Preferences, architecture decisions, constraints, milestones, and lessons are captured as source-linked structured memories with a brief <code>💡</code> receipt, while conflicting updates route to Pending Conflicts.</p>
+        </div>
+        <div class="boundary-card">
+          <h3>③ Cross-Agent Conversation Relay</h3>
+          <p>Type <code>/contextcore</code> or say "Relay" in a new agent to list recent conversation candidates: pick just a number to load context, review a brief summary, and wait for your next prompt, or attach a concrete task to continue right away.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="guide-section">
+      <h2>5. Local Data &amp; Security Boundaries <span class="badge">Data &amp; Keychain</span></h2>
+      <div class="boundary-card">
+        <h3>Local-First Storage &amp; macOS Keychain Isolation</h3>
+        <p>Session indexes, project memories, and configuration snapshots stay in your local Mac data directory (<code>0700</code> directory mode, <code>0600</code> SQLite database files), with whole-database online backups available from Settings or <code>contextcore backup</code>. Provider API keys are isolated in macOS Keychain, and configuration exports exclude managed secrets by default.</p>
+      </div>
+      <div class="boundary-card">
+        <h3>Separate Permissions, Routing &amp; Config Guard</h3>
+        <p>Reading conversation history, modifying host configuration files, and downloading optional local semantic models require separate permissions that are never bundled. Each host supports Direct, Local Proxy Routing (with ordered fallback chains), or Model Aggregation, and every host file write saves an automatic rollback snapshot while blocking silent overwrites on external manual edits.</p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="footer wrap">
+<a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-zh="Senrelay 续境首页" data-aria-en="Senrelay home"><img class="brand-symbol" src="./assets/senrelay-logo-original-v1.png" alt="" aria-hidden="true">Senrelay<span class="brand-cn" data-zh="· 续境" data-en="">· 续境</span></a>
+<p>New agent. Same thread.</p>
+<div>
+  <a href="./" data-zh="首页" data-en="Home">首页</a>
+  <a href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">GitHub ↗<span class="sr-only" data-zh="（新窗口）" data-en="(opens in a new window)">（新窗口）</span></a>
+  <a href="https://github.com/qingsongcui/ContextCore/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License<span class="sr-only" data-zh="（新窗口）" data-en="(opens in a new window)">（新窗口）</span></a>
+  <a href="#main" data-zh="回到顶部 ↑" data-en="Back to top ↑">回到顶部 ↑</a>
+</div>
+</footer>
+<script type="module">
+  const LANG_KEY = 'senrelay.website.language';
+  const root = document.documentElement;
+  const zhTitle = document.title;
+  const brandPrefix = zhTitle.split('—')[0].trim().replace(/\s*·\s*.*$/, '') || 'Senrelay';
+  const enTitle = `${brandPrefix} — Local Setup & Workflow Guide`;
+  const metaDesc = document.querySelector('meta[name="description"]');
+  const zhDesc = metaDesc ? metaDesc.getAttribute('content') : '';
+  const enDesc = `${brandPrefix} local macOS service and workbench guide: multi-host configuration management, companion source-linked auto-memory, and cross-agent conversation relay.`;
+
+  function detectLanguage() {
+    const override = new URLSearchParams(window.location.search).get('lang');
+    if (override === 'zh' || override === 'en') return override;
+    try {
+      const stored = window.localStorage.getItem(LANG_KEY);
+      if (stored === 'zh' || stored === 'en') return stored;
+    } catch { /* Storage is optional. */ }
+    const primary = ((navigator.languages && navigator.languages[0]) || navigator.language || '').toLowerCase();
+    if (!primary) return 'zh';
+    return primary.startsWith('zh') ? 'zh' : 'en';
+  }
+
+  let language = detectLanguage();
+
+  function applyGuideLanguage(lang) {
+    root.lang = lang === 'en' ? 'en' : 'zh-CN';
+    root.dataset.guideLang = lang;
+    document.title = lang === 'en' ? enTitle : zhTitle;
+    if (metaDesc) metaDesc.setAttribute('content', lang === 'en' ? enDesc : zhDesc);
+    document.querySelectorAll('[data-guide-section]').forEach(section => {
+      section.hidden = section.dataset.guideSection !== lang;
+    });
+    document.querySelectorAll('[data-zh][data-en]').forEach(el => {
+      el.textContent = lang === 'en' ? el.dataset.en : el.dataset.zh;
+    });
+    document.querySelectorAll('[data-aria-zh][data-aria-en]').forEach(el => {
+      el.setAttribute('aria-label', lang === 'en' ? el.dataset.ariaEn : el.dataset.ariaZh);
+    });
+    document.querySelectorAll('[data-lang]').forEach(btn => {
+      btn.setAttribute('aria-pressed', String(btn.dataset.lang === lang));
+    });
+    const group = document.querySelector('.language-switch');
+    if (group) group.setAttribute('aria-label', lang === 'en' ? 'Language' : '语言');
+  }
+
+  function setGuideLanguage(next) {
+    if ((next !== 'zh' && next !== 'en') || next === language) return;
+    language = next;
+    try { window.localStorage.setItem(LANG_KEY, next); } catch { /* Storage is optional. */ }
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('lang')) {
+        url.searchParams.delete('lang');
+        window.history.replaceState(null, '', url);
+      }
+    } catch { /* ignore */ }
+    applyGuideLanguage(next);
+  }
+
+  root.classList.add('has-js');
+  document.querySelectorAll('[data-lang]').forEach(btn => {
+    btn.addEventListener('click', () => setGuideLanguage(btn.dataset.lang));
+  });
+  applyGuideLanguage(language);
+</script>
+</body>
+</html>

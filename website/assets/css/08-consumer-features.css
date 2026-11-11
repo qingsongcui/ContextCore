@@ -1,0 +1,547 @@
+/* 2026 Architectural Precision & Feature Narrative Polish */
+:root {
+  --canvas: #121412;
+  --surface: #181b17;
+  --panel: #171b15;
+  --line: #2d3329;
+  --line-soft: #242921;
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 12px;
+  --material-bar: rgba(18, 20, 18, 0.82);
+}
+
+.language-switch {
+  display: none;
+}
+.has-js .language-switch {
+  display: inline-flex;
+  height: 38px;
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid #3d4735;
+  background: #181d15;
+}
+.language-switch button {
+  min-width: 38px;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 550;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* Header & Button Anti-Jump Lock on Language Switch */
+.header .brand,
+.header nav a,
+.header-github,
+.button,
+.text-link,
+.hero-footnote span,
+.eyebrow,
+.assistant-path li span {
+  white-space: nowrap;
+}
+
+.button {
+  border-radius: 7px;
+  min-height: 44px;
+  padding: 10px 20px;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+.header-github {
+  min-height: 38px;
+  height: 38px;
+  padding: 0 13px;
+  border-radius: 6px;
+  border-color: #3d4735;
+  background: #181d15;
+}
+
+/* Fix English typography letter-spacing & line-height */
+html[lang="en"] .hero h1,
+html[lang="en"] h1 {
+  letter-spacing: -0.035em;
+  line-height: 1.16;
+  margin-right: 0;
+}
+html[lang="en"] h2,
+html[lang="en"] .closing h2 {
+  letter-spacing: -0.03em;
+  line-height: 1.24;
+}
+html[lang="en"] .section-label {
+  letter-spacing: 0.05em;
+}
+
+/* Sphere & Hero Visual Geometry Refinement */
+.has-sphere .core-inner {
+  border-radius: 14px;
+}
+.has-sphere .orbit-host {
+  border-radius: 7px;
+  background: rgba(24, 29, 22, 0.92);
+  border-color: rgba(183, 196, 161, 0.2);
+}
+
+/* Section 01: Principles & Everyday Jobs */
+.principles {
+  margin-top: 44px;
+  padding-top: 28px;
+  gap: 20px;
+  border-top: 1px solid var(--line);
+}
+.principles > div {
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(28, 33, 25, 0.72), rgba(21, 24, 19, 0.9));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.principles h3 {
+  font-size: 17px;
+  font-weight: 560;
+  margin-top: 12px;
+  color: #edf2e6;
+}
+.principles p {
+  font-size: 13.5px;
+  line-height: 1.78;
+  max-width: none;
+  margin-top: 8px;
+  color: #a3af96;
+}
+
+.everyday-jobs {
+  margin-top: 32px;
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+}
+.jobs-caption {
+  color: var(--sage);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+.everyday-jobs ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.everyday-jobs li {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(24, 28, 22, 0.68);
+}
+.everyday-jobs strong {
+  font-size: 15.5px;
+  font-weight: 560;
+  color: #ebefe4;
+}
+.everyday-jobs li span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+/* Section 02: Agent Management & Multi-Host Console Preview */
+.assistants .section-heading p {
+  max-width: 480px;
+}
+.assistant-path {
+  list-style: none;
+  padding: 0;
+  margin: 36px 0 24px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  border: 0;
+}
+.assistant-path li {
+  padding: 16px 18px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #e4eadb;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(25, 30, 22, 0.72);
+}
+.assistant-path li span {
+  display: block;
+  color: var(--sage);
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.06em;
+}
+
+.agent-workflow-preview {
+  padding: 24px 26px;
+  border: 1px solid #3c4833;
+  background: linear-gradient(180deg, #1b2118 0%, #141812 100%);
+  border-radius: 10px;
+  margin: 24px 0 28px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 20px 48px rgba(0, 0, 0, 0.32);
+}
+.agent-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #2e3827;
+}
+.preview-host-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.preview-host-pills strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: #eef3e8;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+.host-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 5px;
+  border: 1px solid #343f2c;
+  background: #161b13;
+  color: #9eab90;
+  white-space: nowrap;
+}
+.host-pill.active {
+  background: rgba(183, 196, 161, 0.16);
+  border-color: #829669;
+  color: #eff5e6;
+}
+.preview-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 5px;
+  border: 1px solid rgba(183, 196, 161, 0.26);
+  background: rgba(183, 196, 161, 0.08);
+  color: #c5d4af;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.agent-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  padding-top: 20px;
+}
+.agent-preview-grid > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 20px;
+  border-radius: 8px;
+  border: 1px solid #2e3727;
+  background: rgba(26, 32, 23, 0.78);
+}
+.agent-preview-grid span {
+  color: var(--sage);
+  font-size: 11.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.04em;
+}
+.agent-preview-grid strong {
+  font-size: 16px;
+  font-weight: 560;
+  line-height: 1.45;
+  color: #eef3e8;
+}
+.agent-preview-grid small {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.68;
+}
+
+.assistant-features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.assistant-features article {
+  min-width: 0;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(26, 30, 23, 0.65), rgba(20, 23, 18, 0.85));
+  transition: border-color var(--dur-2) var(--ease-out), background-color var(--dur-2) var(--ease-out);
+}
+.assistant-features article:hover {
+  border-color: #4a583e;
+  background: rgba(30, 36, 26, 0.88);
+}
+.assistant-features h3 {
+  font-size: 16.5px;
+  font-weight: 560;
+  margin-bottom: 10px;
+  color: #edf2e6;
+}
+.assistant-features p {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.78;
+}
+.assistant-boundary {
+  max-width: 880px;
+  margin: 28px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+/* Section 03: Cross-Agent Project Relay & 6-Point Pack */
+.relay-flow-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+.relay-step-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 20px;
+  border: 1px solid #35422c;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(28, 36, 23, 0.82), rgba(20, 26, 17, 0.94));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.relay-step-card span {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--sage);
+}
+.relay-step-card strong {
+  font-size: 15.5px;
+  font-weight: 560;
+  color: #eef3e8;
+  line-height: 1.4;
+}
+.relay-step-card small {
+  font-size: 12.5px;
+  line-height: 1.68;
+  color: #9fb08e;
+}
+
+.handoff-checklist {
+  column-gap: 32px;
+}
+
+/* Section 04: Workspace Card Geometry */
+.project-visual {
+  transform: none;
+  border-radius: 10px;
+  border-color: #3f4d34;
+  background: linear-gradient(180deg, #1d2319 0%, #161a13 100%);
+}
+.feature-row:hover .project-visual {
+  transform: translateY(-2px);
+}
+
+.retrieval-note {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 48px;
+  padding: 40px 0 0;
+  border-top: 1px solid var(--line);
+}
+.retrieval-note h3 {
+  margin: 14px 0;
+  font-size: clamp(24px, 2.8vw, 34px);
+  font-weight: 500;
+  line-height: 1.38;
+}
+.retrieval-note p,
+.support-detail p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.85;
+}
+.retrieval-note details,
+.support-detail {
+  border-top: 1px solid var(--line);
+  margin-top: 20px;
+  padding-top: 10px;
+}
+.retrieval-note summary,
+.support-detail summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 46px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--sage);
+  list-style: none;
+}
+.retrieval-note summary::-webkit-details-marker,
+.support-detail summary::-webkit-details-marker {
+  display: none;
+}
+.retrieval-note details[open] summary span,
+.support-detail[open] summary span {
+  transform: rotate(45deg);
+}
+
+.start-links {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.closing {
+  border-radius: 10px;
+}
+.project-tabs {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+.assistant-features p,
+.assistant-boundary,
+.assistant-path li,
+.start-links a {
+  overflow-wrap: anywhere;
+}
+
+/* Desktop anti-jump min-heights for Chinese/English switching */
+@media (min-width: 901px) {
+  .principles > div {
+    min-height: 164px;
+  }
+  .everyday-jobs li {
+    min-height: 146px;
+  }
+  .assistant-path li {
+    min-height: 82px;
+  }
+  .agent-preview-grid > div {
+    min-height: 132px;
+  }
+  .assistant-features article {
+    min-height: 168px;
+  }
+  .relay-step-card {
+    min-height: 132px;
+  }
+  .handoff-checklist > li {
+    min-height: 98px;
+  }
+  .integration-overview > li {
+    min-height: 92px;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1149px) {
+  .header {
+    gap: 12px;
+  }
+  .header nav a {
+    padding-inline: 6px;
+  }
+  .header-github {
+    gap: 8px;
+    padding-inline: 10px;
+  }
+}
+
+@media (max-width: 900px) {
+  .everyday-jobs ul,
+  .assistant-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .relay-flow-strip {
+    grid-template-columns: 1fr;
+  }
+  .retrieval-note {
+    gap: 32px;
+  }
+  .assistant-path {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .agent-workflow-preview {
+    padding: 18px;
+  }
+  .agent-preview-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .everyday-jobs {
+    margin-top: 28px;
+  }
+  .everyday-jobs ul {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .assistant-features,
+  .retrieval-note,
+  .assistant-path {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .retrieval-note {
+    padding-top: 28px;
+  }
+  .section-label {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .start-links {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .start-links .button {
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .retrieval-note summary span,
+  .support-detail summary span {
+    transition: none;
+  }
+}

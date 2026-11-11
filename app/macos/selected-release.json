@@ -1,0 +1,7 @@
+{
+  "selected_version": "1.0.0-beta.1",
+  "release_id": "21c1dca8df27a48f-4ff3f671fcdf5816",
+  "frontend_sha256": "4ff3f671fcdf58161b6f0db24dedcc8cd50a7d8ef9b8e7b2bc4a9c8145826578",
+  "backend_sha256": "21c1dca8df27a48fa509d073261be2836ff119079b12cce80d0d849fc2f98b00",
+  "api_contract": 2
+}

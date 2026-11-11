@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ContextCore Native Background Service Control Script
+# Usage: ./contextcore-service [serve|status|install|uninstall|stop|generate-plist|prepare-release|activate-release] [options]
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+APP_DIR="$( cd -P "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd )"
+BACKEND_DIR="$APP_DIR/backend"
+
+# Detect Python interpreter (priority: active virtualenv > backend .venv > workspace .venv > system python3)
+if [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/python" ]; then
+  PYTHON_BIN="$VIRTUAL_ENV/bin/python"
+elif [ -x "$BACKEND_DIR/.venv/bin/python" ]; then
+  PYTHON_BIN="$BACKEND_DIR/.venv/bin/python"
+elif [ -x "$APP_DIR/../.venv/bin/python" ]; then
+  PYTHON_BIN="$APP_DIR/../.venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="$(command -v python3)"
+else
+  PYTHON_BIN="python"
+fi
+
+export PYTHONPATH="$BACKEND_DIR${PYTHONPATH:+:$PYTHONPATH}"
+if [ "${1:-}" = "prepare-release" ]; then
+  shift
+  exec "$PYTHON_BIN" "$SCRIPT_DIR/prepare_release.py" "$@"
+elif [ "${1:-}" = "activate-release" ]; then
+  shift
+  exec "$PYTHON_BIN" "$SCRIPT_DIR/prepare_release.py" --activate-release "$@"
+fi
+
+exec "$PYTHON_BIN" -m app.cli "$@"

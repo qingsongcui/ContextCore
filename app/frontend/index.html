@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="application-name" content="Senrelay · 续境" />
+    <title>Senrelay · 续境 — 项目工作台</title>
+    <link rel="icon" type="image/png" href="/senrelay-logo-original-v1.png" />
+    <script>
+      (function() {
+        try {
+          var stored = window.localStorage.getItem('contextcore.theme') || 'system';
+          var theme = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+          var resolved = theme === 'system'
+            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : theme;
+          if (resolved === 'dark') {
+            document.documentElement.classList.add('dark');
+          }
+          var lang = window.localStorage.getItem('contextcore.language');
+          if (lang !== 'zh' && lang !== 'en') {
+            var primary = (navigator.languages && navigator.languages[0]) || navigator.language || 'zh';
+            lang = /^zh/i.test(primary) ? 'zh' : 'en';
+          }
+          document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
