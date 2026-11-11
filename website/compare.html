@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121412">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Senrelay · 续境 — 2026 多 Agent 上下文接力与 MCP 方案对比</title>
+  <meta name="description" content="客观对比 Claude Code、Cursor、Codex 等多 AI 编程助手共享上下文、记忆与同步 MCP 配置的 5 种方案（CLAUDE.md/AGENTS.md、云端记忆 MCP、Senrelay 本机工作台、Dotfiles 脚本、单 IDE 多模型路由），含纯文本价格、真实缺点与 30 秒选型自测器。">
+  <meta property="og:type" content="article">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:site_name" content="Senrelay · 续境">
+  <meta property="og:title" content="Senrelay · 续境 — 2026 多 Agent 上下文接力与 MCP 方案对比">
+  <meta property="og:description" content="5 种跨 Agent 上下文接力、长期记忆与 MCP 配置同步方案深度横评（核对日期 2026-11-11）：附真实缺点、纯文本价格与 30 秒交互选型器。">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Senrelay · 续境 — 2026 多 Agent 上下文接力与 MCP 方案对比">
+  <meta name="twitter:description" content="Claude Code 切 Cursor / Codex 如何保留上下文与同步 MCP？对比 5 种主流方案的适用场景、价格与真实局限。">
+  <!-- deployment-metadata -->
+  <link rel="icon" href="./favicon.ico" sizes="48x48">
+  <link rel="icon" href="./assets/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" sizes="180x180">
+  <link rel="stylesheet" href="./assets/site.css">
+  <style>
+    .compare-page {
+      padding: 48px 0 96px;
+    }
+    .compare-page p code,
+    .compare-page li code,
+    .compare-page td code {
+      overflow-wrap: anywhere;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12.5px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(183, 196, 161, 0.09);
+      border: 1px solid rgba(183, 196, 161, 0.18);
+      color: #dce6cc;
+    }
+    .compare-header {
+      margin-bottom: 34px;
+      padding-bottom: 28px;
+      border-bottom: 1px solid var(--line);
+    }
+    .compare-header h1 {
+      font-size: clamp(28px, 3.8vw, 42px);
+      line-height: 1.24;
+      letter-spacing: -0.03em;
+      margin: 14px 0 14px;
+      color: var(--ink);
+    }
+    .compare-lead {
+      color: var(--ink);
+      font-size: 15.5px;
+      line-height: 1.78;
+      max-width: 880px;
+    }
+    .compare-meta-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      margin-top: 16px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: var(--sage);
+    }
+    .tldr-box {
+      background: linear-gradient(180deg, rgba(38, 45, 34, 0.76), rgba(24, 28, 21, 0.92));
+      border: 1px solid rgba(183, 196, 161, 0.26);
+      border-left: 3px solid var(--sage);
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin: 24px 0 36px;
+    }
+    .tldr-title {
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+      color: var(--sage);
+      margin-bottom: 10px;
+    }
+    .tldr-box p,
+    .tldr-box li {
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.74;
+    }
+    .tldr-box ul {
+      margin: 10px 0 0 20px;
+      padding: 0;
+    }
+    .tldr-box li {
+      margin-bottom: 6px;
+    }
+    .compare-section {
+      margin: 46px 0;
+    }
+    .compare-section h2 {
+      font-size: 22px;
+      font-weight: 560;
+      letter-spacing: -0.02em;
+      margin-bottom: 14px;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .compare-section h2 .badge {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 5px;
+      background: rgba(183, 196, 161, 0.1);
+      border: 1px solid rgba(183, 196, 161, 0.22);
+      color: var(--sage);
+      font-weight: 500;
+    }
+    .compare-section p {
+      color: var(--muted);
+      font-size: 14.5px;
+      line-height: 1.76;
+      margin-bottom: 12px;
+    }
+    .picker-card {
+      background: linear-gradient(180deg, rgba(29, 35, 25, 0.88), rgba(20, 24, 18, 0.95));
+      border: 1px solid #3c4833;
+      border-radius: 10px;
+      padding: 24px;
+      margin: 18px 0 28px;
+    }
+    .picker-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .picker-fieldset {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 0;
+      background: rgba(18, 21, 16, 0.72);
+    }
+    .picker-fieldset legend {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--sage);
+      padding: 0 6px;
+    }
+    .picker-fieldset label {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .picker-fieldset input[type="radio"] {
+      accent-color: #b7c4a1;
+      margin-top: 3px;
+    }
+    .picker-result {
+      margin-top: 18px;
+      padding: 16px 20px;
+      border-radius: 8px;
+      border: 1px solid rgba(183, 196, 161, 0.32);
+      background: rgba(183, 196, 161, 0.08);
+    }
+    .picker-result strong {
+      display: block;
+      color: #eef3e8;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+    .picker-result p {
+      margin: 0;
+      color: #d6e0c8;
+      font-size: 13.5px;
+      line-height: 1.68;
+    }
+    .option-card {
+      background: linear-gradient(180deg, rgba(32, 37, 29, 0.82), rgba(22, 26, 20, 0.92));
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px 24px;
+      margin-bottom: 18px;
+    }
+    .option-card.highlight-honest {
+      border-color: rgba(183, 196, 161, 0.36);
+    }
+    .option-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin-bottom: 12px;
+    }
+    .option-head h3 {
+      font-size: 17.5px;
+      font-weight: 560;
+      color: #eef3e8;
+      margin: 0;
+    }
+    .option-price {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: var(--sage);
+      padding: 3px 9px;
+      border-radius: 4px;
+      background: rgba(183, 196, 161, 0.1);
+      border: 1px solid rgba(183, 196, 161, 0.2);
+    }
+    .option-pros-cons {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 12px;
+    }
+    .option-pros-cons > div {
+      padding: 14px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--line-soft);
+      background: rgba(17, 20, 15, 0.66);
+    }
+    .option-pros-cons strong {
+      display: block;
+      font-size: 12.5px;
+      color: var(--sage);
+      margin-bottom: 6px;
+    }
+    .option-pros-cons p {
+      margin: 0;
+      font-size: 13.5px;
+      line-height: 1.68;
+      color: var(--muted);
+    }
+    .compare-faq details {
+      border-top: 1px solid var(--line);
+      padding: 14px 0;
+    }
+    .compare-faq details:last-child {
+      border-bottom: 1px solid var(--line);
+    }
+    .compare-faq summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 540;
+      color: #eef3e8;
+      list-style: none;
+    }
+    .compare-faq summary::-webkit-details-marker {
+      display: none;
+    }
+    .compare-faq details p {
+      margin: 10px 0 0;
+      font-size: 14px;
+      line-height: 1.75;
+      color: var(--muted);
+    }
+    .lang-divider {
+      margin: 56px 0 40px;
+      border: 0;
+      border-top: 1px solid var(--line);
+    }
+    html.has-js .lang-divider {
+      display: none;
+    }
+    html.has-js[data-guide-lang="zh"] [data-guide-section="en"],
+    html.has-js[data-guide-lang="en"] [data-guide-section="zh"] {
+      display: none;
+    }
+    @media (max-width: 860px) {
+      .picker-grid,
+      .option-pros-cons {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+<a class="skip" href="#main" data-zh="跳到主要内容" data-en="Skip to main content">跳到主要内容</a>
+<header class="site-header"><div class="header wrap">
+<a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-zh="Senrelay 续境首页" data-aria-en="Senrelay home"><img class="brand-symbol" src="./assets/senrelay-logo-display-v1.png" width="28" height="35" decoding="async" alt="" aria-hidden="true">Senrelay<span class="brand-cn" data-zh="· 续境" data-en="">· 续境</span></a>
+<nav aria-label="页面导航" data-aria-zh="页面导航" data-aria-en="Page navigation"><a href="./" data-zh="← 返回首页" data-en="← Back to Home">← 返回首页</a><a href="./guide.html" data-zh="本地运行指南" data-en="Setup Guide">本地运行指南</a></nav>
+<div class="header-tools"><div class="language-switch" role="group" aria-label="语言" data-aria-zh="语言" data-aria-en="Language"><a href="./compare.html" data-lang="zh" aria-current="page" lang="zh-CN">中</a><a href="./en/compare.html" data-lang="en" lang="en">EN</a></div><a class="header-github" href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span><span class="sr-only" data-zh="（新窗口）" data-en="(opens in a new window)">（新窗口）</span></a></div>
+</div></header>
+
+<main id="main" class="wrap compare-page">
+  <div class="compare-header">
+    <div class="eyebrow"><span class="live-dot"></span> DECISION GUIDE / MULTI-AGENT CONTEXT &amp; MCP <span class="tiny-line"></span></div>
+    <h1 data-zh="2026 多 AI 编程助手共享上下文、记忆与同步 MCP 的 5 种方案对比" data-en="5 Ways to Share Context, Memory &amp; MCP Across AI Coding Agents (2026)">2026 多 AI 编程助手共享上下文、记忆与同步 MCP 的 5 种方案对比</h1>
+    <p class="compare-lead" data-zh="在 Claude Code、Cursor、Codex、Antigravity、OMP 与 OpenCode 之间切换时，没有一种工具适合所有人：跨 Windows/Linux 团队协作首选仓库内 CLAUDE.md + AGENTS.md（$0）；多台设备云端同步首选云记忆 MCP 服务（免费额度或付费订阅）；而在单台 macOS 14.0+（Apple Silicon）上高频跨 Agent 续做任务并统管 MCP/Skills，适合叠加 Senrelay（续境，$0 MIT 免费开源，无需注册）。" data-en="No single tool fits every workflow when switching between Claude Code, Cursor, Codex, Antigravity, OMP, and OpenCode: cross-platform teams on Windows or Linux should start with repo-committed CLAUDE.md + AGENTS.md files ($0); multi-machine cloud sync fits hosted Memory MCP servers (free tier or paid plans); and single-machine macOS 14.0+ (Apple Silicon) developers switching multiple agents mid-task can pair repo files with Senrelay ($0, MIT open source, no signup).">在 Claude Code、Cursor、Codex、Antigravity、OMP 与 OpenCode 之间切换时，没有一种工具适合所有人：跨 Windows/Linux 团队协作首选仓库内 CLAUDE.md + AGENTS.md（$0）；多台设备云端同步首选云记忆 MCP 服务（免费额度或付费订阅）；而在单台 macOS 14.0+（Apple Silicon）上高频跨 Agent 续做任务并统管 MCP/Skills，适合叠加 Senrelay（续境，$0 MIT 免费开源，无需注册）。</p>
+    <div class="compare-meta-bar">
+      <span data-zh="官方价格与技术规格核对日期：Checked on 2026-11-11" data-en="Prices &amp; technical specs verified: Checked on 2026-11-11">官方价格与技术规格核对日期：Checked on 2026-11-11</span>
+      <span data-zh="作者：Qingsong Cui (George O'Nair)" data-en="By Qingsong Cui (George O'Nair)">作者：Qingsong Cui (George O'Nair)</span>
+      <span data-zh="中立原则：Senrelay 不排第一 · 每项均列真实缺点" data-en="Fairness rule: Senrelay not ranked #1 · real downsides listed for every option">中立原则：Senrelay 不排第一 · 每项均列真实缺点</span>
+    </div>
+  </div>
+
+  <div data-guide-section="zh">
+    <div class="tldr-box" id="tldr" role="note">
+      <div class="tldr-title">✦ 30 秒结论（TL;DR：按你的真实场景直接对号入座）</div>
+      <ul>
+        <li><strong>如果你用 Windows / Linux / Intel Mac，或需要把规范随 Git 共享给同事</strong> → 选 <strong>方案 1：仓库内 <code>CLAUDE.md</code> + <code>AGENTS.md</code></strong>（<code>$0</code>）。不要装 Senrelay（不支持非 Apple Silicon Mac）。</li>
+        <li><strong>如果你同时在台式机 + 笔记本多台设备间切换，且接受云端存储或自建 Docker</strong> → 选 <strong>方案 2：云端/自托管记忆 MCP（如 Mem0 / OpenMemory）</strong>。</li>
+        <li><strong>如果你主力使用单台 Apple Silicon Mac（<code>macOS 14.0+</code>），每天在 Claude Code、Cursor、Codex 等多个宿主间切来切去接着干活，且要求 100% 本机隐私</strong> → 用 <strong>方案 1 + 方案 3（Senrelay 续境，<code>$0</code> MIT 开源）</strong> 组合。</li>
+        <li><strong>如果你只用同一个 IDE（如只用 Cursor），只是想换底层大模型</strong> → 选 <strong>方案 5：单宿主 + 多模型路由（如 OpenRouter）</strong>，根本不需要跨宿主接力工具。</li>
+      </ul>
+    </div>
+
+    <section class="compare-section" id="picker">
+      <h2>1. 30 秒交互式选型自测器 <span class="badge">Interactive Stack Picker</span></h2>
+      <p>勾选你当前的操作系统、数据边界与日常工作流，下方会实时计算最匹配的组合（不适合使用 Senrelay 的场景会直接提示跳过）：</p>
+      <div class="picker-card" data-picker="zh">
+        <div class="picker-grid">
+          <fieldset class="picker-fieldset">
+            <legend>① 你的主力开发环境</legend>
+            <label><input type="radio" name="os-zh" value="mac-arm64" checked> macOS 14.0+（Apple Silicon M1–M4）</label>
+            <label><input type="radio" name="os-zh" value="other-os"> Windows / Linux / Intel Mac</label>
+          </fieldset>
+          <fieldset class="picker-fieldset">
+            <legend>② 数据与同步边界</legend>
+            <label><input type="radio" name="sync-zh" value="local" checked> 纯本机单机留存（拒绝聊天记录上云）</label>
+            <label><input type="radio" name="sync-zh" value="cloud"> 需要多台电脑实时同步 / 团队共享</label>
+          </fieldset>
+          <fieldset class="picker-fieldset">
+            <legend>③ 日常使用 AI 的方式</legend>
+            <label><input type="radio" name="flow-zh" value="multi-agent" checked> 混用多个 Agent（如 Claude Code + Cursor + Codex）</label>
+            <label><input type="radio" name="flow-zh" value="single-ide"> 固定只用一个 IDE，仅切换底层大模型</label>
+          </fieldset>
+        </div>
+        <div class="picker-result" data-picker-output="zh" aria-live="polite">
+          <strong>推荐组合：方案 1（AGENTS.md 静态规则）+ 方案 3（Senrelay 本机接力与 MCP 工作台，$0）</strong>
+          <p>你在单台 Apple Silicon Mac 上混用多个编码 Agent 且要求纯本机隐私：用仓库内的 AGENTS.md 固化团队级静态规范，配合 Senrelay（127.0.0.1:8420）实现输入 /contextcore 一句话接力近期会话、伴生 💡 自动记忆，以及一处同步 ~/.claude.json 与 ~/.codex/config.toml。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="compare-section" id="matrix">
+      <h2>2. 五种方案横向规格核对表 <span class="badge">Checked on 2026-11-11</span></h2>
+      <div class="host-matrix-wrap">
+        <table class="host-matrix-table">
+          <caption>多 AI 编程助手上下文共享与 MCP 同步方案对比（核对日期：2026-11-11）</caption>
+          <thead>
+            <tr>
+              <th scope="col">方案名称</th>
+              <th scope="col">支持系统</th>
+              <th scope="col">官方价格（纯文本）</th>
+              <th scope="col">任务中途会话接力</th>
+              <th scope="col">带原话出处的自动记忆</th>
+              <th scope="col">跨宿主 MCP/Skills 同步</th>
+              <th scope="col">数据存储位置</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">1. 仓库规则文件（<code>CLAUDE.md</code> / <code>AGENTS.md</code>）</th>
+              <td>全平台（Win / Mac / Linux）</td>
+              <td><strong>$0</strong>（原生内置）</td>
+              <td>不支持（仅静态规则，不含聊天进度）</td>
+              <td>不支持（需手动编辑 Markdown）</td>
+              <td>不支持（不管全局 MCP 配置文件）</td>
+              <td>本地 Git 仓库</td>
+            </tr>
+            <tr>
+              <th scope="row">2. 云端/自托管记忆 MCP（Mem0 / OpenMemory 等）</th>
+              <td>全平台（凡支持 MCP 客户端）</td>
+              <td>开源自建 <strong>$0</strong> / 云托管免费额度或按量付费</td>
+              <td>部分（可检索碎片记忆，无带序号最近会话交接包）</td>
+              <td>支持语义提取（通常不含本地原始会话轮次行号回溯）</td>
+              <td>不支持（需在每个宿主手写一次该 MCP 配置）</td>
+              <td>云端服务器或本地 Docker 容器</td>
+            </tr>
+            <tr>
+              <th scope="row">3. Senrelay · 续境（<code>ContextCore</code> 本机工作台）</th>
+              <td>仅限 <code>macOS 14.0+</code>（Apple Silicon <code>arm64</code>）</td>
+              <td><strong>$0</strong>（100% 免费开源，MIT License，免注册）</td>
+              <td>原生支持（<code>/contextcore</code> 自动盘点 6 大宿主近期会话，选序号先汇报待命或直接续做）</td>
+              <td>原生支持（伴生采集 + <code>💡</code> 回执 + 原话出处溯源 + 分歧确认箱）</td>
+              <td>原生支持（6 大主力 + 9 类扩展宿主配置预览、快照回滚与冲突 Diff）</td>
+              <td>100% 本机 SQLite（<code>0600</code>）+ macOS 钥匙串</td>
+            </tr>
+            <tr>
+              <th scope="row">4. Dotfiles 软链与转换脚本（<code>GNU Stow</code> 等）</th>
+              <td>macOS / Linux（Windows 需额外脚本）</td>
+              <td><strong>$0</strong>（开源工具 + 自写脚本）</td>
+              <td>不支持</td>
+              <td>不支持</td>
+              <td>半自动（JSON / TOML / JSON5 格式不兼容，软链易被宿主重写破坏）</td>
+              <td>本地 Dotfiles 仓库（需注意剔除明文 Key）</td>
+            </tr>
+            <tr>
+              <th scope="row">5. 单 IDE / 单 CLI + 多模型聚合路由（OpenRouter 等）</th>
+              <td>全平台（视所选单一宿主而定）</td>
+              <td>IDE 订阅费（如 $0–$20/月）+ 模型 Token 费</td>
+              <td>同窗口内无需接力（但无法跨不同 Agent 外壳接力）</td>
+              <td>取决于单一 IDE 自带记忆能力</td>
+              <td>仅需维护单一宿主配置</td>
+              <td>本地 + 所选模型路由商</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="compare-section" id="options">
+      <h2>3. 五种方案逐项深评（含真实缺点） <span class="badge">5 Options Ranked Fairly</span></h2>
+      <p>为保持客观参考价值，我们将最通用、零依赖的原生方案排在第一位，<strong>Senrelay 排在第三位</strong>，并为每一种方案（包括我们自己的产品）列出真实的硬伤与不适用边界。</p>
+
+      <article class="option-card">
+        <div class="option-head">
+          <h3>方案 1：仓库内静态指令文件（<code>CLAUDE.md</code> + <code>AGENTS.md</code> + <code>.cursor/rules</code>）</h3>
+          <span class="option-price">价格：$0 · 全平台原生支持</span>
+        </div>
+        <p>将项目架构约定、测试命令与禁止事项直接写进代码仓库根目录的 Markdown 规则文件中。Claude Code 原生读取 <code>CLAUDE.md</code>，Codex、Cursor、OpenCode 等普遍支持 <code>AGENTS.md</code>。这是所有多 Agent 用户都应该优先配好的第一层基石。</p>
+        <div class="option-pros-cons">
+          <div>
+            <strong>✦ 最适合谁</strong>
+            <p>跨 Windows / macOS / Linux 多人协作团队；希望编码规范跟随 Git PR 评审与版本控制的所有项目。</p>
+          </div>
+          <div>
+            <strong>⚠ 真实缺点</strong>
+            <p>它是“静态说明书”而非“动态接力棒”——当你在 Claude Code 排查了 40 分钟定位到半截 Bug，临时因为额度耗尽或想用 Cursor 改前端时，<code>AGENTS.md</code> 里并没有刚才那通对话的上下文、已排除死胡同和未完进度，也没法帮你同步 <code>~/.claude.json</code> 里的全局 MCP 服务。</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="option-card">
+        <div class="option-head">
+          <h3>方案 2：云端或 Docker 自托管记忆 MCP 服务（如 Mem0 MCP / OpenMemory）</h3>
+          <span class="option-price">价格：自托管 $0 / 云托管含免费档与付费订阅（Checked on 2026-11-11）</span>
+        </div>
+        <p>通过标准 MCP 协议把对话中值得记住的事实写入远端云 API 或本地 Docker 向量库（如 Qdrant + Postgres），让不同宿主下的 Agent 调用同一组记忆检索工具。</p>
+        <div class="option-pros-cons">
+          <div>
+            <strong>✦ 最适合谁</strong>
+            <p>同时在 Linux 工作站、Windows 台式机和 MacBook 多台机器间办公的开发者；或希望直接调用成熟云端记忆 API 的场景。</p>
+          </div>
+          <div>
+            <strong>⚠ 真实缺点</strong>
+            <p>云托管模式需要将提炼后的上下文发往第三方云端；自托管模式需要维护 Docker 容器与向量数据库。此外，通用记忆 MCP 不直接解析各编码助手本机的原始会话历史文件，无法做到“列出最近 5 条跨宿主对话按序号整包接力”，也不负责管理宿主配置文件与 API Key。</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="option-card highlight-honest">
+        <div class="option-head">
+          <h3>方案 3：Senrelay · 续境（<code>ContextCore</code> 本机多 Agent 接力与配置工作台）</h3>
+          <span class="option-price">价格：$0（MIT 免费开源 · 免注册 · Checked on 2026-11-11）</span>
+        </div>
+        <p>运行在 macOS 本机回环端口（<code>127.0.0.1:8420</code>）的桌面应用与后台服务。打通 Claude Code、Codex、Cursor、Antigravity、OMP 与 OpenCode 六大主力宿主的本地会话采集、伴生带出处自动记忆（附 <code>💡</code> 回执）与 <code>/contextcore</code> 一句话六要素接力，同时提供 6+9 多宿主模型服务商、MCP 与 Skills 一键同步及冲突 Diff 保护（详见<a class="inline-link" href="./#connections">首页宿主支持矩阵</a>与<a class="inline-link" href="./guide.html#everyday-use">本地运行指南</a>）。</p>
+        <div class="option-pros-cons">
+          <div>
+            <strong>✦ 最适合谁</strong>
+            <p>主力设备为单台 <code>macOS 14.0+</code>（Apple Silicon）的开发者；每天在 2 个以上 AI 编程助手间高频切换续做任务、反感任何聊天记录上云，且想一处管好各宿主 MCP、Skills 与 API Key（系统钥匙串隔离）的人。</p>
+          </div>
+          <div>
+            <strong>⚠ 真实缺点（请先看清再决定是否安装）</strong>
+            <p>① <strong>平台锁死</strong>：仅支持 <code>macOS 14.0+</code>（Apple Silicon <code>arm64</code>），不支持 Windows、Linux 或 Intel Mac；② <strong>无云同步</strong>：纯单机 SQLite（<code>0600</code>）设计，换电脑需用 <code>contextcore backup</code> 手动迁移；③ <strong>扩展宿主能力有限</strong>：9 类扩展宿主仅支持配置文件读写，不支持会话采集与接力；④ <strong>首次启动门槛</strong>：Public Beta 暂未做 Apple 公证，首次打开需执行一次 <code>xattr -cr /Applications/Senrelay.app</code>。</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="option-card">
+        <div class="option-head">
+          <h3>方案 4：Dotfiles 软链接与自定义配置同步脚本（<code>GNU Stow</code> / Shell 脚本）</h3>
+          <span class="option-price">价格：$0 · 极客纯手工方案</span>
+        </div>
+        <p>利用 Git 仓库配合 <code>GNU Stow</code> 或手写 Python/jq 脚本，管理散落在 <code>~/.claude/</code>、<code>~/.codex/</code>、<code>~/.cursor/</code> 下的全局提示词、Skills 目录与 MCP 配置文件。</p>
+        <div class="option-pros-cons">
+          <div>
+            <strong>✦ 最适合谁</strong>
+            <p>原本就重度维护个人 Dotfiles 仓库、只需要同步静态配置而不需要跨 Agent 会话接力或记忆检索的终端极客。</p>
+          </div>
+          <div>
+            <strong>⚠ 真实缺点</strong>
+            <p>Claude Code 用 JSON（<code>~/.claude.json</code>）、Codex 用 TOML（<code>~/.codex/config.toml</code>）、OpenClaw/Pi 用 JSON5、Hermes 用 YAML——直接软链同一个文件根本跑不通；且许多客户端启动时会自动改写配置文件并内嵌状态字段，极易把明文 API Key 误提交进 Git 或引发覆盖冲突。</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="option-card">
+        <div class="option-head">
+          <h3>方案 5：留在单一多模型 IDE 或聚合路由内（如只用 Cursor / OpenCode + OpenRouter）</h3>
+          <span class="option-price">价格：IDE 订阅费 + 模型 API 按量计费（Checked on 2026-11-11）</span>
+        </div>
+        <p>不切换 Agent 外壳，固定只用一款支持切换底层模型的 IDE 或 CLI 工具，通过切换 Claude Sonnet/Opus、GPT、Gemini 或 DeepSeek 模型来应对不同任务。</p>
+        <div class="option-pros-cons">
+          <div>
+            <strong>✦ 最适合谁</strong>
+            <p>习惯单一交互界面、不需要同时利用不同 Agent 专属工程能力（如 Claude Code 终端长程循环 + Cursor 行内补全审阅 + Codex 沙箱执行）的开发者。</p>
+          </div>
+          <div>
+            <strong>⚠ 真实缺点</strong>
+            <p>今天各家编码助手的差距早已不只是底层模型，更在于各自的 Agent 循环、工具沙箱、浏览器操控与订阅包含额度；只锁死单一外壳，遇到该客户端限流、宕机或某类任务表现不佳时，依然面临“换工具就丢全部上下文”的断层。</p>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="compare-section" id="methodology">
+      <h2>4. 我们的实测与核验方法 <span class="badge">Show the Method</span></h2>
+      <p>本页所有结论均基于 <code>macOS 14+ (arm64)</code> 本机实测核验（核对日期：<time datetime="2026-11-11">2026-11-11</time>），而非二手资料拼凑：</p>
+      <ul>
+        <li><strong>配置文件格式与冲突核验</strong>：逐一验证了 <code>~/.claude.json</code>（JSON）、<code>~/.codex/config.toml</code>（TOML）、Cursor MCP 配置、<code>.gemini/settings.json</code> 等真实宿主路径在外部手动编辑与进程重载时的行为差异（完整分层表见<a class="inline-link" href="./#connections">首页 6+9 宿主支持表</a>）。</li>
+        <li><strong>接力安全性核验</strong>：在 Senrelay（<code>127.0.0.1:8420</code>）中实测验证了纯回复序号时强制注入 <code>must_not_execute=true</code>（只汇报上一段摘要待命、绝不擅自改文件），以及附带明确任务指令时加载六要素交接包直接续做的双模式行为。</li>
+        <li><strong>零虚构承诺</strong>：所有价格均核对官方公开页面，Senrelay 自身的 4 项硬性局限（Apple Silicon 限制、无云同步、扩展宿主范围、Beta 阶段 <code>xattr -cr</code>）均与仓库自动化测试契约保持 1:1 一致。</li>
+      </ul>
+    </section>
+
+    <section class="compare-section compare-faq" id="faq">
+      <h2>5. 选型常见问题（FAQ） <span class="badge">Conclusion-First Answers</span></h2>
+      <details>
+        <summary>我已经写了 CLAUDE.md 和 AGENTS.md，还需要用 Senrelay 吗？<span aria-hidden="true">+</span></summary>
+        <p>如果你不跨 Agent 接力半截对话、也不用管理多个宿主的 MCP 配置，只用 <code>CLAUDE.md</code> + <code>AGENTS.md</code> 就够了；两者其实是互补关系。<code>AGENTS.md</code> 负责固化仓库级长期静态规范，而 Senrelay 负责把刚刚那通 30 轮对话的实时进展、踩坑记录（附 💡 回执）和全局 MCP/Skills 配置无缝带到下一个 Agent，并支持一键把沉淀的高频记忆预览生成为 <code>AGENTS.md</code>。</p>
+      </details>
+      <details>
+        <summary>从 Claude Code 切到 Cursor 或 Codex 时，最快保留上下文的方法是什么？<span aria-hidden="true">+</span></summary>
+        <p>在 macOS（Apple Silicon）上最快的方式是提前接入 Senrelay，直接在新 Agent 输入 <code>/contextcore</code> 或说「接力」按序号点选刚才的会话。如果你在 Windows 或 Linux 上，最快的方法是在切走前让原 Agent 把「目标、已完成进度、已排除方案、下一步计划」输出成一段临时 <code>HANDOFF.md</code>，再到新 Agent 里引用该文件。</p>
+      </details>
+      <details>
+        <summary>什么时候应该选 Mem0 等云端记忆 MCP，而不是 Senrelay？<span aria-hidden="true">+</span></summary>
+        <p>当你需要跨 Windows、Linux 和多台电脑实时共享同一套记忆库，或者正在构建面向终端用户的云端 SaaS Agent 产品时，应该选 Mem0 等云端/Docker 记忆服务。Senrelay 专为开发者个人单台 Mac 本机编码工作流设计，不提供云端托管 API 或跨机器自动同步。</p>
+      </details>
+      <details>
+        <summary>怎么安全地同步 Claude Code 和 Codex 之间的 MCP Server 配置？<span aria-hidden="true">+</span></summary>
+        <p>必须按各自原生格式（JSON 与 TOML）转换写入并保留修改前快照，切勿直接用软链接指向同一个文件。在 Senrelay 的「Agent 管理」中勾选目标宿主即可自动完成格式渲染、macOS 钥匙串凭据隔离、快照备份，并在检测到你手改过配置文件时弹出 Diff 对比框防止误覆盖（详见<a class="inline-link" href="./guide.html#security-boundaries">本机数据与安全边界</a>）。</p>
+      </details>
+      <details>
+        <summary>Senrelay 跟付费上下文工具相比真的永久免费吗？后续怎么安装？<span aria-hidden="true">+</span></summary>
+        <p>是，Senrelay 基于 MIT 开源协议发布，价格为 $0，无需注册账号，所有本机功能完整开放无付费墙。在 macOS 14.0+（Apple Silicon）上可直接运行 <code>brew install --cask qingsongcui/tap/senrelay</code> 安装，首次打开执行一次 <code>xattr -cr /Applications/Senrelay.app</code> 即可启动（完整步骤见<a class="inline-link" href="./guide.html#download-requirements">本地运行指南</a>；切勿运行无关的 <code>pip install contextcore</code>）。</p>
+      </details>
+    </section>
+
+    <section class="compare-section" id="about-privacy">
+      <div class="trust-box">
+        <div class="trust-col">
+          <strong>作者署名与利益相关声明（Editorial Disclosure）</strong>
+          <p>本文由 <strong>Qingsong Cui（George O'Nair）</strong>（<a class="inline-link" href="https://github.com/qingsongcui" target="_blank" rel="noopener noreferrer">GitHub @qingsongcui</a> · <a class="inline-link" href="https://x.com/George_ONair" target="_blank" rel="noopener noreferrer">X @George_ONair</a>）撰写并维护。作者同时是开源项目 <a class="inline-link" href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">Senrelay（ContextCore）</a> 的创建者；正因如此，本文严格遵循不把自家产品排第一、在首屏明确劝退不适用系统用户、如实披露全部局限的核验标准。</p>
+        </div>
+        <div class="trust-col">
+          <strong>立刻体验或查看源码（$0 MIT Open Source）</strong>
+          <p>如果你恰好使用 Apple Silicon Mac 并混用多个编码 Agent，可通过 <code>brew install --cask qingsongcui/tap/senrelay</code> 安装，或阅读<a class="inline-link" href="./guide.html">本地运行指南</a>与<a class="inline-link" href="./#fact-sheet">首页官方事实核对表</a>。</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <hr class="lang-divider">
+
+  <div data-guide-section="en" lang="en">
+    <div class="tldr-box" id="tldr" role="note">
+      <div class="tldr-title">✦ 30-Second Verdict (TL;DR: Pick by Your Actual Setup)</div>
+      <ul>
+        <li><strong>On Windows, Linux, or Intel Mac—or sharing team conventions in Git</strong> → Use <strong>Option 1: Repo-committed <code>CLAUDE.md</code> + <code>AGENTS.md</code></strong> (<code>$0</code>). Skip Senrelay (it requires Apple Silicon macOS).</li>
+        <li><strong>Syncing memory across multiple machines (e.g. Linux desktop + MacBook)</strong> → Use <strong>Option 2: Cloud or Docker Memory MCP servers (e.g. Mem0 / OpenMemory)</strong>.</li>
+        <li><strong>Working on a single Apple Silicon Mac (<code>macOS 14.0+</code>) across Claude Code, Cursor, Codex, Antigravity, OMP, or OpenCode with strict local privacy</strong> → Combine <strong>Option 1 + Option 3 (Senrelay, <code>$0</code> MIT open source)</strong>.</li>
+        <li><strong>Staying inside one IDE (e.g. Cursor only) and just switching underlying LLMs</strong> → Use <strong>Option 5: Single IDE + Multi-Model Router (e.g. OpenRouter)</strong>—you do not need cross-agent relay software.</li>
+      </ul>
+    </div>
+
+    <section class="compare-section" id="picker">
+      <h2>1. 30-Second Interactive Stack Picker <span class="badge">Interactive Quiz</span></h2>
+      <p>Select your operating system, privacy boundary, and daily agent workflow to see which architecture fits—including when you should <em>not</em> install Senrelay:</p>
+      <div class="picker-card" data-picker="en">
+        <div class="picker-grid">
+          <fieldset class="picker-fieldset">
+            <legend>① Primary Operating System</legend>
+            <label><input type="radio" name="os-en" value="mac-arm64" checked> macOS 14.0+ (Apple Silicon M1–M4)</label>
+            <label><input type="radio" name="os-en" value="other-os"> Windows / Linux / Intel Mac</label>
+          </fieldset>
+          <fieldset class="picker-fieldset">
+            <legend>② Data &amp; Sync Boundary</legend>
+            <label><input type="radio" name="sync-en" value="local" checked> 100% Local on One Machine (Zero Cloud Upload)</label>
+            <label><input type="radio" name="sync-en" value="cloud"> Multi-Machine Cloud Sync / Hosted Team Store</label>
+          </fieldset>
+          <fieldset class="picker-fieldset">
+            <legend>③ Daily Coding Workflow</legend>
+            <label><input type="radio" name="flow-en" value="multi-agent" checked> Switching Multiple Agents (Claude Code + Cursor + Codex)</label>
+            <label><input type="radio" name="flow-en" value="single-ide"> One Single IDE / CLI, Only Switching LLMs</label>
+          </fieldset>
+        </div>
+        <div class="picker-result" data-picker-output="en" aria-live="polite">
+          <strong>Recommended Stack: Option 1 (AGENTS.md Static Rules) + Option 3 (Senrelay Local Workbench, $0)</strong>
+          <p>For single-Mac Apple Silicon developers switching across multiple agent harnesses with strict local privacy: keep shared repo rules in AGENTS.md, and run Senrelay on 127.0.0.1:8420 for /contextcore session relay, source-linked 💡 auto-memory, and safe ~/.claude.json + ~/.codex/config.toml sync.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="compare-section" id="matrix">
+      <h2>2. Side-by-Side Technical Matrix <span class="badge">Checked on 2026-11-11</span></h2>
+      <div class="host-matrix-wrap">
+        <table class="host-matrix-table">
+          <caption>Comparison of 5 Cross-Agent Context, Memory &amp; MCP Sync Approaches (Checked on 2026-11-11)</caption>
+          <thead>
+            <tr>
+              <th scope="col">Approach</th>
+              <th scope="col">OS Support</th>
+              <th scope="col">Official Pricing (Plain Text)</th>
+              <th scope="col">Mid-Task Session Relay</th>
+              <th scope="col">Source-Linked Auto-Memory</th>
+              <th scope="col">Multi-Host MCP &amp; Skills Sync</th>
+              <th scope="col">Data Residency</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">1. Repo Rule Files (<code>CLAUDE.md</code> / <code>AGENTS.md</code>)</th>
+              <td>All OSes (Win / Mac / Linux)</td>
+              <td><strong>$0</strong> (built-in)</td>
+              <td>No (static rules only; misses live chat state)</td>
+              <td>No (manual Markdown edits)</td>
+              <td>No (does not manage global host MCP configs)</td>
+              <td>Local Git repository</td>
+            </tr>
+            <tr>
+              <th scope="row">2. Cloud / Docker Memory MCP (Mem0 / OpenMemory)</th>
+              <td>All OSes (any MCP client)</td>
+              <td>Self-hosted <strong>$0</strong> / Cloud free tier &amp; paid plans</td>
+              <td>Partial (retrieves memory facts, no numbered transcript handoff pack)</td>
+              <td>Semantic extraction (typically without local turn-level transcript links)</td>
+              <td>No (must configure MCP manually per host)</td>
+              <td>Cloud API or local Docker stack</td>
+            </tr>
+            <tr>
+              <th scope="row">3. Senrelay (<code>ContextCore</code> Local macOS Workbench)</th>
+              <td><code>macOS 14.0+</code> Apple Silicon (<code>arm64</code>) only</td>
+              <td><strong>$0</strong> (100% Free &amp; Open Source, MIT License, no signup)</td>
+              <td>Native (<code>/contextcore</code> lists recent sessions across 6 hosts; brief-only or continue)</td>
+              <td>Native (companion capture + <code>💡</code> receipt + verbatim provenance + conflict inbox)</td>
+              <td>Native (6 core + 9 extended hosts with diff guard &amp; rollback snapshots)</td>
+              <td>100% local SQLite (<code>0600</code>) + macOS Keychain</td>
+            </tr>
+            <tr>
+              <th scope="row">4. Dotfiles &amp; Sync Scripts (<code>GNU Stow</code> / Custom CLI)</th>
+              <td>macOS / Linux (custom scripts on Windows)</td>
+              <td><strong>$0</strong> (DIY open source)</td>
+              <td>No</td>
+              <td>No</td>
+              <td>Fragile (JSON vs TOML vs JSON5 vs YAML schema mismatch breaks symlinks)</td>
+              <td>Local Dotfiles repo (risk of committing secrets)</td>
+            </tr>
+            <tr>
+              <th scope="row">5. Single Multi-Model IDE / Router (Cursor / OpenRouter)</th>
+              <td>All OSes (depends on IDE)</td>
+              <td>IDE plan ($0–$20+/mo) + token usage</td>
+              <td>Same-window only (cannot relay across separate agent tools)</td>
+              <td>Varies by single IDE</td>
+              <td>Single host only</td>
+              <td>Local + chosen model router</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="compare-section" id="options">
+      <h2>3. Honest Breakdown of All 5 Options <span class="badge">Senrelay Ranked #3, Not #1</span></h2>
+      <p>To keep this guide genuinely useful, we rank the universal zero-dependency standard first, place <strong>Senrelay at #3</strong>, and document concrete downsides for every single option—including our own.</p>
+
+      <article class="option-card">
+        <div class="option-head">
+          <h3>Option 1: Repo-Committed Instruction Files (<code>CLAUDE.md</code> + <code>AGENTS.md</code> + <code>.cursor/rules</code>)</h3>
+          <span class="option-price">Pricing: $0 · Universal Cross-Platform Standard</span>
+        </div>
+        <p>Check project architecture rules, test commands, and guardrails straight into Markdown files at the root of your repository. Claude Code reads <code>CLAUDE.md</code> natively while Codex, Cursor, OpenCode, and most modern agents read <code>AGENTS.md</code>. Almost every project should start here.</p>
+        <div class="option-pros-cons">
+          <div>
+            <strong>✦ Best For</strong>
+            <p>Cross-platform engineering teams on Windows, Linux, and macOS who want static repository rules versioned alongside pull requests.</p>
+          </div>
+          <div>
+            <strong>⚠ Real Downside</strong>
+            <p>Static files do not capture live session state. If you spend 40 minutes debugging a race condition in Claude Code and switch to Cursor or Codex when hitting a rate limit or UI task, <code>AGENTS.md</code> has none of your recent conversation turns, ruled-out hypotheses, or global MCP server definitions.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="option-card">
+        <div class="option-head">
+          <h3>Option 2: Cloud or Docker-Hosted Memory MCP Servers (e.g. Mem0 MCP / OpenMemory)</h3>
+          <span class="option-price">Pricing: Self-hosted $0 / Hosted free tier + paid plans (Checked on 2026-11-11)</span>
+        </div>
+        <p>Connects an external semantic memory server over MCP so multiple clients can store and query extracted facts through a shared cloud API or local Docker stack (vector DB + API service).</p>
+        <div class="option-pros-cons">
+          <div>
+            <strong>✦ Best For</strong>
+            <p>Developers moving constantly between a Linux workstation, Windows PC, and laptop—or teams building cloud-hosted agent applications.</p>
+          </div>
+          <div>
+            <strong>⚠ Real Downside</strong>
+            <p>Hosted plans send extracted project context to external servers, while self-hosting requires maintaining Docker containers. Generic memory MCPs also do not index native local agent transcript files for numbered session handoff or manage host provider/Skills config files.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="option-card highlight-honest">
+        <div class="option-head">
+          <h3>Option 3: Senrelay (<code>ContextCore</code> Local macOS Multi-Agent Workbench)</h3>
+          <span class="option-price">Pricing: $0 (100% Free MIT Open Source · No Signup · Checked on 2026-11-11)</span>
+        </div>
+        <p>A native macOS app and loopback service (<code>127.0.0.1:8420</code>) uniting local transcript discovery, <code>/contextcore</code> 6-point cross-agent conversation relay, companion source-linked auto-memory (with a brief <code>💡</code> receipt), and safe multi-host MCP, Skills, and provider configuration sync across Claude Code, Codex, Cursor, Antigravity, OMP, and OpenCode (see the <a class="inline-link" href="./#connections">6+9 host matrix</a> and <a class="inline-link" href="./guide.html#everyday-use">setup guide</a>).</p>
+        <div class="option-pros-cons">
+          <div>
+            <strong>✦ Best For</strong>
+            <p>Developers working on a single <code>macOS 14.0+</code> (Apple Silicon) machine who bounce between 2+ AI coding agents daily, require 100% local SQLite + Keychain privacy, and want one place to sync MCP servers, Skills, and provider presets.</p>
+          </div>
+          <div>
+            <strong>⚠ Real Downside (Read Before Installing)</strong>
+            <p>(1) <strong>macOS Apple Silicon only</strong>: No Windows, Linux, or Intel (<code>x86_64</code>) Mac support; (2) <strong>No cloud sync</strong>: Single-Mac loopback design—moving Macs requires <code>contextcore backup</code>; (3) <strong>Extended host scope</strong>: 9 extended hosts support config management only, not session relay; (4) <strong>First-launch step</strong>: Public Beta uses ad-hoc signing without Apple notarization, requiring a one-time <code>xattr -cr /Applications/Senrelay.app</code>.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="option-card">
+        <div class="option-head">
+          <h3>Option 4: Dotfiles Symlinks &amp; Custom Config Scripts (<code>GNU Stow</code> / jq-toml Scripts)</h3>
+          <span class="option-price">Pricing: $0 · DIY Terminal Workflow</span>
+        </div>
+        <p>Uses a personal Dotfiles Git repo with <code>GNU Stow</code> or custom shell scripts to version global prompt files, Skills folders, and MCP definitions across <code>~/.claude/</code>, <code>~/.codex/</code>, and <code>~/.cursor/</code>.</p>
+        <div class="option-pros-cons">
+          <div>
+            <strong>✦ Best For</strong>
+            <p>Terminal minimalists on Linux or macOS who only care about static config files and never need mid-task conversation relay or searchable local memory.</p>
+          </div>
+          <div>
+            <strong>⚠ Real Downside</strong>
+            <p>Incompatible formats—Claude Code uses JSON (<code>~/.claude.json</code>), Codex uses TOML (<code>~/.codex/config.toml</code>), OpenClaw/Pi use JSON5, and Hermes uses YAML—so raw symlinks fail. Worse, agents frequently rewrite their own config files with runtime state, breaking symlinks or risking accidental API key commits.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="option-card">
+        <div class="option-head">
+          <h3>Option 5: Staying Inside One Multi-Model IDE or API Router (e.g. Cursor / OpenCode + OpenRouter)</h3>
+          <span class="option-price">Pricing: IDE Subscription + Pay-Per-Token API (Checked on 2026-11-11)</span>
+        </div>
+        <p>Keep all coding inside a single editor or CLI harness and swap underlying models (Claude, GPT, Gemini, DeepSeek) via built-in model selectors or an OpenRouter key instead of switching tools.</p>
+        <div class="option-pros-cons">
+          <div>
+            <strong>✦ Best For</strong>
+            <p>Developers satisfied with one single UI who only want model diversity rather than combining specialized agent harnesses.</p>
+          </div>
+          <div>
+            <strong>⚠ Real Downside</strong>
+            <p>Modern coding agents differ dramatically in harness capabilities—Claude Code's autonomous CLI loop, Cursor's multi-file tab/diff UX, Codex's sandboxed execution, and Antigravity's browser/desktop workflows. Locking into one client means losing context the moment a subscription quota resets or another harness fits a task better.</p>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="compare-section" id="methodology">
+      <h2>4. How We Tested &amp; Verified <span class="badge">Show the Method</span></h2>
+      <p>Every specification on this page was verified directly against local macOS 14+ (<code>arm64</code>) installations (<time datetime="2026-11-11">Checked on 2026-11-11</time>):</p>
+      <ul>
+        <li><strong>Native Host Config Inspection</strong>: Verified schema serialization, external-edit conflict detection, and snapshot rollback across <code>~/.claude.json</code> (JSON), <code>~/.codex/config.toml</code> (TOML), Cursor MCP configs, and <code>.gemini/settings.json</code> (see the <a class="inline-link" href="./#connections">homepage 6+9 host matrix</a>).</li>
+        <li><strong>Relay Execution Safety Check</strong>: Verified on <code>127.0.0.1:8420</code> that number-only selection enforces <code>must_not_execute=true</code> (summarizing context without modifying files), while attaching an explicit task executes immediately using the 6-point relay pack.</li>
+        <li><strong>Zero Inflated Claims</strong>: Pricing was checked against public documentation, and all 4 Senrelay limitations (Apple Silicon requirement, single-Mac local storage, config-only extended hosts, and Beta <code>xattr -cr</code> first launch) match our automated repository test suite.</li>
+      </ul>
+    </section>
+
+    <section class="compare-section compare-faq" id="faq">
+      <h2>5. Decision FAQ <span class="badge">Conclusion-First Answers</span></h2>
+      <details>
+        <summary>If I already maintain CLAUDE.md and AGENTS.md, do I still need Senrelay? <span aria-hidden="true">+</span></summary>
+        <p>No if you only need static repo conventions; yes if you switch agents mid-task or manage MCP servers across multiple hosts—they solve different layers and work best together. <code>AGENTS.md</code> stores timeless repo rules in Git, whereas Senrelay relays your live 30-turn debugging context, captures source-linked memories (with a 💡 receipt), syncs global MCP/Skills configs, and can export pinned rules back into <code>AGENTS.md</code>.</p>
+      </details>
+      <details>
+        <summary>What is the fastest way to switch from Claude Code to Cursor or Codex without losing context? <span aria-hidden="true">+</span></summary>
+        <p>On Apple Silicon macOS, type <code>/contextcore</code> (or "Relay") in your target agent with Senrelay running to pick your recent session by number. On Windows or Linux, ask your current agent to write a concise <code>HANDOFF.md</code> summarizing goals, completed diffs, ruled-out approaches, and next steps before opening the next tool.</p>
+      </details>
+      <details>
+        <summary>When should I choose Mem0 or cloud memory MCP over Senrelay? <span aria-hidden="true">+</span></summary>
+        <p>Choose Mem0 or a cloud/Docker memory MCP whenever you work across Windows, Linux, or multiple computers, or when building cloud-hosted multi-user agent apps. Senrelay is purpose-built for single-Mac local developer privacy and intentionally omits cloud storage.</p>
+      </details>
+      <details>
+        <summary>How can I safely sync MCP servers between Claude Code and Codex without breaking configs? <span aria-hidden="true">+</span></summary>
+        <p>Translate entries natively between JSON (<code>~/.claude.json</code>) and TOML (<code>~/.codex/config.toml</code>) with pre-write snapshots—never symlink one file to the other. Senrelay's Agent Management converts formats automatically, isolates API keys in macOS Keychain, and opens a side-by-side Diff prompt whenever a host config was edited externally (<a class="inline-link" href="./guide.html#security-boundaries">read security boundaries</a>).</p>
+      </details>
+      <details>
+        <summary>Is Senrelay genuinely $0 forever, and how do I install it on macOS? <span aria-hidden="true">+</span></summary>
+        <p>Yes—Senrelay is 100% free ($0) under the MIT License with zero account signup or paid tiers. Install on macOS 14.0+ (Apple Silicon) via <code>brew install --cask qingsongcui/tap/senrelay</code> and run <code>xattr -cr /Applications/Senrelay.app</code> once on first launch (<a class="inline-link" href="./guide.html#download-requirements">full setup guide</a>; never run the unrelated PyPI <code>pip install contextcore</code> package).</p>
+      </details>
+    </section>
+
+    <section class="compare-section" id="about-privacy">
+      <div class="trust-box">
+        <div class="trust-col">
+          <strong>Author &amp; Editorial Disclosure</strong>
+          <p>Written and maintained by <strong>Qingsong Cui (George O'Nair)</strong> (<a class="inline-link" href="https://github.com/qingsongcui" target="_blank" rel="noopener noreferrer">GitHub @qingsongcui</a> · <a class="inline-link" href="https://x.com/George_ONair" target="_blank" rel="noopener noreferrer">X @George_ONair</a>), creator of the open-source <a class="inline-link" href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">Senrelay (ContextCore)</a> project. Because we build Option 3, we deliberately do not rank ourselves #1 and state upfront whenever another workflow is a better fit.</p>
+        </div>
+        <div class="trust-col">
+          <strong>Try Locally or Inspect Source ($0 MIT Open Source)</strong>
+          <p>On macOS 14.0+ (Apple Silicon), install via <code>brew install --cask qingsongcui/tap/senrelay</code>, or inspect the <a class="inline-link" href="./guide.html">Local Setup Guide</a> and <a class="inline-link" href="./#fact-sheet">Homepage Official Fact Sheet</a>.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="footer wrap">
+<a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-zh="Senrelay 续境首页" data-aria-en="Senrelay home"><img class="brand-symbol" src="./assets/senrelay-logo-display-v1.png" width="26" height="33" loading="lazy" decoding="async" alt="" aria-hidden="true">Senrelay<span class="brand-cn" data-zh="· 续境" data-en="">· 续境</span></a>
+<p>New agent. Same thread.</p>
+<div>
+  <a href="./" data-zh="首页" data-en="Home">首页</a>
+  <a href="./guide.html" data-zh="运行指南" data-en="Setup Guide">运行指南</a>
+  <a href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">GitHub ↗<span class="sr-only" data-zh="（新窗口）" data-en="(opens in a new window)">（新窗口）</span></a>
+  <a href="https://github.com/qingsongcui/ContextCore/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License<span class="sr-only" data-zh="（新窗口）" data-en="(opens in a new window)">（新窗口）</span></a>
+  <a href="#main" data-zh="回到顶部 ↑" data-en="Back to top ↑">回到顶部 ↑</a>
+</div>
+</footer>
+<script type="module">
+  const LANG_KEY = 'senrelay.website.language';
+  const root = document.documentElement;
+  const docDefaultLang = (root.getAttribute('lang') || '').toLowerCase().startsWith('en') ? 'en' : 'zh';
+  const hasBothSections = Boolean(document.querySelector('[data-guide-section="zh"]') && document.querySelector('[data-guide-section="en"]'));
+  const zhTitle = document.title;
+  const brandPrefix = zhTitle.split('—')[0].trim().replace(/\s*·\s*.*$/, '') || 'Senrelay';
+  const enTitle = `${brandPrefix} — 5 Ways to Share AI Agent Context (2026)`;
+  const metaDesc = document.querySelector('meta[name="description"]');
+  const zhDesc = metaDesc ? metaDesc.getAttribute('content') : '';
+  const enDesc = `Objective 2026 comparison of 5 ways to share context, memory, and MCP configs across Claude Code, Cursor, and Codex: CLAUDE.md/AGENTS.md, Cloud Memory MCP, ${brandPrefix}, Dotfiles scripts, and single-IDE routers.`;
+
+  function evaluatePicker(locale) {
+    const container = document.querySelector(`[data-picker="${locale}"]`);
+    const output = document.querySelector(`[data-picker-output="${locale}"]`);
+    if (!container || !output) return;
+    const os = (container.querySelector(`input[name="os-${locale}"]:checked`) || {}).value || 'mac-arm64';
+    const sync = (container.querySelector(`input[name="sync-${locale}"]:checked`) || {}).value || 'local';
+    const flow = (container.querySelector(`input[name="flow-${locale}"]:checked`) || {}).value || 'multi-agent';
+
+    let heading = '';
+    let detail = '';
+    if (flow === 'single-ide') {
+      heading = locale === 'en'
+        ? 'Recommended Stack: Option 5 (Single IDE + Multi-Model Router) + Option 1 (AGENTS.md)'
+        : '推荐组合：方案 5（单 IDE + 多模型路由）+ 方案 1（AGENTS.md 仓库规范）';
+      detail = locale === 'en'
+        ? 'Since you stay inside one IDE or CLI harness and only switch underlying LLMs, skip cross-agent relay tools—keep repo rules in AGENTS.md and use built-in model switching or OpenRouter.'
+        : '既然你固定只用一个 IDE/CLI 外壳、仅切换底层大模型，无需安装跨宿主接力软件；直接用仓库内 AGENTS.md 搭配内置多模型切换或 OpenRouter 最轻量。';
+    } else if (os === 'other-os') {
+      heading = sync === 'cloud'
+        ? (locale === 'en' ? 'Recommended Stack: Option 1 (AGENTS.md) + Option 2 (Cloud Memory MCP)' : '推荐组合：方案 1（AGENTS.md）+ 方案 2（云端/Docker 记忆 MCP）')
+        : (locale === 'en' ? 'Recommended Stack: Option 1 (AGENTS.md + HANDOFF.md) + Option 4 (Dotfiles Scripts)' : '推荐组合：方案 1（AGENTS.md + HANDOFF.md）+ 方案 4（Dotfiles 脚本）');
+      detail = locale === 'en'
+        ? `Do NOT install ${brandPrefix}—it requires macOS 14.0+ on Apple Silicon (arm64). On Windows, Linux, or Intel Mac, combine repo-committed AGENTS.md files with ${sync === 'cloud' ? 'a cross-platform Memory MCP server (Option 2)' : 'lightweight HANDOFF.md notes and config scripts (Option 4)'}.`
+        : `请勿安装 ${brandPrefix}（当前仅支持 macOS 14.0+ Apple Silicon）。在 Windows、Linux 或 Intel Mac 上，建议采用仓库内 AGENTS.md 搭配${sync === 'cloud' ? '跨平台记忆 MCP 服务（方案 2）' : '临时 HANDOFF.md 交接文档与配置转换脚本（方案 4）'}。`;
+    } else if (sync === 'cloud') {
+      heading = locale === 'en'
+        ? 'Recommended Stack: Option 1 (Git AGENTS.md) + Option 2 (Cloud Memory MCP)'
+        : '推荐组合：方案 1（Git AGENTS.md）+ 方案 2（云端记忆 MCP 服务）';
+      detail = locale === 'en'
+        ? `${brandPrefix} is strictly single-Mac local loopback (127.0.0.1:8420) without automatic cloud sync. For multi-machine real-time sync, use Git-committed AGENTS.md plus a hosted or self-hosted Memory MCP server (Option 2).`
+        : `${brandPrefix} 采用纯单机回环架构（127.0.0.1:8420），不提供多设备云端实时同步。若刚需多台电脑实时同步记忆，建议使用 Git 内的 AGENTS.md 搭配云端/自托管记忆 MCP（方案 2）。`;
+    } else {
+      heading = locale === 'en'
+        ? `Recommended Stack: Option 1 (AGENTS.md Static Rules) + Option 3 (${brandPrefix} Local Workbench, $0)`
+        : `推荐组合：方案 1（AGENTS.md 静态规则）+ 方案 3（${brandPrefix} 本机接力与 MCP 工作台，$0）`;
+      detail = locale === 'en'
+        ? `For single-Mac Apple Silicon developers switching across multiple agent harnesses with strict local privacy: keep shared repo rules in AGENTS.md, and run ${brandPrefix} on 127.0.0.1:8420 for /contextcore session relay, source-linked 💡 auto-memory, and safe ~/.claude.json + ~/.codex/config.toml sync.`
+        : `你在单台 Apple Silicon Mac 上混用多个编码 Agent 且要求纯本机隐私：用仓库内的 AGENTS.md 固化团队级静态规范，配合 ${brandPrefix}（127.0.0.1:8420）实现输入 /contextcore 一句话接力近期会话、伴生 💡 自动记忆，以及一处同步 ~/.claude.json 与 ~/.codex/config.toml。`;
+    }
+    output.querySelector('strong').textContent = heading;
+    output.querySelector('p').textContent = detail;
+  }
+
+  for (const locale of ['zh', 'en']) {
+    const container = document.querySelector(`[data-picker="${locale}"]`);
+    if (container) {
+      container.addEventListener('change', () => evaluatePicker(locale));
+      evaluatePicker(locale);
+    }
+  }
+
+  function detectLanguage() {
+    const override = new URLSearchParams(window.location.search).get('lang');
+    if (override === 'zh' || override === 'en') return override;
+    if (!hasBothSections) return docDefaultLang;
+    try {
+      const stored = window.localStorage.getItem(LANG_KEY);
+      if (stored === 'zh' || stored === 'en') return stored;
+    } catch { /* Storage is optional. */ }
+    return docDefaultLang;
+  }
+
+  let language = detectLanguage();
+
+  function syncControls(lang) {
+    document.querySelectorAll('[data-lang]').forEach(ctrl => {
+      const active = ctrl.dataset.lang === lang;
+      if (ctrl.hasAttribute('href') || ctrl.tagName === 'A') {
+        if (active) ctrl.setAttribute('aria-current', 'page');
+        else ctrl.removeAttribute('aria-current');
+      }
+    });
+    const group = document.querySelector('.language-switch');
+    if (group) group.setAttribute('aria-label', lang === 'en' ? 'Language' : '语言');
+  }
+
+  function applyCompareLanguage(lang) {
+    if (hasBothSections) {
+      root.lang = lang === 'en' ? 'en' : 'zh-CN';
+      root.dataset.guideLang = lang;
+      document.title = lang === 'en' ? enTitle : zhTitle;
+      if (metaDesc) metaDesc.setAttribute('content', lang === 'en' ? enDesc : zhDesc);
+      document.querySelectorAll('[data-guide-section]').forEach(section => {
+        section.hidden = section.dataset.guideSection !== lang;
+      });
+      document.querySelectorAll('[data-zh][data-en]').forEach(el => {
+        el.textContent = lang === 'en' ? el.dataset.en : el.dataset.zh;
+      });
+      document.querySelectorAll('[data-aria-zh][data-aria-en]').forEach(el => {
+        el.setAttribute('aria-label', lang === 'en' ? el.dataset.ariaEn : el.dataset.ariaZh);
+      });
+    } else {
+      root.dataset.guideLang = docDefaultLang;
+    }
+    syncControls(hasBothSections ? lang : docDefaultLang);
+  }
+
+  root.classList.add('has-js');
+  if (!hasBothSections && language !== docDefaultLang) {
+    const targetCtrl = document.querySelector(`[data-lang="${language}"]`);
+    const targetHref = targetCtrl && targetCtrl.getAttribute('href');
+    if (targetHref) window.location.replace(targetHref);
+  }
+  document.querySelectorAll('[data-lang]').forEach(ctrl => {
+    ctrl.addEventListener('click', event => {
+      const next = ctrl.dataset.lang;
+      if (next !== 'zh' && next !== 'en') return;
+      try { window.localStorage.setItem(LANG_KEY, next); } catch { /* Storage is optional. */ }
+      if (!hasBothSections) {
+        if (next === docDefaultLang) event.preventDefault();
+        return;
+      }
+      if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        language = next;
+        applyCompareLanguage(next);
+      }
+    });
+  });
+  applyCompareLanguage(language);
+</script>
+</body>
+</html>

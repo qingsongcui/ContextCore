@@ -48,8 +48,10 @@ jobs:
           test -f dist/CNAME
           test -f dist/favicon.ico
           test -f dist/404.html
+          test -f dist/compare.html
           test -f dist/en/index.html
           test -f dist/en/guide.html
+          test -f dist/en/compare.html
           test -f dist/sitemap.xml
           test -f dist/robots.txt
           test -f dist/llms.txt
@@ -87,6 +89,8 @@ jobs:
                 "https://senrelay.com/en/",
                 "https://senrelay.com/guide.html",
                 "https://senrelay.com/en/guide.html",
+                "https://senrelay.com/compare.html",
+                "https://senrelay.com/en/compare.html",
                 "https://senrelay.com/llms.txt",
                 "https://senrelay.com/llms-full.txt"
               ]
