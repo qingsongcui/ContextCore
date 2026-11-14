@@ -9,8 +9,8 @@ authors:
 repository-code: "https://github.com/qingsongcui/ContextCore"
 url: "https://senrelay.com/"
 license: MIT
-version: "1.0.0-beta.1"
-date-released: "2026-11-11"
+version: "1.0.0-beta.2"
+date-released: "2026-11-15"
 keywords:
   - "senrelay"
   - "contextcore"

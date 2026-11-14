@@ -2,7 +2,9 @@
 
 macOS 原生桌面 App、浏览器工作台与本机常驻服务，让多个 AI 编程助手围绕同一项目沉淀带来源记忆、一句话跨助手接力对话，并在一处统管模型服务商、MCP、Skills 与使用规则。
 
-[English](README.md) · [中文](README.zh-CN.md) · [产品官网](https://senrelay.com/) · [使用指南](https://senrelay.com/guide.html) · [下载公开测试版 (`v1.0.0-beta.1`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1)
+[English](README.md) · [中文](README.zh-CN.md) · [产品官网](https://senrelay.com/) · [使用指南](https://senrelay.com/guide.html) · [五方横评与选型](https://senrelay.com/compare.html) · [5-Way Comparison (EN)](https://senrelay.com/en/compare.html) · [下载公开测试版 (`v1.0.0-beta.2`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.2)
+
+> **100% 免费开源（`$0`，[MIT 协议](LICENSE)）· 无需注册账号 · 仅限 macOS 14.0+ Apple Silicon (`arm64`) 本机运行**
 
 ## 产品与核心范围
 
@@ -10,15 +12,22 @@ macOS 原生桌面 App、浏览器工作台与本机常驻服务，让多个 AI 
 
 - **原生桌面 App + 浏览器工作台 + 独立 macOS 后台**：采用原生 AppKit / WKWebView 桌面壳与 React/Vite 工作台，后端由 FastAPI + SQLite 在本机环回地址常驻运行；关闭窗口或网页不会停止后台采集服务。
 - **六大主力上下文宿主适配**：Codex（Desktop 与 CLI）、Oh My Pi（OMP）、Cursor、Antigravity、Claude Code、OpenCode。按宿主与具体界面分别核验能力（Codex Desktop ≠ Codex CLI，Cursor IDE ≠ Cursor CLI，Antigravity Desktop ≠ agy，OMP ≠ Pi / OpenCode），详见 [docs/support-matrix.md](docs/support-matrix.md)。配置文件写入成功不等于运行中的宿主进程已加载，本地连通性测速也不等同于真实模型推理调用。
-- **对话内跨 Agent 无缝接力**：切换到任意新 Agent 输入 `/contextcore`（或说“接着做” / “接力” / “continue” / “relay”），自动盘点并列出近期跨宿主对话候选（含序号、来源 Agent、所属项目、标题与摘要）。**仅回复候选序号**时加载接力上下文（`must_not_execute=true`）、先汇报前序进展摘要并等待下一句指令；**选择序号的同时附带具体任务指令**时，结合上下文直接开始续做。生命周期 Hook 保持静默上报，绝不向对话强行注入未请求的上下文。
-- **伴生隐式自动记忆与版本治理**：日常对话中由当前活跃 Agent 通过伴生 MCP 工具与 Skills 实时捕获带原话引用的结构化记忆（附简短 `💡` 回执），普通记忆自动生效；明确改口自动归档旧决定，模糊分歧进入「待确认」人工裁决；支持 📌 核心规则置顶、`AGENTS.md` 规则手册预览及聊天/记忆独立永久删除。
+- **对话内跨 Agent 无缝接力**：切换到任意新 Agent 输入 `/contextcore`（或说“接着做” / “接力” / “continue” / “relay”），不调用后台模型写交接卡，而是列出近期跨宿主对话短简介候选（含序号、来源 Agent、所属项目或未关联标记、`title` 与 `brief_summary`、原生会话 ID、工作目录与 Git 分支/提交，确保同一仓库下不同 Git worktree 与同标题独立会话不会被合并猜错）。**仅回复候选序号**（或原生/内部会话 ID）时返回受限上下文与 `transcript_paging`（`must_not_execute=true`）；若未一次性带全消息，接棒 Agent 会按分页顺序调用 `read_conversation_messages`（如每页 `limit=30`，或 `GET /api/conversations/<id>/messages`）读完全文并在当前上下文中直接压缩全量对话、汇报前序进展并停下等待下一句指令。**选择序号的同时附带具体任务指令**时（除非匹配任务处于 `discussion_only` 状态），结合完整上下文直接开始续做。生命周期 Hook 保持静默上报，绝不向对话强行注入未请求的上下文。
+- **双层记忆体系与版本治理**：结合长期可治理记忆（`contents` 六大分类：使用习惯、项目背景、决定与约束、任务与进度、踩坑经验、参考资料，附简短 `💡` 回执、📌 核心规则置顶、`AGENTS.md` 规则手册预览、明确改口替代、过时归档 `outdated`、冲突进「待确认」裁决以及诚实 `saved`/`provided`/`cited` 回执）与短期任务态（`working_tasks`，记录当前目标、已完成步、失败尝试、临时限制与 `discussion_only` 防误改代码门禁，通过 `bootstrap_working_memory`、`upsert_working_task` 与带原文引用的 `promote_task_lesson` 维护）。支持历史版本回滚与聊天/记忆独立永久删除。
 - **多宿主配置一处统管**：常驻顶栏秒切宿主，支持「一键接入续境」、服务商预设填入与端点测速、模型与账号绑定、第三方 MCP、Skills、系统提示词、项目配置组合、多模路由与本机已有配置导入导出。配置切换自动留存原件快照并支持随时回滚，检测到外部手动修改冲突时自动弹出差异（Diff）核对。
 - **本机词法检索与可选增强检索**：工作台顶栏提供跨项目全文词法检索，默认毫秒级本地响应；设置页「高级」折叠区内提供可选本地向量语义检索与带来源关系图谱（默认关闭，搜索绝不自动联网下载模型或安装依赖）。
 - **数据备份与范围边界**：支持通过设置页按钮或 `contextcore backup` 创建 SQLite 在线一致性快照（`0600` 权限保存在 `<data_dir>/backups/`）；自动云同步、Skill 生成工坊与主动打扰式洞察不在产品范围内。
 
-## 桌面 App 与当前分发状态
+## 桌面 App、定价与不适用场景
 
-原生 macOS App 内置独立 Python 运行环境、后端服务与前端工作台资源，构建与校验流程见 [桌面指南](app/macos/README.md)。当前公开测试包（`v1.0.0-beta.1`）面向 **macOS 14.0+ Apple Silicon（`arm64`）**，采用 ad-hoc 签名（`Senrelay-macOS.zip` 仅含 `Senrelay.app` 本体）。
+原生 macOS App 内置独立 Python 运行环境（`1.0.0b2`）、后端服务与前端工作台资源，构建与校验流程见 [桌面指南](app/macos/README.md)。当前公开测试包（`v1.0.0-beta.2`）面向 **macOS 14.0+ Apple Silicon（`arm64`）**，采用 ad-hoc 签名（`Senrelay-macOS.zip` 仅含 `Senrelay.app` 本体）。
+
+- **定价与许可**：**完全免费（`$0`，[MIT 开源协议](LICENSE)）**，无付费订阅、无功能锁、无需注册账号、零云端遥测；模型调用密钥均由用户自行配置并隔离保存在 macOS 系统钥匙串。
+- **什么情况下不适合使用（When NOT to use）**：
+  1. 你使用 **Windows、Linux 或 Intel（`x86_64`）Mac**：当前仅支持 **macOS 14.0+ Apple Silicon（`arm64`）**。
+  2. 你强需求 **跨设备云端同步、团队云托管共享记忆或远程网页访问**：本系统严格绑定本机回环地址 `127.0.0.1:8420`（开发态 `18420`），无任何云后台。
+  3. 你期望为 **九类扩展宿主**（`Claude Desktop`、`Gemini CLI`、`Grok Build`、`Kimi Code`、`MiniMax Code`、`Pi`、`Hermes`、`OpenClaw`、`agy`）开启会话采集或 `/contextcore` 跨助手接力：上述 9 类仅支持在「Agent 管理」中预览与写入配置文件，不含会话接力与自动记忆。
+  4. 你要求 **完全免终端指令的双击零弹窗安装**：公开测试版采用 ad-hoc 签名、暂未执行 Apple 公证，首次安装后需执行一次 `xattr -cr /Applications/Senrelay.app`。
 
 ### Homebrew Tap 一键安装（macOS 14.0+ `arm64`）
 
@@ -29,7 +38,7 @@ xattr -cr /Applications/Senrelay.app
 
 ### 手动下载 ZIP 安装
 
-1. 从 [`v1.0.0-beta.1` 发布页](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1) 下载并解压 `Senrelay-macOS.zip`，将 `Senrelay.app` 移入 `/Applications`；
+1. 从 [`v1.0.0-beta.2` 发布页](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.2) 下载并解压 `Senrelay-macOS.zip`，将 `Senrelay.app` 移入 `/Applications`；
 2. 在终端执行 `xattr -cr /Applications/Senrelay.app`（或在「系统设置 → 隐私与安全性 → 仍要打开」中放行；源码检出目录亦提供 `app/macos/install-macos.sh`）。
 
 > **包名防误装提示**：本机 `contextcore` CLI 随 `Senrelay.app` 及本开源仓库（`qingsongcui/ContextCore`）内置分发。**请勿执行 `pip install contextcore`**——PyPI 上的同名 `contextcore` 包属于无关第三方项目。
@@ -53,8 +62,8 @@ Developer ID 签名与 Apple 公证、全新 Mac 物理设备验收及跨版本�
 
 ### 2. 沉淀记忆、资料与来源追溯
 
-- **伴生自动沉淀 + 手工维护**：对话中由伴生组件自动提取带原文引用的记忆并给出 `💡` 简短回执；工作台内可直接新建笔记或导入文档（支持 `MD`、`TXT`、`JSON`、`PDF`、`DOCX`、`DOC`）。
-- **六大分类与分层注入**：涵盖 **使用习惯、项目背景、决定与约束、任务与进度、踩坑经验、参考资料** 六类记忆，支持将核心约束一键 📌 置顶、去重整理以及预览导出 `AGENTS.md` 规则手册。
+- **伴生自动沉淀 + 双层任务记忆**：对话中由伴生组件自动提取带原文引用的长期记忆（`contents`，附 `💡` 简短回执）并维护短期任务态（`working_tasks`，通过 `bootstrap_working_memory`、`upsert_working_task` 与带引文的 `promote_task_lesson` 记录进展、失败尝试、临时限制与 `discussion_only` 防误改门禁）；工作台内可直接新建笔记或导入文档（支持 `MD`、`TXT`、`JSON`、`PDF`、`DOCX`、`DOC`）。
+- **六大分类与分层治理**：涵盖 **使用习惯、项目背景、决定与约束、任务与进度、踩坑经验、参考资料** 六类记忆，支持将核心约束一键 📌 置顶、将过时规则归档为 `outdated`、去重整理以及预览导出 `AGENTS.md` 规则手册。
 - **独立永久删除**：每条记忆均可溯源至原始对话轮次或关联文档并支持历史版本回滚；删除原始对话绝不级联删除已沉淀记忆，删除记忆也绝不影响原始对话记录。
 
 ### 3. 跨 Agent 对话接力
@@ -62,10 +71,10 @@ Developer ID 签名与 Apple 公证、全新 Mac 物理设备验收及跨版本�
 当某个 Agent 额度耗尽、上下文窗口写满，或需要换用更擅长当前任务的助手时，无需在工作台手动填表，直接在目标 Agent 对话框内完成接力：
 
 1. 在新打开的目标 Agent（支持 Claude Code、Codex、Cursor、Antigravity、OMP、OpenCode）中输入 `/contextcore`，或直接说“接着做” / “接力” / “continue” / “relay”。
-2. 系统自动同步并列出近期跨宿主对话候选清单（包含序号、来源 Agent、所属项目、会话标题与关键摘要）。
+2. 系统不调用后台模型写交接卡，而是列出近期跨宿主对话短简介候选清单（包含序号、来源 Agent、所属项目或未关联标记、`title` 与 `brief_summary`、原生会话 ID、工作目录与 Git 分支/提交，确保同仓库下多 worktree 与同标题独立会话区分展示）。
 3. 按需选择续做节奏：
-   - **只回复序号**（如 `1`）：目标 Agent 加载接力上下文（`must_not_execute=true`），先简要汇报上一段会话的目标、已完成进度、关键约束与下一步建议，停下等待你的下一句指令，绝不擅自改代码；
-   - **回复序号并附带具体任务**（如 `选 1，把剩余的接口边界测试补齐`）：目标 Agent 加载上下文后结合你的明确指令直接继续执行。
+   - **只回复序号**（或直接指定原生/内部会话 ID）：目标 Agent 仅加载受限上下文与 `transcript_paging`（`must_not_execute=true`）；存在未附带消息时顺序分页调用 `read_conversation_messages`（`offset=0`、`limit=30` 或 `/api/conversations/<id>/messages`）读完全文并在当前上下文中直接压缩整场对话，汇报目标、已完成进度、关键约束与停下位置，等待你的下一句指令；
+   - **回复序号并附带具体任务**（如 `选 1，把剩余的接口边界测试补齐`）：目标 Agent 加载上下文后结合你的明确指令直接继续执行（若对应 `working_tasks` 处于 `discussion_only` 则仍保持讨论态）。
 
 ### 4. Agent 管理
 
@@ -78,7 +87,7 @@ Developer ID 签名与 Apple 公证、全新 Mac 物理设备验收及跨版本�
 ## 常见场景问答（FAQ）
 
 - **如何在 Claude Code、Cursor、Codex、Antigravity 之间无缝接力对话，而不用反复复制粘贴背景？**
-  在 `Agent 管理` 中为各宿主执行一次「一键接入续境」后，切换到任意新助手只需输入 `/contextcore`（或说“接力” / “接着做” / `continue`），即可列出近期跨宿主会话候选。仅回复序号（如 `1`）会先加载上下文并汇报简短摘要待命，不会擅自改代码；回复序号并附带具体任务指令则直接续做。
+  在 `Agent 管理` 中为各宿主执行一次「一键接入续境」后，切换到任意新助手只需输入 `/contextcore`（或说“接力” / “接着做” / `continue`），即可列出包含目录与 Git worktree/分支标识的近期跨宿主短简介候选。仅回复序号（或原生会话 ID）会通过 `read_conversation_messages` 顺序读完并压缩完整上下文后待命（`must_not_execute=true`），绝不擅自改代码；回复序号并附带具体任务指令则直接续做。
 - **跨多个 AI 助手同步 MCP、Skills 与规则时，如何防止覆盖我手改过的本地配置？**
   每次配置写入均记录受管条目哈希并自动留存快照备份。一旦检测到目标宿主的配置文件被外部手动修改，系统会自动拦截静默写入并弹出 Diff 差异对比框，由你确认或随时一键回滚。
 - **聊天记录、项目记忆和 API Key 存在哪里？会不会上传云端？**
@@ -129,10 +138,10 @@ app/backend/.venv/bin/contextcore generate-plist --data-dir "$HOME/.contextcore/
 
 当前自动化发布门禁覆盖：
 
-- **后端测试（`pytest`）**：1,485 项通过；
-- **前端工作台（`typecheck` / `lint` / `vitest` / `check:i18n`）**：188 项组件与回归测试通过，1,334 条中英双语文案 100% 对齐且零未包裹中文；
-- **官网构建与交互校验**：预览与部署双模式静态校验、112 条首页双语字典 + 双语指南页、交互测试与球体动效测试全部通过；
-- **打包、原生桌面与安全扫描**：独立 wheel 11 项内置资源完整性校验（`check_release_readiness.py`）、原生 `Senrelay.app`（`arm64`，`minos <= 14.0`）包体与双语 WKWebView 渲染校验、六宿主隔离沙箱 Hook 校验，以及全仓与 Git 历史安全扫描（`verify_repository_security.py`）。
+- **后端测试（`pytest`）**：1,648 项通过，另有 1 项 100k 用量性能测试（`SENRELAY_USAGE_PERF=1`）按需启用；
+- **前端工作台（`typecheck` / `lint` / `vitest` / `check:i18n`）**：205 项组件与回归测试通过（11 个测试文件），1,518 条中英双语文案 100% 对齐且零未包裹中文；
+- **官网构建与交互校验**：预览与部署双模式静态校验覆盖双语首页、`guide.html` 与 `compare.html`（`check` / `check:brand` / `check:i18n` / `check:interactions` / `check:sphere`）；
+- **打包、原生桌面与安全扫描**：29 项 `scripts/tests` 安全与版本测试、独立 wheel 11 项内置资源完整性校验（`check_release_readiness.py`）、原生 `Senrelay.app`（`arm64`，`minos <= 14.0`，build 2）包体与双语 WKWebView 渲染校验、六宿主隔离沙箱 Hook 校验，以及全仓与 Git 历史安全扫描（`verify_repository_security.py`）。
 
 详细实现映射、历史参考证据与公开边界（如私有 GitHub 仓库鉴权、外部账号真实计费/OAuth 资质、全新 Mac 公证与跨版本升级验收）见 [发布就绪清单](docs/release-readiness.md) 与 [公开证据摘要](docs/evidence.md)。
 

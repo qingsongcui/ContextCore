@@ -2,7 +2,9 @@
 
 A native macOS app, browser workbench, and local background service that lets multiple AI coding assistants accumulate source-linked project memories, relay conversations across agents in a single command, and manage providers, MCP tools, Skills, and instructions in one place.
 
-[English](README.md) · [中文](README.zh-CN.md) · [Official Website](https://senrelay.com/en/) · [Setup Guide](https://senrelay.com/en/guide.html) · [Public Beta Release (`v1.0.0-beta.1`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1)
+[English](README.md) · [中文](README.zh-CN.md) · [Official Website](https://senrelay.com/en/) · [Setup Guide](https://senrelay.com/en/guide.html) · [5-Way Comparison](https://senrelay.com/en/compare.html) · [中文对比页](https://senrelay.com/compare.html) · [Public Beta Release (`v1.0.0-beta.2`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.2)
+
+> **100% Free & Open Source (`$0`, [MIT License](LICENSE)) · No Account Required · Apple Silicon `macOS 14.0+` (`arm64`) Local-First**
 
 ## Product and scope
 
@@ -10,15 +12,22 @@ The active product lives in `app/`. The [public specification](docs/SPECIFICATIO
 
 - **Native macOS App + Browser Workbench + Local Daemon**: Built with a native AppKit/WKWebView macOS shell, a React/Vite workbench, and an independent FastAPI + SQLite loopback service. Closing the window or browser tab does not stop background capture.
 - **Six Core Context Hosts**: Codex (Desktop and CLI), Oh My Pi (OMP), Cursor, Antigravity, Claude Code, and OpenCode. Capabilities are tracked independently per host and surface (Codex Desktop ≠ Codex CLI, Cursor IDE ≠ Cursor CLI, Antigravity Desktop ≠ agy, OMP ≠ Pi / OpenCode); see [docs/support-matrix.md](docs/support-matrix.md). Writing a configuration file does not prove a running host process has reloaded it, and local endpoint checks are distinct from live model inference.
-- **In-Agent Conversation Relay**: Open any new Agent and type `/contextcore` (or say `"接着做"` / `"接力"` / `"continue"` / `"relay"`) to automatically scan and list recent cross-host conversation candidates with their number, source Agent, project, title, and summary. **Replying with only a candidate number** loads the relay context (`must_not_execute=true`), summarizes where the previous chat left off, and waits for your next instruction; **attaching a concrete task alongside your selection** continues execution directly. Lifecycle hooks report events silently and never force unrequested context into chat.
-- **Companion Auto-Memory & Version Governance**: During everyday chats, the active Agent captures structured, source-quoted memories in real time via companion MCP tools and Skills (leaving a brief `💡` receipt). Ordinary memories take effect automatically, explicit user updates supersede older decisions, and ambiguous contradictions route to Pending Conflicts. Supports 📌 core-rule pinning, `AGENTS.md` handbook preview, version rollback, and independent permanent deletion of chats versus memories.
+- **In-Agent Conversation Relay**: Open any new Agent and type `/contextcore` (or say `"接着做"` / `"接力"` / `"continue"` / `"relay"`) to list recent cross-host conversation candidates as short, recognizable briefs (`title`, `brief_summary`, source Agent, project or explicit unassigned label, native session ID, directory, and Git branch—keeping sibling Git worktrees and distinct same-title sessions separate without calling a background model). **Replying with only a candidate number** (or native/internal session ID) loads bounded context and `transcript_paging` (`must_not_execute=true`) without generating a summary card; when turns are omitted, the receiving Agent sequentially pages `read_conversation_messages` (`offset=0`, `limit=30`, or `GET /api/conversations/<id>/messages`), compacts the entire transcript in its own context, reports where the previous session left off, and waits for your next instruction. **Attaching a concrete task alongside your selection** authorizes continuing directly (unless a matching `working_tasks` entry is marked `discussion_only`). Lifecycle hooks report events silently and never inject unrequested context into chat.
+- **Dual-Tier Companion Auto-Memory & Version Governance**: Combines durable, source-quoted project/global memories (`contents`: six classes with 📌 core-rule pinning, `AGENTS.md` handbook preview, explicit supersession, `outdated` archival, Pending Conflicts, and honest `saved`/`provided`/`cited` receipts, leaving a brief `💡` notice) with short-term `working_tasks` state (active task goal, completed steps, failed attempts, one-off constraints, and fail-closed `discussion_only` gates via `bootstrap_working_memory`, `upsert_working_task`, and source-backed `promote_task_lesson`). Supports version rollback and independent permanent deletion of chats versus memories.
 - **Unified Multi-Host Management**: Switch target hosts from the permanent top bar, run **One-Click Connect**, fill read-only provider presets and test endpoint latency, bind models and Keychain secrets, and manage MCP servers, Skills, system prompts, project bundles, per-host routing modes, and local configuration import/export. Changes save automatic rollback snapshots and open a Diff confirmation dialog whenever external manual file edits conflict.
 - **Instant Lexical Search & Optional Local Semantics**: Search across all projects or the current project from the workbench header with local FTS5 indexing. Optional local vector semantic search and source-backed relationship graphs live under Settings → Advanced (disabled by default; searching never triggers automatic downloads or dependency installation).
 - **Backups & Scope Boundaries**: Whole-database SQLite online snapshots (`0600` permissions under `<data_dir>/backups/`) are supported from Settings and `contextcore backup`. Automated cloud sync, Skill generation foundries, and unsolicited proactive insights are out of scope.
 
-## Desktop app and current distribution
+## Desktop app, pricing, and when NOT to use
 
-The native macOS bundle ships a self-contained Python runtime, backend service, and frontend workbench; see [desktop build and verification](app/macos/README.md). Current public Beta candidates (`v1.0.0-beta.1`) target **Apple Silicon (`arm64`) on macOS 14.0+** and use ad-hoc signing (`Senrelay-macOS.zip` contains `Senrelay.app` only).
+The native macOS bundle ships a self-contained Python runtime (`1.0.0b2`), backend service, and frontend workbench; see [desktop build and verification](app/macos/README.md). Current public Beta candidates (`v1.0.0-beta.2`) target **Apple Silicon (`arm64`) on macOS 14.0+** and use ad-hoc signing (`Senrelay-macOS.zip` contains `Senrelay.app` only).
+
+- **Pricing & License**: **Free (`$0`, [MIT License](LICENSE))**, with no paid tiers, cloud account, or telemetry. You supply your own API keys stored locally in macOS Keychain.
+- **When NOT to use Senrelay**:
+  1. You use **Windows, Linux, or an Intel (`x86_64`) Mac** — current builds support **macOS 14.0+ Apple Silicon (`arm64`)** only.
+  2. You need **multi-device cloud sync, hosted team memory, or remote web access** — Senrelay runs strictly on local loopback (`127.0.0.1:8420`, dev `18420`) on a single Mac.
+  3. You expect **cross-host session capture or `/contextcore` relay for the 9 extended config hosts** (`Claude Desktop`, `Gemini CLI`, `Grok Build`, `Kimi Code`, `MiniMax Code`, `Pi`, `Hermes`, `OpenClaw`, `agy`) — those 9 hosts only support previewed configuration management.
+  4. You require a **zero-prompt Apple-notarized installer** — Public Beta builds are ad-hoc signed, so first launch requires running `xattr -cr /Applications/Senrelay.app` once.
 
 ### Quick install via Homebrew Tap (macOS 14.0+ `arm64`)
 
@@ -29,7 +38,7 @@ xattr -cr /Applications/Senrelay.app
 
 ### Manual ZIP install
 
-1. Download `Senrelay-macOS.zip` from [`v1.0.0-beta.1`](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1), extract it, and move `Senrelay.app` to `/Applications`;
+1. Download `Senrelay-macOS.zip` from [`v1.0.0-beta.2`](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.2), extract it, and move `Senrelay.app` to `/Applications`;
 2. Run `xattr -cr /Applications/Senrelay.app` in Terminal (or allow it under **System Settings → Privacy & Security → Open Anyway**; source checkouts also include `app/macos/install-macos.sh`).
 
 > **Package naming note**: The `contextcore` CLI ships inside `Senrelay.app` and this source repository (`qingsongcui/ContextCore`). Do **not** run `pip install contextcore` — the `contextcore` package on PyPI is an unrelated third-party project.
@@ -53,8 +62,8 @@ Projects organize work topics. Create a project associated with one or more loca
 
 ### 2. Accumulate memories, materials, and sources
 
-- **Companion Auto-Memory + Manual Curation**: Companion MCP tools and Skills capture source-quoted memories with a brief `💡` receipt during conversations, while the workbench supports manual notes and document imports (`MD`, `TXT`, `JSON`, `PDF`, `DOCX`, `DOC`).
-- **Six Categories & Tiered Context**: Organize memories across **Preferences, Background, Constraints, Tasks, Lessons, and References**, pin 📌 core rules to the protected prompt tier, consolidate duplicates, and preview `AGENTS.md` handbooks.
+- **Companion Auto-Memory + Dual-Tier Working Memory**: Companion MCP tools and Skills capture source-quoted durable memories (`contents` with a brief `💡` receipt) and short-term active task state (`working_tasks` with completed steps, failed attempts, one-off restrictions, and `discussion_only` edit guards via `bootstrap_working_memory`, `upsert_working_task`, and source-backed `promote_task_lesson`), while the workbench supports manual notes and document imports (`MD`, `TXT`, `JSON`, `PDF`, `DOCX`, `DOC`).
+- **Six Categories & Tiered Governance**: Organize memories across **Preferences, Background, Constraints, Tasks, Lessons, and References**, pin 📌 core rules to the protected prompt tier, archive obsolete rules as `outdated`, consolidate duplicates, and preview `AGENTS.md` handbooks.
 - **Independent Permanent Deletion**: Trace any memory back to its exact dialogue turns or document source and roll back retained versions. Deleting a conversation never deletes extracted memories, and deleting a memory never deletes original conversations.
 
 ### 3. Cross-Agent conversation relay
@@ -62,10 +71,10 @@ Projects organize work topics. Create a project associated with one or more loca
 When switching tools (for example after hitting quota or context limits), continue directly inside your receiving Agent without filling out forms in the web UI:
 
 1. Open your target Agent (Claude Code, Codex, Cursor, Antigravity, OMP, or OpenCode) and type `/contextcore` (or say `"continue"` / `"relay"` / `"接着做"` / `"接力"`).
-2. Senrelay syncs authorized histories and lists recent cross-host conversation candidates with their number, source Agent, project, title, and summary.
+2. Senrelay syncs authorized histories and lists recent cross-host conversation candidates as short, recognizable briefs (`title`, `brief_summary`, source Agent, project or unassigned marker, native session ID, directory, and Git branch/head—keeping distinct same-title sessions and sibling Git worktrees separate without calling a background model).
 3. Choose how to proceed:
-   - **Reply with just a number** (e.g. `1`): Loads the relay context (`must_not_execute=true`), reports a concise summary of goal, progress, constraints, and next steps, and waits for your next instruction before touching code.
-   - **Reply with a number plus a concrete task** (e.g. `1, finish the remaining edge-case unit tests`): Loads the relay context and continues working right away.
+   - **Reply with just a number** (or provide an exact native/internal session ID): Loads bounded context and `transcript_paging` (`must_not_execute=true`) without a handoff card; if any turns were omitted, the receiving Agent sequentially calls `read_conversation_messages` (`offset=0`, `limit=30`, or `GET /api/conversations/<id>/messages`), compacts the full transcript in context, summarizes progress, constraints, and next steps, and waits before modifying code.
+   - **Reply with a number plus a concrete task** (e.g. `1, finish the remaining edge-case unit tests`): Loads the relay context and continues working right away (unless a matched `working_tasks` entry is `discussion_only`).
 
 ### 4. Agent Management
 
@@ -78,7 +87,7 @@ When switching tools (for example after hitting quota or context limits), contin
 ## Common scenarios (FAQ)
 
 - **How do I continue a Claude Code session in Cursor, Codex, or Antigravity without re-explaining context?**
-  Run **One-Click Connect** once for each host in `Agent Management`. When switching tools, type `/contextcore` (or `"continue"` / `"relay"` / `"接力"`) in the target Agent to list recent cross-host sessions. Reply with just a session number (e.g. `1`) to load context and review a concise status summary before acting, or reply with a number plus your next instruction to continue immediately.
+  Run **One-Click Connect** once for each host in `Agent Management`. When switching tools, type `/contextcore` (or `"continue"` / `"relay"` / `"接力"`) in the target Agent to list recent cross-host sessions as short briefs with distinct directory and Git branch/worktree labels. Reply with just a session number (or native session ID) to page and compact the full transcript via `read_conversation_messages` and wait before acting (`must_not_execute=true`), or reply with a number plus your next instruction to continue immediately.
 - **How does multi-host MCP, Skills, and prompt sync avoid overwriting manual config edits?**
   Every configuration change records per-entry ownership hashes and saves an automatic rollback snapshot. If a host configuration file was edited externally, Senrelay pauses auto-apply and opens a Diff confirmation dialog rather than overwriting your manual changes.
 - **Where are chat transcripts, project memories, and API keys stored?**
@@ -129,10 +138,10 @@ app/backend/.venv/bin/contextcore generate-plist --data-dir "$HOME/.contextcore/
 
 Automated verification gates currently pass across:
 
-- **Backend suite (`pytest`)**: 1,485 passed;
-- **Frontend workbench (`typecheck`, `lint`, `vitest`, `check:i18n`)**: 188 Vitest tests passed, 1,334 Chinese/English UI strings verified with zero unwrapped Chinese;
-- **Website checks**: Preview and `SITE_URL` deployment checks, 112 index bilingual strings + bilingual `guide.html`, 3 interaction tests, and 5 sphere motion tests passed;
-- **Packaging, Native App & Security**: Installed non-editable wheel 11-resource verification (`check_release_readiness.py`), native `Senrelay.app` (`arm64`, `minos <= 14.0`) bundle/archive and bilingual WKWebView verification, 6-host isolated hook verification, and full working-tree + Git history security scans (`verify_repository_security.py`).
+- **Backend suite (`pytest`)**: 1,648 passed, 1 opt-in 100k usage benchmark (`SENRELAY_USAGE_PERF=1`);
+- **Frontend workbench (`typecheck`, `lint`, `vitest`, `check:i18n`)**: 205 Vitest tests passed across 11 files, 1,518 Chinese/English UI strings verified with zero unwrapped Chinese;
+- **Website checks**: Preview and `SITE_URL` deployment checks across bilingual `index.html`, `guide.html`, and `compare.html` (`check`, `check:brand`, `check:i18n`, `check:interactions`, `check:sphere`);
+- **Packaging, Native App & Security**: 29 `scripts/tests` security/version tests, installed non-editable wheel 11-resource verification (`check_release_readiness.py`), native `Senrelay.app` (`arm64`, `minos <= 14.0`, build 2) bundle/archive/lifecycle/WKWebView verification, 6-host isolated hook verification, and full working-tree + Git history security scans (`verify_repository_security.py`).
 
 See [release readiness](docs/release-readiness.md) and [evidence](docs/evidence.md) for detailed implementation mappings, historical reference records, and disclosed external boundaries (private GitHub auth, live account billing/OAuth eligibility, Apple notarization, and clean-Mac physical device acceptance).
 

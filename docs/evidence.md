@@ -1,6 +1,6 @@
 # Public evidence register
 
-Source package version: `1.0.0-beta.1` (Python package `1.0.0b1`, native macOS short version `1.0.0` plus numeric build number). Surface limits are documented in [support-matrix](support-matrix.md). Requirements: [specification](SPECIFICATION.md). Delivery boundaries: [release readiness](release-readiness.md) and [known issues](known-issues.md).
+Source package version: `1.0.0-beta.2` (Python package `1.0.0b2`, native macOS short version `1.0.0` plus numeric build number). Surface limits are documented in [support-matrix](support-matrix.md). Requirements: [specification](SPECIFICATION.md). Delivery boundaries: [release readiness](release-readiness.md) and [known issues](known-issues.md).
 
 The sections below summarize **verified automated release gates** and **sanitized historical reference records** without publishing private transcripts, credentials, or raw machine dumps.
 
@@ -8,11 +8,11 @@ The sections below summarize **verified automated release gates** and **sanitize
 
 | Verification gate | Scope & result | Boundary |
 |---|---|---|
-| Backend suite (`pytest`) | 1,484 passed, 1 opt-in skipped | Isolated synthetic fixtures and protocol/adapter tests; does not replace live external provider billing or OAuth sessions. |
-| Frontend workbench (`vitest`, `typecheck`, `lint`, `check:i18n`) | 188 tests passed, 0 type/lint errors, 1,334 Chinese/English keys verified | JSDOM/component and build checks; complements live browser inspection. |
-| Website (`build`, `check`, `check:i18n`, `check:brand`, `check:interactions`, `check:sphere`) | Static/SEO checks, 112 index i18n keys + bilingual `guide.html`, 3 interaction tests, 5 sphere tests passed | Automated DOM and static bundle verification across preview and `SITE_URL` modes. |
-| Packaging & release readiness (`check_release_readiness.py`, `verify_bundle.py`, `verify_archive.py`, `verify_hook_distribution.py`, `verify_data_lifecycle.py`) | Installed non-editable wheel 11-resource check, default static serving, `Senrelay.app` / `Senrelay-macOS.zip` (`arm64`, `minos <= 14.0`), 6-host isolated hook execution, restart persistence & deletion safety passed | Isolated local verification on Apple Silicon; does not replace clean-Mac Gatekeeper/notarization acceptance. |
-| Repository security (`verify_repository_security.py`) | Tracked source tree and Git object history scanned with 0 credential/path leaks and 0 dependency advisories | Automated static/history gate, not a third-party security audit. |
+| Backend suite (`pytest`) | 1,648 passed, 1 opt-in 100k benchmark (`SENRELAY_USAGE_PERF=1`) | Isolated synthetic fixtures and protocol/adapter tests (including dual-tier `working_tasks`, `read_conversation_messages` transcript paging, and Git worktree disambiguation); does not replace live external provider billing or OAuth sessions. |
+| Frontend workbench (`vitest`, `typecheck`, `lint`, `check:i18n`) | 205 tests passed (11 files), 0 type/lint errors, 1,518 Chinese/English keys verified | JSDOM/component and build checks; complements live browser inspection. |
+| Website (`build`, `check`, `check:i18n`, `check:brand`, `check:interactions`, `check:sphere`) | Static/SEO checks, bilingual `index.html`, `guide.html`, and `compare.html`, interaction tests, and sphere tests | Automated DOM and static bundle verification across preview and `SITE_URL` modes. |
+| Packaging & release readiness (`check_release_readiness.py`, `verify_bundle.py`, `verify_archive.py`, `verify_hook_distribution.py`, `verify_data_lifecycle.py`, `verify_native.py`) | Installed non-editable wheel 11-resource check, default static serving, `Senrelay.app` / `Senrelay-macOS.zip` (`arm64`, `minos <= 14.0`, build 2), 6-host isolated hook execution, restart persistence & deletion safety, bilingual WKWebView native recovery checks | Isolated local verification on Apple Silicon; does not replace clean-Mac Gatekeeper/notarization acceptance. |
+| Repository security (`scripts/tests` + `verify_repository_security.py`) | 29 security/version unit tests + tracked source tree and Git object history scanned with 0 credential/path leaks and 0 dependency advisories | Automated static/history gate, not a third-party security audit. |
 
 ## Provenance and limits
 

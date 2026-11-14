@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "contextcore-backend"
-version = "1.0.0b1"
+version = "1.0.0b2"
 description = "ContextCore FastAPI Backend"
 readme = "README.md"
 license = "MIT"

@@ -7,7 +7,7 @@ Beta reference. Items here are current limits or incomplete acceptance, not a pr
 - The App is ad-hoc signed and not notarized (`Senrelay-macOS.zip` packages `Senrelay.app` only). macOS Gatekeeper blocks quarantined ad-hoc bundles by default; for first launch on macOS 14.0+: (1) move `Senrelay.app` to `/Applications`, and (2) run `xattr -cr /Applications/Senrelay.app` in Terminal (or allow in **System Settings → Privacy & Security → Open Anyway**). Source checkouts also include `app/macos/install-macos.sh`. Developer ID signing and notarization are outside this Beta gate.
 - The supported deployment target is Apple Silicon (`arm64`) on macOS 14.0+. Intel, older macOS, and other platforms are unclaimed.
 - There is no public auto-update. A version mismatch against the bundled service shows a recoverable error. Updating the local service is an explicit action.
-- GitHub Pages and a public download URL are not published from this checkout. Do not treat the marketing site preview as a live installer.
+- Local website preview builds emit `noindex, nofollow` without a live installer; public downloads require building with `SITE_URL` and publishing release attachments (`Senrelay-macOS.zip` + `SHA256SUMS`) on GitHub Releases (`v1.0.0-beta.2` tag/release pending coordinator publication). Do not treat a local marketing site preview as a live installer.
 
 ## Native App and service
 
@@ -35,7 +35,7 @@ Beta reference. Items here are current limits or incomplete acceptance, not a pr
 
 ## Packaging and verification boundaries
 
-- Public package version is `1.0.0-beta.1` → Python wheel `1.0.0b1` → native short version `1.0.0` plus numeric build number (`app/scripts/release_versions.py`).
+- Public package version is `1.0.0-beta.2` → Python wheel `1.0.0b2` → native short version `1.0.0` plus numeric build number (`app/scripts/release_versions.py`).
 - Per-surface limits are listed in [support-matrix](support-matrix.md). Historical live-host grades in [evidence](evidence.md) describe recorded reference runs and do not certify an untested user environment.
 - Clean-Mac Gatekeeper install, upgrade from older user installations, sleep/reboot autostart, and uninstall-with-data-kept require physical clean-device acceptance (`app/scripts/check_macos_install_lifecycle.py`).
 - Live external sessions (paid provider calls, official interactive OAuth, live Keychain lock/recovery, and all-host live memory writes) require separate user-consented account verification beyond automated pytest and Vitest suites.

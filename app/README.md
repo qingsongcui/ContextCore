@@ -29,19 +29,19 @@
 
 ### 2. 沉淀与管理记忆、资料与来源
 
-- 对话中由伴生 MCP 与 Skills 采集带原文引用的结构化记忆（附 `💡` 简短回执），同时支持直接新建笔记或导入常用文档格式（MD、TXT、JSON、PDF、Word）。
-- 记忆自动归纳或手动整理为六大分类：**习惯偏好、背景信息、约束规则、待办事项、经验教训、参考资料**。
+- 对话中由伴生 MCP 与 Skills 采集带原文引用的长期记忆（`contents`，附 `💡` 简短回执）并维护短期任务态（`working_tasks`），同时支持直接新建笔记或导入常用文档格式（MD、TXT、JSON、PDF、Word）。
+- 记忆自动归纳或手动整理为六大分类：**习惯偏好、背景信息、约束规则、待办事项、经验教训、参考资料**；过时规则可归档为 `outdated`，短期推进步骤、失败尝试与临时约束（如 `"这次先别..."`）写入 `working_tasks` 并受 `discussion_only` 防误改门禁保护。
 - 任何沉淀记忆均可追溯其原始会话轮次或关联文档；支持 📌 核心规则置顶、`AGENTS.md` 规则手册预览与历史版本回滚。
 - 聊天与记忆独立永久删除：删除原始对话不影响已沉淀的记忆；删除记忆也绝不级联删除原始对话；没有回收站。
 
 ### 3. 跨 Agent 对话接力
 
-当需要切换到另一个 Agent 继续开发时，直接在目标 Agent 对话框中输入 `/contextcore`（或说“接着做” / “接力” / “continue” / “relay”），系统自动列出近期跨宿主对话候选：
+当需要切换到另一个 Agent 继续开发时，直接在目标 Agent 对话框中输入 `/contextcore`（或说“接着做” / “接力” / “continue” / “relay”），系统不调用后台模型，直接列出近期跨宿主对话短简介候选：
 
-- **(a) 仅选择候选序号**：列表只给短简介用于认出对话；点中某一场后不调用后台模型写交接卡，而是交出完整对话原文与分页指引，由接棒 Agent 通过 `read_conversation_messages`（或 `/api/conversations/<id>/messages`）连续读完全部消息并在当前上下文压缩全量对话后汇报（`must_not_execute=true`），等待你的下一句指令再改代码。
-- **(b) 选择候选时附带具体任务指令**：在 `/contextcore` 接力点选的同时给出明确任务要求，接棒 Agent 结合上下文直接开始续做。
+- **(a) 仅选择候选序号**：列表只给短简介（`title`、`brief_summary`、工作目录与 Git 分支）用于认出对话；点中某一场后不调用后台模型写交接卡，而是交出完整对话原文与 `transcript_paging`，由接棒 Agent 通过 `read_conversation_messages`（或 `/api/conversations/<id>/messages`）从 `offset=0` 起连续读完全部消息并在当前上下文压缩全量对话后汇报（`must_not_execute=true`），等待你的下一句指令再改代码。
+- **(b) 选择候选时附带具体任务指令**：在 `/contextcore` 接力点选的同时给出明确任务要求，接棒 Agent 结合完整上下文直接开始续做（若匹配的 `working_tasks` 任务处于 `discussion_only` 模式，则仍拦截改代码）。
 
-候选同时显示续境内部编号与宿主原始会话编号；可以直接提供反重力的原始 UUID。不同会话不会因为标题或开场白相同而合并；缺少工作目录的会话会明确标为未知项目，而不是从接力候选中消失。列表支持 `limit` / `offset` 分页，并返回总数与下一页位置。
+候选同时显示续境内部编号与宿主原始会话编号（支持直接提供反重力的原始 UUID），并区分展示同一仓库下不同 Git worktree 的工作目录与 `git_branch` / `git_head`（不会跨 worktree 合并或猜错当前目录）。不同会话不会因为标题或开场白相同而合并；缺少工作目录的会话会明确标为未知项目，而不是从接力候选中消失。列表支持 `limit` / `offset` 分页，并返回总数与下一页位置。
 
 列表按最近聊天时间分页，不为列一页候选读取整库聊天正文。旧记录暂时没有摘要索引时仍展示标题和原始编号，选择后再读取正文。请求刷新只唤醒已运行的后台采集；更新未完成或后台不可用会明确提示，空列表不被解释为宿主历史为空。
 
@@ -63,11 +63,11 @@
 
 接力成功时，结构化正文在 `context`，可复制提示在 `context_text`。完整模式读取项目当前会话及活跃记忆快照，超预算整体拒绝；压缩模式明确标记部分覆盖。
 
-会话级读取的长对话按实际序列化大小装配：优先保留最新用户问题和最新答复，必要时明确标记答复尾部节选、较早消息省略量及原始消息位置/时间。原文仍可通过已有聊天消息分页接口读取；受保护的约束无法装入时仍拒绝，不会静默截掉。该响应的 `handoff` 仅含编号和状态，完整协议卡仍由 `read_handoff` 提供；`context.project` 与 `context.six_elements` 使用 JSON Pointer 引用顶层 `project` 与 `card`，客户端应读取这两个顶层规范字段。`coverage` 明确说明消息、过程摘要和工具字段的覆盖范围。
+会话级读取（`relay_conversation`）返回 `transcript_paging` 与按实际序列化大小装配的受限消息窗口：优先保留最新用户问题和最新答复，必要时明确标记答复尾部节选、较早消息省略量及原始消息位置/时间；当 `transcript_paging.complete` 为 `false`（或 `omitted_messages > 0`）时，接棒 Agent 应从 `offset=0` 顺序调用 `read_conversation_messages`（或 `GET /api/conversations/<id>/messages`）读完全部消息并直接压缩完整上下文，而不是展示交接卡。受保护的约束无法装入时仍拒绝，不会静默截掉。响应中 `context.mode` 为 `"full_transcript_relay"`、`context.project` 使用 JSON Pointer 引用顶层 `project`（明确绑定所选会话自身的工作目录与 worktree/分支状态），`coverage` 说明消息、过程摘要与工具字段的覆盖范围；底层项目协议卡（`hnd_...`）仍仅通过 `read_handoff` 提供。
 
-伴生自动记忆遵循统一决定治理：助手建议不自动成为用户决定，同标题差异产生待确认分歧；明确改口需带来源用户引文、旧记录版本及替代关系。普通可信记忆自动积累。
+伴生自动记忆遵循统一决定治理与双层记忆闭环：助手建议不自动成为用户决定，同标题差异产生待确认分歧；明确改口需带来源用户引文、旧记录版本及替代关系，过时规则可通过 `mark_memory_outdated` 归档为 `outdated`。普通可信记忆自动积累，Gate-0 准入校验与 `saved`/`provided`/`cited` 回执诚实记录采纳情况。
 
-`bootstrap_working_memory` 同样保护完整安全规则与任务临时限制；若放不下，返回 `insufficient_budget` 和 `must_not_execute=true`，不会为了通过预算删去“不要做什么”。任务经验提炼需先关联同项目原始聊天，再提供 `evidence_quote`，该引文必须实际出现在聊天正文且与结论相关。Agent 提炼标为 `source_backed`（有来源支持），不等于独立验证。工作任务列表按状态分页，支持上一页、下一页和指定任务定位，超过 200 条也可继续访问。
+`bootstrap_working_memory` 同样保护完整安全规则与 `working_tasks` 临时限制；若放不下，返回 `insufficient_budget` 和 `must_not_execute=true` 且不记 `provided` 回执，不会为了通过预算删去“不要做什么”。任务经验提炼（`promote_task_lesson`）需先关联同项目原始聊天，再提供 `evidence_quote`，该引文必须实际出现在聊天正文且与结论相关。Agent 提炼标为 `source_backed`（有来源支持），不等于独立验证；遇到冲突结果不会误标任务完成。工作任务列表按激活/历史/全量状态分页并返回精确总数，超过 200 条也可通过深链直接定位，列表收缩时自动回退至最后一页有效分页。
 
 ### 4. “Agent 管理”统一管理
 
@@ -165,7 +165,7 @@ app/backend/.venv/bin/contextcore generate-plist --data-dir "$HOME/.contextcore/
 REST 版本化变更需要当前 `expected_version`；批量内容删除/合并提供完整 `expected_versions`。冲突返回 409 后重读，不能静默覆盖。MCP 永久删除需要 `confirmed=True` 和正整数 `expected_version`。初始创建与不同接口的版本要求按真实 API 契约，不将“所有操作都有 CAS”泛化到未实现接口。
 
 ## 验证状态
-验证命令统一见 [CONTRIBUTING](../CONTRIBUTING.md)。当前自动化门禁覆盖后端测试（1,484 项）、前端类型检查 / lint / Vitest（188 项）与双语覆盖率（1,334 条文本）、安装包与内置资源完整性（`check_release_readiness.py`）、原生 macOS 应用包与六宿主 Hook 沙箱校验，以及全仓安全扫描。历史参考记录包含 4 家 `live_host` 接棒、2 家 `live_protocol` 与 3 笔合成输入测试记录；随包参考记录不代表所有界面、所有记忆写入、语义质量或更广宿主配置管理完整等价，也不替代用户本机环境、真实外部账号、付费模型调用或全新 Mac 设备的独立验收。
+验证命令统一见 [CONTRIBUTING](../CONTRIBUTING.md)。当前自动化门禁覆盖后端测试（1,648 项通过、1 项 100k 用量性能测试按需开启）、前端类型检查 / lint / Vitest（205 项）与双语覆盖率（1,518 条文本）、`scripts/tests`（29 项）、安装包与内置资源完整性（`check_release_readiness.py`）、原生 macOS 应用包与六宿主 Hook 沙箱校验，以及全仓安全扫描。历史参考记录包含 4 家 `live_host` 接棒、2 家 `live_protocol` 与 3 笔合成输入测试记录；随包参考记录不代表所有界面、所有记忆写入、语义质量或更广宿主配置管理完整等价，也不替代用户本机环境、真实外部账号、付费模型调用或全新 Mac 设备的独立验收。
 
 ## macOS 桌面 App
 
@@ -182,8 +182,8 @@ An explicit standalone database path does not grant ownership of its parent.
 These controls protect other OS accounts; they do not hide data from the same
 OS user, privileged processes, or copies already made elsewhere.
 
-Release identities use an explicit mapping: frontend/tag `1.0.0-beta.1` /
-`v1.0.0-beta.1`, Python/wheel `1.0.0b1`, and native short version `1.0.0` plus
+Release identities use an explicit mapping: frontend/tag `1.0.0-beta.2` /
+`v1.0.0-beta.2`, Python/wheel `1.0.0b2`, and native short version `1.0.0` plus
 a numeric build number. `BUILD.json` retains all mapped versions. Stable
 versions retain `MAJOR.MINOR.PATCH` throughout. Unknown suffixes, mismatched
 tags and wrong wheel metadata block packaging. This mapping does not select

@@ -2,11 +2,11 @@
 
 All notable changes to ContextCore will be documented in this file.
 
-## [Unreleased]
+## [1.0.0-beta.2] - 2026-11-15
 
 - Keep `/contextcore` candidate lists as short recognizable briefs without calling a model; upon concrete selection, avoid handoff-card clutter and return `transcript_paging` so the receiving Agent reads the full transcript sequentially via `read_conversation_messages` (bounded per page to stay within MCP response budgets) and compacts the entire conversation directly in context.
 - Preserve native session IDs in conversation APIs, search, and relay candidates; resolve bare native UUIDs without guessing when multiple sessions match.
-- Keep distinct same-title sessions and explicitly labeled unassigned sessions visible in newest-first, counted relay pages. Read indexed metadata for discovery instead of decoding all stored transcripts.
+- Disambiguate same-repository Git worktrees across relay discovery and loaded context: preserve per-session working directories, recorded `git_branch` / `git_head`, and `worktree_code_state`, while keeping distinct same-title sessions and explicitly labeled unassigned sessions visible in newest-first, counted relay pages.
 - Refresh a selected authorized native source independently of unrelated tasks and history backlogs. Selection-only reads do not create or confirm handoffs; stale, unavailable, or changing sources are reported explicitly.
 - Pack long selected conversations against the serialized response budget, preserving the newest user request and timestamped latest-answer excerpts with explicit coverage. Keep protected constraints intact and defer execution confirmation until the payload fits.
 - Follow Antigravity's native transcript companions and committed dialogue positions, prioritize recently changed sources, and wake background reconciliation for authorized hidden/generated history directories.
@@ -16,6 +16,8 @@ All notable changes to ContextCore will be documented in this file.
 - Preserve complete safety rules and task restrictions in bootstrap responses; insufficient budgets fail closed without emitting a provided-memory receipt.
 - Require same-project source dialogue and a matching, relevant quote before promoting lessons. Agent promotions are labeled source-backed, not independently verified; conflict results do not complete tasks.
 - Page active, historical, and combined task lists with exact totals; deep links locate the correct page beyond 200 records, and shrinking lists recover their last valid page.
+- Public website (`website/`): fix hero visual layout, apply a hairline dark-olive editorial declutter across landing, guide, and comparison pages, publish the bilingual 5-way multi-agent context comparison & stack picker (`/compare.html`, `/en/compare.html`), and ship GEO/SEO round 2 updates (6-host coverage, local MCP `contextcore` / `127.0.0.1:8420/mcp/` configuration clarity, enriched JSON-LD graphs, expanded `llms-full.txt`, `Baiduspider` rules, and troubleshooting FAQ schema).
+- Bump package and release baseline across backend (`1.0.0b2`), frontend (`1.0.0-beta.2`), native candidate (`build_number: 2`), `CITATION.cff`, and public documentation.
 
 ## [1.0.0-beta.1] - 2026-11-11
 
@@ -102,5 +104,5 @@ These historical entries are not cumulative current behavior. The public specifi
   - Streamable HTTP MCP and stdio MCP entrypoints.
   - Approval inbox, audit log, backup/restore, permissions, Skills, and optional semantic search.
 
-[Unreleased]: https://github.com/qingsongcui/ContextCore/compare/v1.0.0-beta.1...HEAD
+[1.0.0-beta.2]: https://github.com/qingsongcui/ContextCore/compare/v1.0.0-beta.1...v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.1
