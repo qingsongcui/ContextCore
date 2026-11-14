@@ -32,28 +32,26 @@ npm --prefix website run check
 
 `brand.config.mjs` supplies identity and repository/deployment URLs; current product descriptions and JSON-LD come from `index.html`, with English in `assets/i18n.js`. The builder preserves this page-owned copy instead of replacing it with older brand-description text. The versioned PNG mother image is `../brand/assets/senrelay-logo-original-v1.png`; source/provenance limits are in the [brand README](../brand/README.md). From repository root, `node brand/scripts/sync-identity.mjs` copies identity assets to website/workbench; this is a file-mutating operation, not a required preview step or a fresh hash-verification result.
 
-Content describes in-chat `/contextcore` cross-Agent continuation, six-item context coverage and confirmation discipline, real-time companion memory capture plus shared/versioned memory, independent deletion, per-assistant configuration management, and optional local semantic retrieval with honest host boundaries. D005's required items are goal/progress/constraints/working scene/blockers/next steps; current API decisions/evidence names do not prove coverage by themselves. The marketing page must not imitate a real task confirmation or connection probe.
+## Content & Architecture Boundaries
 
-The recorded reference evidence is **four live-host continuation loops** (Codex CLI, OMP CLI, Antigravity Desktop, OpenCode) and **two protocol loops** (Cursor, Claude Code). Codex CLI evidence does not certify Codex Desktop; bundled grades are reference, not local-install verification. Models/accounts/tools/Skills/instructions, project combinations, migration and usage are explained with per-assistant scope, not universal support. Official account eligibility, external calls, real host loading, wider-host differences and semantic quality remain separate evidence. Skills copy/shared-link modes are described as host-dependent, not a fresh live adoption claim. Optional semantic/relations remain first-release scope, disabled pending consent.
+Content describes cross-agent `/contextcore` continuation across six core context hosts (Claude Code, Codex, Cursor, Antigravity, OMP, OpenCode) using short-brief discovery, bounded sequential transcript paging (`read_conversation_messages`), in-context compaction (`must_not_execute=true` on number-only selection), dual-tier working memory (`working_tasks` + versioned long-term memories with provenance), multi-host config sync (6 core + 9 extended hosts under the `contextcore` MCP key on `127.0.0.1:8420/mcp/`), and optional local semantic retrieval. The marketing pages (`index.html`, `guide.html`, `compare.html`, and static `/en/*` equivalents) disclose real limits (`$0` MIT, `macOS 14.0+ arm64` only, single-machine loopback, first-launch `xattr -cr`) and must not fabricate usage metrics, installers, or live host telemetry.
 
-SEO metadata and static structure do not guarantee indexing, rich results, AI citation or ranking. `llms.txt` is only an optional reading aid. Do not fabricate ratings, traffic, customers, prices or domain ownership.
+The recorded verification baseline in the repository covers four live-host continuation loops (Codex CLI, OMP CLI, Antigravity Desktop, OpenCode) and two protocol loops (Cursor, Claude Code), while config schema serialization and snapshots are tested across declared hosts. Models/accounts/tools/Skills/instructions, project combinations, and migration behavior remain scoped per host format rather than universal parity.
+
+SEO metadata, JSON-LD graphs, and `llms.txt`/`llms-full.txt` follow structured clarity without guaranteeing indexing, citation, or ranking. Keep copy factual and concise.
 
 ## Source and visual boundaries
 
 Styles are sourced under `assets/css/` and bundled by `scripts/css-bundle.mjs`; edit source, not `dist`. The hero's Canvas surface is implemented in `assets/sphere.js`; semantic page content, FAQ and navigation must remain readable without it. Animation represents a flow illustration, **not real connection state**. Reduced motion, page visibility/offscreen pausing, keyboard focus and small-screen readability require current browser checks; simulated canvas tests cannot prove visual correctness.
 
-Historical design records mention charcoal/warm-white/gray-green tokens, orbit/particle motion and the approved PNG identity. These are implementation/reference choices, not mandatory interview hex colors or a still-active model-exclusivity rule. D058 exclusivity was revoked 2026-10-25.
+## Pages and Bilingual Coverage
 
-## Current consumer-page changes
+- `index.html` (`en/index.html` via `assets/i18n.js`): Product showcase, 6-step full-transcript relay architecture, dual-tier memory workspace, 6+9 host matrix, official dated Fact Sheet (`#fact-sheet`), and 9-item native `<details>` FAQ.
+- `guide.html` (`en/guide.html`): Apple Silicon macOS install (`brew install --cask qingsongcui/tap/senrelay` / `v1.0.0-beta.2` zip / `xattr -cr`), source dev mode, MCP key (`contextcore` on `/mcp/`) vs `/contextcore` skill, security boundaries, and 3-item troubleshooting FAQ (`FAQPage` schema).
+- `compare.html` (`en/compare.html`): Honest 5-option comparison (`AGENTS.md`, Cloud/Docker Memory MCP, Senrelay ranked #3, Dotfiles, Single IDE) with interactive setup picker, `#option-1`..`#option-5` ItemList schema, and 6-item decision FAQ.
+- `llms.txt` & `llms-full.txt`: Pure-English summary header plus full-transcript relay specification, 6+9 host matrix, 5-way comparison table, and Chinese core summary (`续境` / `ContextCore`).
 
-- Daily jobs now include writing, research, planning and coding. “Agent” is explained as an AI assistant. The first CTA opens the on-page start steps rather than implying a download.
-- `#assistants` starts with choosing one assistant, then covers models/accounts, tools/Skills, instructions, project combinations, local configuration import/migration and usage. The page distinguishes saved definitions, written files and actual assistant loading.
-- `#workspace` keeps shared memory/document explanations and adds source-backed question/keyword search with optional enhancements behind a native disclosure. `#workflow` gives four beginner steps and states the source-setup prerequisite.
-- `#connections` discloses the four-live/two-protocol reference split in an expandable explanation. Native FAQs cover permissions, shared-memory scope, independent permanent deletion, accounts, advanced tools/routing/context and current release boundaries.
-- PNG identity, sphere implementation and its five behavioral checks are unchanged. New CSS is `assets/css/08-consumer-features.css`, following numbered bundle ordering. Native navigation and disclosures remain useful without JavaScript; language buttons only appear when JavaScript is available.
-- Chinese/English page copy, description/social metadata, both JSON-LD descriptions and the generated reading aid reflect productivity use rather than developer-only positioning. Language switching preserves open disclosures; navigation labels follow both language and expanded state.
-
-There is no live demo workspace, fake confirmation button, connection probe, installer or paid-account claim. The sphere and static workspace illustrations are explicitly illustrative, not live state.
+There is no live demo workspace, fake confirmation button, or server-side tracking. The sphere and static workspace previews are explicitly illustrative, not live state.
 
 ## Checks and browser verification
 
@@ -68,6 +66,6 @@ npm --prefix website run check:interactions
 npm --prefix website run check:sphere
 ```
 
-Automated checks execute the interaction module against a DOM boundary (language/metadata/restoration, navigation/Escape/focus, and preference/storage/disclosure/visibility state), run the five sphere behavioral tests, validate semantic headings, six-entry handoff structure, native disclosure labels, control targets, links, assets, indexing rules (`noindex` preview vs `SITE_URL` deployment), brand rename consistency, and full Chinese/English coverage across `index.html` and `guide.html`.
+Automated checks execute the interaction module against a DOM boundary (language/metadata/restoration, navigation/Escape/focus, and preference/storage/disclosure/visibility state), run the five sphere behavioral tests, validate semantic headings, six-entry handoff structure, native disclosure labels, control targets, links, assets, indexing rules (`noindex` preview vs `SITE_URL` deployment), brand rename consistency, and full Chinese/English coverage across `index.html`, `guide.html`, and `compare.html`.
 
-Recommended manual browser walkthrough before public deployment: serve the built static site on a loopback preview port and check **375 / 768 / 1280 px** in Chinese and English, including navigation, `#workflow`, `#assistants`, `#workspace`, disclosures, `guide.html` language toggle, reduced-motion behavior, and keyboard focus. Automated DOM/style checks complement but do not replace visual and assistive-technology review.
+Recommended manual browser walkthrough before public deployment: serve the built static site on a loopback preview port and check **375 / 768 / 1280 px** in Chinese and English, including navigation, `#workflow`, `#assistants`, `#workspace`, disclosures, `guide.html` & `compare.html` language toggles, reduced-motion behavior, and keyboard focus. Automated DOM/style checks complement but do not replace visual and assistive-technology review.

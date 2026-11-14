@@ -7,8 +7,8 @@ import { bundleCss } from './css-bundle.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const out = path.join(root, 'dist');
-const RELEASE_VERSION = '1.0.0-beta.1';
-const FALLBACK_LASTMOD = '2026-11-11';
+const RELEASE_VERSION = '1.0.0-beta.2';
+const FALLBACK_LASTMOD = '2026-11-15';
 
 function deploymentUrl(value) {
   if (!value) return null;
@@ -61,6 +61,12 @@ function applyBrandTokens(source, { htmlEscaped = true } = {}) {
 
 function gitLastmod(relFiles) {
   try {
+    const dirty = execFileSync('git', ['status', '--porcelain', '--', ...relFiles], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (dirty) return FALLBACK_LASTMOD;
     const outDate = execFileSync('git', ['log', '-1', '--format=%cs', '--', ...relFiles], {
       cwd: root,
       encoding: 'utf8',
@@ -280,7 +286,7 @@ function buildHomepageSchema({ lang, pageUrl, siteDesc, appDesc, faqEntities, la
   const orgNode = {
     '@type': 'Organization',
     '@id': orgId,
-    name: zhFullName,
+    name: displayName,
     alternateName: altNames,
     founder: { '@id': creatorId },
     ...(site
@@ -310,8 +316,9 @@ function buildHomepageSchema({ lang, pageUrl, siteDesc, appDesc, faqEntities, la
   };
 }
 
-function buildGuideSchema({ lang, pageUrl, homeUrl, headline, description, lastmod }) {
+function buildGuideSchema({ lang, pageUrl, homeUrl, headline, description, faqEntities = [], lastmod }) {
   const zhFullName = `${brand.name} · ${brand.chineseName}`;
+  const displayName = lang === 'en' ? brand.name : zhFullName;
   const orgId = site ? `${site.href}#organization` : '#organization';
   const appId = site ? `${site.href}#software` : '#software';
   const personNode = buildPersonNode();
@@ -319,15 +326,30 @@ function buildGuideSchema({ lang, pageUrl, homeUrl, headline, description, lastm
 
   const articleNode = {
     '@type': 'TechArticle',
-    ...(site ? { '@id': `${pageUrl}#article`, url: pageUrl } : {}),
+    ...(site
+      ? {
+          '@id': `${pageUrl}#article`,
+          url: pageUrl,
+          mainEntityOfPage: pageUrl,
+          image: new URL('assets/social-original-v1.png', site).href,
+        }
+      : {}),
     headline,
     description,
     inLanguage: lang === 'en' ? 'en' : 'zh-CN',
+    datePublished: '2026-11-11',
     dateModified: lastmod,
     proficiencyLevel: 'Beginner',
     author: { '@type': 'Person', '@id': creatorId, name: personNode.name },
-    publisher: { '@type': 'Organization', '@id': orgId, name: zhFullName },
-    about: { '@type': 'SoftwareApplication', '@id': appId, name: lang === 'en' ? brand.name : zhFullName },
+    publisher: { '@type': 'Organization', '@id': orgId, name: displayName },
+    about: { '@type': 'SoftwareApplication', '@id': appId, name: displayName },
+  };
+
+  const faqNode = {
+    '@type': 'FAQPage',
+    ...(site ? { '@id': `${pageUrl}#faq`, url: `${pageUrl}#faq` } : {}),
+    inLanguage: lang === 'en' ? 'en' : 'zh-CN',
+    mainEntity: faqEntities,
   };
 
   const breadcrumbNode = {
@@ -350,12 +372,13 @@ function buildGuideSchema({ lang, pageUrl, homeUrl, headline, description, lastm
 
   return {
     '@context': 'https://schema.org',
-    '@graph': [articleNode, breadcrumbNode, personNode],
+    '@graph': [articleNode, faqNode, breadcrumbNode, personNode],
   };
 }
 
 function buildCompareSchema({ lang, pageUrl, homeUrl, headline, description, faqEntities, lastmod }) {
   const zhFullName = `${brand.name} · ${brand.chineseName}`;
+  const displayName = lang === 'en' ? brand.name : zhFullName;
   const orgId = site ? `${site.href}#organization` : '#organization';
   const appId = site ? `${site.href}#software` : '#software';
   const personNode = buildPersonNode();
@@ -363,16 +386,25 @@ function buildCompareSchema({ lang, pageUrl, homeUrl, headline, description, faq
 
   const articleNode = {
     '@type': 'TechArticle',
-    ...(site ? { '@id': `${pageUrl}#article`, url: pageUrl } : {}),
+    ...(site
+      ? {
+          '@id': `${pageUrl}#article`,
+          url: pageUrl,
+          mainEntityOfPage: pageUrl,
+          image: new URL('assets/social-original-v1.png', site).href,
+        }
+      : {}),
     headline,
     description,
     inLanguage: lang === 'en' ? 'en' : 'zh-CN',
+    datePublished: '2026-11-11',
     dateModified: lastmod,
     author: { '@type': 'Person', '@id': creatorId, name: personNode.name },
-    publisher: { '@type': 'Organization', '@id': orgId, name: zhFullName },
-    about: { '@type': 'SoftwareApplication', '@id': appId, name: lang === 'en' ? brand.name : zhFullName },
+    publisher: { '@type': 'Organization', '@id': orgId, name: displayName },
+    about: { '@type': 'SoftwareApplication', '@id': appId, name: displayName },
   };
 
+  const optionUrl = (n) => (site ? `${pageUrl}#option-${n}` : `#option-${n}`);
   const itemListNode = {
     '@type': 'ItemList',
     ...(site ? { '@id': `${pageUrl}#options`, url: `${pageUrl}#options` } : {}),
@@ -385,18 +417,80 @@ function buildCompareSchema({ lang, pageUrl, homeUrl, headline, description, faq
     itemListElement:
       lang === 'en'
         ? [
-            { '@type': 'ListItem', position: 1, name: 'Repo-Committed Instruction Files (CLAUDE.md + AGENTS.md + .cursor/rules)' },
-            { '@type': 'ListItem', position: 2, name: 'Cloud or Docker-Hosted Memory MCP Servers (Mem0 MCP / OpenMemory)' },
-            { '@type': 'ListItem', position: 3, name: `${brand.name} (ContextCore Local macOS Multi-Agent Workbench)` },
-            { '@type': 'ListItem', position: 4, name: 'Dotfiles Symlinks & Custom Config Scripts (GNU Stow / jq-toml Scripts)' },
-            { '@type': 'ListItem', position: 5, name: 'Single Multi-Model IDE or API Router (Cursor / OpenCode + OpenRouter)' },
+            {
+              '@type': 'ListItem',
+              position: 1,
+              url: optionUrl(1),
+              name: 'Repo-Committed Instruction Files (CLAUDE.md + AGENTS.md + .cursor/rules)',
+              description: '$0 cross-platform standard for static Git-versioned conventions; no live session relay or global MCP sync.',
+            },
+            {
+              '@type': 'ListItem',
+              position: 2,
+              url: optionUrl(2),
+              name: 'Cloud or Docker-Hosted Memory MCP Servers (Mem0 MCP / OpenMemory)',
+              description: 'Cross-device semantic fact store across Windows, Linux, and Mac; does not index native local chats or host configs.',
+            },
+            {
+              '@type': 'ListItem',
+              position: 3,
+              url: optionUrl(3),
+              name: `${brand.name} (ContextCore Local macOS Multi-Agent Workbench)`,
+              description: '$0 MIT single-Mac (macOS 14.0+ arm64) workbench combining /contextcore full-transcript relay, shared memory, and 6+9 host MCP/Skills sync.',
+              item: { '@type': 'SoftwareApplication', '@id': appId, name: displayName },
+            },
+            {
+              '@type': 'ListItem',
+              position: 4,
+              url: optionUrl(4),
+              name: 'Dotfiles Symlinks & Custom Config Scripts (GNU Stow / jq-toml Scripts)',
+              description: '$0 DIY terminal sync for static files; prone to JSON/TOML/JSON5 conflicts and lacks session relay.',
+            },
+            {
+              '@type': 'ListItem',
+              position: 5,
+              url: optionUrl(5),
+              name: 'Single Multi-Model IDE or API Router (Cursor / OpenCode + OpenRouter)',
+              description: 'Zero client switching by swapping LLMs inside one harness; context stays isolated when rate limits force tool switches.',
+            },
           ]
         : [
-            { '@type': 'ListItem', position: 1, name: '仓库内静态指令文件（CLAUDE.md + AGENTS.md + .cursor/rules）' },
-            { '@type': 'ListItem', position: 2, name: '云端或 Docker 自托管记忆 MCP 服务（Mem0 MCP / OpenMemory）' },
-            { '@type': 'ListItem', position: 3, name: `${zhFullName}（ContextCore 本机多 Agent 接力与配置工作台）` },
-            { '@type': 'ListItem', position: 4, name: 'Dotfiles 软链接与自定义配置同步脚本（GNU Stow / Shell 脚本）' },
-            { '@type': 'ListItem', position: 5, name: '单一多模型 IDE 或聚合路由（Cursor / OpenCode + OpenRouter）' },
+            {
+              '@type': 'ListItem',
+              position: 1,
+              url: optionUrl(1),
+              name: '仓库内静态指令文件（CLAUDE.md + AGENTS.md + .cursor/rules）',
+              description: '$0 全平台随 Git 共享静态规则；不支持中途会话接力或全局 MCP 配置同步。',
+            },
+            {
+              '@type': 'ListItem',
+              position: 2,
+              url: optionUrl(2),
+              name: '云端或 Docker 自托管记忆 MCP 服务（Mem0 MCP / OpenMemory）',
+              description: '适合跨 Windows/Linux/Mac 多设备同步语义事实；不索引本地原生会话也不管宿主配置文件。',
+            },
+            {
+              '@type': 'ListItem',
+              position: 3,
+              url: optionUrl(3),
+              name: `${zhFullName}（ContextCore 本机多 Agent 接力与配置工作台）`,
+              description: '$0 MIT 开源单机 macOS 14.0+ arm64 工作台，整合 /contextcore 全文接力、伴生共享记忆与 6+9 宿主 MCP/Skills 同步。',
+              item: { '@type': 'SoftwareApplication', '@id': appId, name: displayName },
+            },
+            {
+              '@type': 'ListItem',
+              position: 4,
+              url: optionUrl(4),
+              name: 'Dotfiles 软链接与自定义配置同步脚本（GNU Stow / Shell 脚本）',
+              description: '$0 极客手写脚本同步全局规则；跨 JSON/TOML/JSON5 易冲突且不支持对话接力。',
+            },
+            {
+              '@type': 'ListItem',
+              position: 5,
+              url: optionUrl(5),
+              name: '单一多模型 IDE 或聚合路由（Cursor / OpenCode + OpenRouter）',
+              description: '固定单一外壳切换多模型；遇限流换工具时上下文仍中断。',
+            },
           ],
   };
 
@@ -478,9 +572,9 @@ const { attrEn, htmlEn, metaEn, textEn } = await import(
   `${pathToFileURL(path.join(out, 'assets', 'i18n.js')).href}?v=${Date.now()}`
 );
 
-const homeLastmod = gitLastmod(['index.html', 'assets/i18n.js', 'assets/site.js', 'brand.config.mjs']);
-const guideLastmod = gitLastmod(['guide.html', 'brand.config.mjs']);
-const compareLastmod = gitLastmod(['compare.html', 'brand.config.mjs']);
+const homeLastmod = gitLastmod(['index.html', 'assets/i18n.js', 'assets/site.js', 'brand.config.mjs', 'scripts/build.mjs']);
+const guideLastmod = gitLastmod(['guide.html', 'brand.config.mjs', 'scripts/build.mjs']);
+const compareLastmod = gitLastmod(['compare.html', 'brand.config.mjs', 'scripts/build.mjs']);
 
 const zhHomeHref = site ? site.href : './';
 const enHomeHref = site ? new URL('en/', site).href : './en/';
@@ -587,6 +681,7 @@ const zhGuideSchema = buildGuideSchema({
   homeUrl: zhHomeHref,
   headline: zhGuideTitle,
   description: zhGuideDesc,
+  faqEntities: extractFaqEntities(zhGuide),
   lastmod: guideLastmod,
 });
 if (site) {
@@ -607,7 +702,7 @@ zhGuide = zhGuide
 await writeFile(path.join(out, 'guide.html'), zhGuide);
 
 const enGuideTitle = `${brand.name} — Local Setup & Workflow Guide`;
-const enGuideDesc = `${brand.name} local macOS service and workbench guide: Homebrew Cask and release setup, multi-host configuration management, companion source-linked auto-memory, and cross-agent conversation relay.`;
+const enGuideDesc = `${brand.name} macOS Apple Silicon local guide ($0 MIT): Homebrew Cask install, xattr first launch, /contextcore relay, shared memory, and MCP sync.`;
 
 let enGuide = removeElementByAttr(baseGuideHtml, 'div', 'data-guide-section="zh"')
   .replace(/\s*<hr class="lang-divider">\s*/g, '\n')
@@ -648,6 +743,7 @@ const enGuideSchema = buildGuideSchema({
   homeUrl: enHomeHref,
   headline: enGuideTitle,
   description: enGuideDesc,
+  faqEntities: extractFaqEntities(enGuide),
   lastmod: guideLastmod,
 });
 if (site) {
@@ -703,7 +799,7 @@ zhCompare = zhCompare
 await writeFile(path.join(out, 'compare.html'), zhCompare);
 
 const enCompareTitle = `${brand.name} — 5 Ways to Share AI Agent Context (2026)`;
-const enCompareDesc = `Objective 2026 comparison of 5 ways to share context, memory, and MCP configs across Claude Code, Cursor, and Codex: CLAUDE.md/AGENTS.md, Cloud Memory MCP, ${brand.name}, Dotfiles scripts, and single-IDE routers.`;
+const enCompareDesc = `Compare 5 ways to share context, memory, and sync MCP across Claude Code, Cursor & Codex: AGENTS.md, Mem0, ${brand.name} ($0 MIT), Dotfiles, and routers.`;
 
 let enCompare = removeElementByAttr(baseCompareHtml, 'div', 'data-guide-section="zh"')
   .replace(/\s*<hr class="lang-divider">\s*/g, '\n')
@@ -786,6 +882,7 @@ const aiCrawlerAgents = [
   'GPTBot',
   'ClaudeBot',
   'Bytespider',
+  'Baiduspider',
   '*',
 ];
 
@@ -841,15 +938,15 @@ const llmsContent = `# ${brand.name} · ${brand.chineseName} (ContextCore)
 
 ${brand.name} (${brand.chineseName}) runs natively on macOS 14.0+ (Sonoma or later, Apple Silicon \`arm64\`) as \`Senrelay.app\` or from source via Python 3.11+ and Node 22/24 LTS. Pricing: **$0 (free and open source under the MIT License)**.
 
-> **Package Disambiguation**: Install the macOS app via \`brew install --cask qingsongcui/tap/senrelay\` or GitHub Releases (\`Senrelay-macOS.zip\`). Do **NOT** run \`pip install contextcore\`—the PyPI package of that name is an unrelated third-party project.
+> **Package & MCP Disambiguation**: Install the macOS app via \`brew install --cask qingsongcui/tap/senrelay\` or GitHub Releases (\`Senrelay-macOS.zip\`). Do **NOT** run \`pip install contextcore\`—the PyPI package of that name is an unrelated third-party project. In AI host configurations, Senrelay registers under the MCP server key \`contextcore\` pointing to \`http://127.0.0.1:8420/mcp/\` alongside the companion \`/contextcore\` skill (never \`senrelay-mcp\`).
 
 ## Core Capabilities
 
-- **Cross-Agent Conversation Relay (\`/contextcore\`)**: Type \`/contextcore\` (or say "接着做" / "接力" / "continue" / "relay") inside any of the 6 core context hosts—Claude Code, Codex, Cursor, Antigravity, Oh My Pi (OMP), or OpenCode—to list numbered recent cross-host conversation candidates with source agent, project, title, and summary. Selecting only a candidate number loads context with \`must_not_execute=true\` so the new agent briefs status and awaits instructions; attaching a concrete task continues execution immediately.
-- **Companion Source-Linked Auto-Memory**: Companion MCP tools and Skills capture structured memories across six categories (Preferences, Background, Constraints, Tasks, Lessons, References) with exact conversation-turn or document provenance and a brief \`💡\` receipt, plus core-rule pinning (\`📌\`), conflict inbox review, version rollback, \`AGENTS.md\` handbook preview, and multi-format document imports (Markdown, TXT, JSON, PDF, DOCX, DOC).
-- **Unified Multi-Host Configuration Management**: Switch across 6 core context hosts and 9 extended configuration hosts from a permanent top bar, run One-Click Connect, apply provider presets, test endpoint latency, isolate API keys in macOS Keychain, and sync MCP servers, Skills, and system prompts with automatic rollback snapshots and external-edit Diff protection.
+- **Cross-Agent Conversation Relay (\`/contextcore\`)**: Type \`/contextcore\` (or say "接着做" / "接力" / "continue" / "relay") inside any of the 6 core context hosts—Claude Code, Codex, Cursor, Antigravity, Oh My Pi (OMP), or OpenCode—to inspect short recognizable candidate briefs with native session and worktree identity without calling a model. Upon selection, \`relay_conversation\` returns \`transcript_paging\` so the receiving agent pages through the full transcript via \`read_conversation_messages\` (bounded per MCP page to ~48KB) and compacts the entire conversation directly in context instead of emitting lossy handoff cards. Number-only replies set \`must_not_execute=true\` to brief and stand by; attaching a concrete task continues execution immediately.
+- **Dual-Tier Working Memory & Companion Auto-Memory**: Companion MCP tools and Skills maintain active working tasks (\`working_tasks\`) and source-backed lesson promotions alongside six categories of version-governed long-term memories (Preferences, Background, Constraints, Tasks, Lessons, References) with exact conversation-turn provenance and a concise receipt, \`outdated\` lifecycle and supersession version guards, core-rule pinning, conflict inbox review, directory-free project creation, \`AGENTS.md\` handbook preview, and multi-format document imports (Markdown, TXT, JSON, PDF, DOCX, DOC).
+- **Unified Multi-Host Configuration Management**: Switch across 6 core context hosts and 9 extended configuration hosts from a permanent top bar, run One-Click Connect (configuring the \`contextcore\` server at \`http://127.0.0.1:8420/mcp/\`), apply provider presets, test endpoint latency, isolate API keys in macOS Keychain, and sync MCP servers, Skills, and system prompts with automatic rollback snapshots, external-edit Diff protection, and zero silent Skill overwrites during startup or local config import.
 
-## System Requirements, Pricing & Real Boundaries (Checked on 2026-11-11)
+## System Requirements, Pricing & Real Boundaries (Checked on 2026-11-15)
 
 - **Pricing & License**: **$0 (100% Free & Open Source under the MIT License)**. No account registration, no subscription tiers, and no cloud paywall.
 - **Platform & Release**: macOS 14.0+ on Apple Silicon (\`arm64\`) · Public Beta \`v${RELEASE_VERSION}\`.
@@ -868,28 +965,26 @@ ${brand.name} (${brand.chineseName}) runs natively on macOS 14.0+ (Sonoma or lat
 - [English Setup & Workflow Guide](${guideEnRef}): Homebrew Cask install, first launch (\`xattr -cr\`), source build, and daily workflows.
 - [Chinese Setup & Workflow Guide (中文运行指南)](${guideZhRef}): 本地安装、首次启动、源码运行与三大工作流指南。
 - [English 5-Way Comparison & Stack Picker](${compareEnRef}): Objective comparison of \`CLAUDE.md\`/\`AGENTS.md\`, Cloud Memory MCP, ${brand.name}, Dotfiles scripts, and single-IDE routers (with interactive picker & real downsides).
-- [Chinese 5-Way Comparison & Stack Picker (5 种方案客观对比)](${compareZhRef}): 跨 AI 编程助手共享上下文、记忆与同步 MCP 的 5 种方案深度横评与 30 秒选型自测器。
-- [Extended LLM Reference](${llmsFullUrl}): Complete 6-point relay specification, 6+9 host support matrix, CLI commands, and bilingual FAQ.
+- [Chinese 5-Way Comparison & Stack Picker (5 种方案客观对比)](${compareZhRef}): 跨 AI 编程助手共享上下文、记忆与同步 MCP 的 5 种方案深度横评与按环境交互选型。
+- [Extended LLM Reference](${llmsFullUrl}): Complete full-transcript relay & compaction specification, 6+9 host support matrix, CLI commands, and bilingual FAQ.
 - [GitHub Repository](${brand.github}): Source code, architecture contracts, and automated verification gates.
 - [Release v${RELEASE_VERSION}](${releaseTagHref}): Prebuilt \`Senrelay-macOS.zip\` and \`SHA256SUMS\`.
 - [License](${brand.github}/blob/main/LICENSE): MIT License.
 `;
 
 const llmsFullContent = `${llmsContent}
-## 6-Point Cross-Agent Relay Pack Specification
+## Full-Transcript Cross-Agent Relay & Compaction Specification
 
-When \`/contextcore\` loads a selected conversation across Claude Code, Codex, Cursor, Antigravity, OMP, or OpenCode, it assembles a structured 6-point relay pack backed by recent verbatim transcript turns:
+When \`/contextcore\` relays a conversation across Claude Code, Codex, Cursor, Antigravity, OMP, or OpenCode, it avoids lossy external handoff cards and instead enforces six engineering guarantees:
 
-1. **01 — Project & Task Goal**: What the session is building and what is explicitly out of scope.
-2. **02 — Current Progress**: Completed work vs remaining items.
-3. **03 — Confirmed Decisions & Constraints**: Chosen architecture and boundaries that must not be altered.
-4. **04 — Working Scene & Evidence**: Linked original conversation turns, project records, and imported documents.
-5. **05 — Blockers & Open Questions**: Unresolved issues and assumptions requiring verification.
-6. **06 — Next Action Plan**: Exact resume point and verification criteria.
-
-**Execution Safety Contract**:
-- **Number-only reply** (e.g. \`1\`): Sets \`must_not_execute=true\`; the target agent summarizes the handoff state and waits for your next prompt without editing files or running destructive commands.
-- **Number + task reply** (e.g. \`1, finish the unit tests\`): Loads the 6-point pack and executes the requested follow-up task directly.
+1. **01 — Short-Brief Candidate Discovery**: Candidate lists display recognizable titles and short briefs without calling a model or pre-writing summaries.
+2. **02 — Native Session & Worktree Disambiguation**: Preserves native session UUIDs and worktree/cwd identity so same-title or unassigned sessions stay distinct; refreshes only the selected authorized source on demand.
+3. **03 — Bounded Sequential Transcript Paging**: \`relay_conversation\` returns \`transcript_paging\` (\`next_args\` at \`offset=0\`) so the receiving agent calls \`read_conversation_messages\` until \`next_offset\` is \`null\`, with each MCP response page bounded (~48KB page cap / 24KB single-item trim) to protect context budgets.
+4. **04 — Direct In-Context Compaction**: The receiving agent compacts the complete read transcript inside its own context window (like \`/compact\`), without emitting five-field or six-element handoff cards.
+5. **05 — Working Tasks & Fail-Closed Constraints**: Carries active \`working_tasks\` state and locked project constraints; if protected rules cannot fit the requested budget, responses fail closed without silent clipping.
+6. **06 — Execution Safety Contract**:
+   - **Number- or ID-only reply** (e.g. \`1\`): Enforces \`must_not_execute=true\`; the receiving agent reports its compacted full-conversation summary and waits for your next prompt without editing files or running destructive commands.
+   - **Number + explicit task reply** (e.g. \`1, finish the unit tests\`): Continues immediately using the full compacted context and preserved constraints.
 
 ## Host Support Matrix (6 Core Context Hosts + 9 Extended Configuration Hosts)
 
@@ -943,13 +1038,13 @@ app/backend/.venv/bin/contextcore serve --host 127.0.0.1 --port 18420 --data-dir
 ## Frequently Asked Questions (EN / 中文)
 
 ### 1. How do I hand off a coding session from Claude Code to Cursor or Codex? / 如何在不同 AI 编程助手间无缝接力对话？
-Connect your hosts once via **Agent Management → One-Click Connect**. When switching assistants, type \`/contextcore\` (or "接力" / "continue") in the target agent. It queries local authorized histories and lists numbered recent sessions. Reply \`1\` to load context (\`must_not_execute=true\`) and get a status summary without modifying files, or \`1, finish the unit tests\` to continue immediately.
+Connect your hosts once via **Agent Management → One-Click Connect**. When switching assistants, type \`/contextcore\` (or "接力" / "continue") in the target agent to see short recognizable candidate briefs without calling a model. Pick a candidate (e.g. \`1\`) so the receiving agent calls \`relay_conversation\` + sequential \`read_conversation_messages\` pages until \`next_offset\` is \`null\` and compacts the entire conversation directly in context—reporting in read-only stand-by (\`must_not_execute=true\`) on number-only replies, or continuing immediately when you attach a task like \`1, finish the unit tests\`.
 
 ### 2. How is implicit auto-memory triggered during chats? / 隐式自动记忆是如何触发的？
-During everyday chats, companion MCP tools and Skills capture preferences, architectural decisions, constraints, milestones, and lessons learned as structured records linked to exact source turns, returning a brief \`💡\` receipt. Conflicting updates route to Pending Conflicts, and you can pin \`📌\` core rules or preview \`AGENTS.md\` anytime.
+During everyday chats, companion MCP tools and Skills maintain working tasks (\`working_tasks\`) and six categories of version-governed long-term memories linked to exact source turns, returning a concise source receipt. Superseding decisions mark old records \`outdated\` with version guards instead of overwriting history, conflicting updates route to Pending Conflicts, lesson promotions verify same-project source dialogue provenance, and you can pin core rules or preview \`AGENTS.md\` anytime.
 
 ### 3. How does multi-host MCP and Skills sync avoid overwriting manual config edits? / 跨宿主同步如何防止覆盖手改配置？
-Every configuration write records ownership hashes and an automatic rollback snapshot. If a target host file (\`~/.claude.json\`, \`~/.codex/config.toml\`, Cursor MCP config, etc.) was modified externally, ${brand.name} pauses auto-apply and opens a side-by-side Diff confirmation modal instead of silently overwriting user changes.
+Every configuration write records ownership hashes and an automatic rollback snapshot, and startup or local config import never silently overwrites installed host Skills. If a target host file (\`~/.claude.json\`, \`~/.codex/config.toml\`, Cursor MCP config, etc.) was modified externally, ${brand.name} pauses auto-apply and opens a side-by-side Diff confirmation modal instead of silently overwriting user changes.
 
 ### 4. Will changing one assistant affect my other assistants? / 修改单个宿主会影响其他助手吗？
 Never silently. You can configure a single host independently or explicitly select multiple hosts to sync shared MCP servers, Skills, and prompts, with full diff preview and one-click snapshot rollback.
@@ -959,6 +1054,28 @@ All session indexes, versioned memories, imported documents, and config snapshot
 
 ### 6. Can I install ContextCore via \`pip install contextcore\`? / 可以用 \`pip install contextcore\` 安装吗？
 No. The \`contextcore\` package on public PyPI is an unrelated third-party project. Install ${brand.name} on macOS via \`brew install --cask qingsongcui/tap/senrelay\`, download \`Senrelay-macOS.zip\` from \`${releaseTagHref}\`, or clone \`${brand.github}\` and run \`pip install -e 'app/backend[test]'\`.
+
+### 7. What MCP server key should appear in ~/.claude.json or ~/.codex/config.toml? / 宿主配置中的 MCP 键名是什么？
+Registered hosts connect to local \`http://127.0.0.1:8420/mcp/\` (source dev port \`18420\`) under the MCP key \`contextcore\`, paired with the \`/contextcore\` slash skill. Do **NOT** use \`senrelay-mcp\`.
+
+## 5-Way Comparison & Architecture Layering (2026)
+
+| Approach | OS Support | Price | Mid-Task Relay | Source-Linked Memory | MCP & Skills Sync | Storage |
+|---|---|---|---|---|---|---|
+| 1. \`CLAUDE.md\` / \`AGENTS.md\` | Win / Mac / Linux | $0 | Static rules only | Manual Markdown | Does not sync globals | Git repo |
+| 2. Cloud / Docker Memory MCP | All OSes | $0 self-host / Cloud plans | Fragment search only | Semantic facts only | Manual per-host setup | Cloud or Docker |
+| 3. ${brand.name} (ContextCore) | macOS 14.0+ arm64 | $0 (MIT · no signup) | Short-brief pick + full transcript page & compact | Working tasks + versioned memory | 6+9 hosts with diff & rollback | Local SQLite (\`0600\`) + Keychain |
+| 4. Dotfiles / GNU Stow | macOS / Linux | $0 (DIY) | No | No | Fragile across JSON/TOML/JSON5 | Dotfiles repo |
+| 5. Single IDE + Router | Depends on IDE | IDE plan + tokens | Within same app only | Depends on single IDE | Single host only | Local + router API |
+
+- **How \`AGENTS.md\`, \`MCP\`, and Session Relay Fit Together**: \`AGENTS.md\` holds Git-versioned static repo conventions; \`MCP\` connects assistants to tools and data; cross-agent session relay (${brand.name} \`/contextcore\`) preserves live mid-task conversation threads, working tasks, and host configs locally on a single Apple Silicon Mac.
+- **When NOT to Choose ${brand.name}**: Choose Option 1 (\`CLAUDE.md\` / \`AGENTS.md\`) if your team uses Windows, Linux, or Intel Macs; choose Option 2 (Mem0 / OpenMemory) if you need multi-device cloud memory sync; choose Option 5 if you stay inside one IDE and only switch LLM APIs.
+
+## 中文核心摘要（${brand.name} · ${brand.chineseName} / ContextCore）
+
+- **实体定义**：${brand.name}（中文名「${brand.chineseName}」，开源仓库 \`ContextCore\`，宿主 MCP 键名为 \`contextcore\`，不适用 \`senrelay-mcp\`）是免费开源（**$0 · MIT 协议 · 免注册**）的 \`macOS 14.0+\` Apple Silicon（\`arm64\`）本机工作台，仅绑定 \`127.0.0.1:8420\`。
+- **核心场景覆盖**：**跨 Agent 对话接力**（在 Claude Code、Codex、Cursor、Antigravity、OMP、OpenCode 中输入 \`/contextcore\` 或说「接力」，按短简介选场后通过 \`read_conversation_messages\` 分页读完完整原文并原地压缩；仅选序号设 \`must_not_execute=true\` 只读待命）、**共享记忆与工作任务**（双层机制与六类带出处长期记忆、版本留痕与核心规则置顶），以及 **MCP 管理与多宿主配置同步**（6 大主力 + 9 类扩展宿主的 JSON/TOML/JSON5/YAML 预览写入、钥匙串密钥隔离、快照回滚与外部修改 Diff 提醒）。
+- **明确不适用场景**：不支持 Windows、Linux 或 Intel（\`x86_64\`）Mac；无多设备云同步（换机需用 \`contextcore backup\`）；9 类扩展宿主仅管配置不做对话接力；Public Beta 首次启动需执行 \`xattr -cr /Applications/Senrelay.app\`。
 `;
 
 await writeFile(path.join(out, 'llms.txt'), llmsContent);

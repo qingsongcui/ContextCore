@@ -85,9 +85,11 @@ html[lang="en"] .section-label {
 }
 
 /* Sphere & Hero Visual Geometry Refinement */
+.has-js .hero-visual:not(.no-sphere) .core-inner,
 .has-sphere .core-inner {
   border-radius: 14px;
 }
+.has-js .hero-visual:not(.no-sphere) .orbit-host,
 .has-sphere .orbit-host {
   border-radius: 7px;
   background: rgba(24, 29, 22, 0.92);
@@ -96,17 +98,17 @@ html[lang="en"] .section-label {
 
 /* Section 01: Principles & Everyday Jobs */
 .principles {
-  margin-top: 44px;
-  padding-top: 28px;
-  gap: 20px;
+  margin-top: 48px;
+  padding-top: 32px;
+  gap: 36px;
   border-top: 1px solid var(--line);
 }
 .principles > div {
-  padding: 22px 24px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgba(28, 33, 25, 0.72), rgba(21, 24, 19, 0.9));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  padding: 4px 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .principles h3 {
   font-size: 17px;
@@ -116,24 +118,22 @@ html[lang="en"] .section-label {
 }
 .principles p {
   font-size: 13.5px;
-  line-height: 1.78;
-  max-width: none;
-  margin-top: 8px;
+  line-height: 1.82;
+  max-width: 36ch;
+  margin-top: 10px;
   color: #a3af96;
 }
 
 .everyday-jobs {
-  margin-top: 32px;
+  margin-top: 40px;
   border-top: 1px solid var(--line);
-  padding-top: 24px;
+  padding-top: 26px;
 }
 .jobs-caption {
   color: var(--sage);
   font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  margin-bottom: 18px;
+  letter-spacing: 0.04em;
+  margin-bottom: 20px;
 }
 .everyday-jobs ul {
   list-style: none;
@@ -141,51 +141,57 @@ html[lang="en"] .section-label {
   margin: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 24px 28px;
 }
 .everyday-jobs li {
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  padding: 18px 20px;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  background: rgba(24, 28, 22, 0.68);
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
 }
 .everyday-jobs strong {
-  font-size: 15.5px;
+  font-size: 15px;
   font-weight: 560;
   color: #ebefe4;
 }
 .everyday-jobs li span {
   color: var(--muted);
   font-size: 13px;
-  line-height: 1.75;
+  line-height: 1.78;
 }
 
 /* Section 02: Agent Management & Multi-Host Console Preview */
 .assistants .section-heading p {
-  max-width: 480px;
+  max-width: 52ch;
 }
 .assistant-path {
   list-style: none;
   padding: 0;
-  margin: 36px 0 24px;
+  margin: 36px 0 28px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  border: 0;
+  gap: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 .assistant-path li {
-  padding: 16px 18px;
+  padding: 18px 20px 18px 0;
   font-size: 13.5px;
   font-weight: 500;
   color: #e4eadb;
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(25, 30, 22, 0.72);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.assistant-path li + li {
+  padding-left: 20px;
+  border-left: 1px solid var(--line-soft);
 }
 .assistant-path li span {
   display: block;
@@ -198,13 +204,11 @@ html[lang="en"] .section-label {
 
 .agent-workflow-preview {
   padding: 24px 26px;
-  border: 1px solid #3c4833;
-  background: linear-gradient(180deg, #1b2118 0%, #141812 100%);
-  border-radius: 10px;
-  margin: 24px 0 28px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 20px 48px rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--line);
+  background: #161914;
+  border-radius: 8px;
+  margin: 24px 0 36px;
+  box-shadow: none;
 }
 .agent-preview-heading {
   display: flex;
@@ -262,7 +266,7 @@ html[lang="en"] .section-label {
 .agent-preview-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 24px;
   padding-top: 20px;
 }
 .agent-preview-grid > div {
@@ -270,10 +274,11 @@ html[lang="en"] .section-label {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 18px 20px;
-  border-radius: 8px;
-  border: 1px solid #2e3727;
-  background: rgba(26, 32, 23, 0.78);
+  padding: 14px 0 0;
+  border-radius: 0;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
 }
 .agent-preview-grid span {
   color: var(--sage);
@@ -282,7 +287,7 @@ html[lang="en"] .section-label {
   letter-spacing: 0.04em;
 }
 .agent-preview-grid strong {
-  font-size: 16px;
+  font-size: 15.5px;
   font-weight: 560;
   line-height: 1.45;
   color: #eef3e8;
@@ -290,28 +295,29 @@ html[lang="en"] .section-label {
 .agent-preview-grid small {
   color: var(--muted);
   font-size: 12.5px;
-  line-height: 1.68;
+  line-height: 1.72;
 }
 
 .assistant-features {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 28px 36px;
 }
 .assistant-features article {
   min-width: 0;
-  padding: 22px 24px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgba(26, 30, 23, 0.65), rgba(20, 23, 18, 0.85));
-  transition: border-color var(--dur-2) var(--ease-out), background-color var(--dur-2) var(--ease-out);
+  padding: 20px 0 6px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  transition: border-color var(--dur-2) var(--ease-out);
 }
 .assistant-features article:hover {
-  border-color: #4a583e;
-  background: rgba(30, 36, 26, 0.88);
+  border-color: #546446;
+  background: transparent;
 }
 .assistant-features h3 {
-  font-size: 16.5px;
+  font-size: 16px;
   font-weight: 560;
   margin-bottom: 10px;
   color: #edf2e6;
@@ -319,32 +325,33 @@ html[lang="en"] .section-label {
 .assistant-features p {
   color: var(--muted);
   font-size: 13.5px;
-  line-height: 1.78;
+  line-height: 1.82;
 }
 .assistant-boundary {
-  max-width: 880px;
-  margin: 28px 0 14px;
+  max-width: 66ch;
+  margin: 32px 0 14px;
   color: var(--muted);
   font-size: 13px;
-  line-height: 1.8;
+  line-height: 1.85;
 }
 
-/* Section 03: Cross-Agent Project Relay & 6-Point Pack */
+/* Section 03: Cross-Agent Project Relay */
 .relay-flow-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 22px;
+  gap: 28px;
+  margin-top: 24px;
 }
 .relay-step-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 18px 20px;
-  border: 1px solid #35422c;
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgba(28, 36, 23, 0.82), rgba(20, 26, 17, 0.94));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  padding: 18px 0 4px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .relay-step-card span {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -356,24 +363,24 @@ html[lang="en"] .section-label {
   font-size: 15.5px;
   font-weight: 560;
   color: #eef3e8;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 .relay-step-card small {
-  font-size: 12.5px;
-  line-height: 1.68;
-  color: #9fb08e;
+  font-size: 13px;
+  line-height: 1.72;
+  color: var(--muted);
 }
 
 .handoff-checklist {
-  column-gap: 32px;
+  column-gap: 40px;
 }
 
 /* Section 04: Workspace Card Geometry */
 .project-visual {
   transform: none;
-  border-radius: 10px;
-  border-color: #3f4d34;
-  background: linear-gradient(180deg, #1d2319 0%, #161a13 100%);
+  border-radius: 8px;
+  border-color: var(--line);
+  background: #161914;
 }
 .feature-row:hover .project-visual {
   transform: translateY(-2px);
@@ -449,22 +456,22 @@ html[lang="en"] .section-label {
 /* Desktop anti-jump min-heights for Chinese/English switching */
 @media (min-width: 901px) {
   .principles > div {
-    min-height: 164px;
+    min-height: 132px;
   }
   .everyday-jobs li {
-    min-height: 146px;
+    min-height: 112px;
   }
   .assistant-path li {
-    min-height: 82px;
+    min-height: 76px;
   }
   .agent-preview-grid > div {
-    min-height: 132px;
+    min-height: 108px;
   }
   .assistant-features article {
-    min-height: 168px;
+    min-height: 132px;
   }
   .relay-step-card {
-    min-height: 132px;
+    min-height: 108px;
   }
   .handoff-checklist > li {
     min-height: 98px;
@@ -501,6 +508,17 @@ html[lang="en"] .section-label {
   .assistant-path {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .assistant-path li + li {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .assistant-path li:nth-child(even) {
+    border-left: 1px solid var(--line-soft);
+    padding-left: 20px;
+  }
+  .assistant-path li:nth-child(n+3) {
+    border-top: 1px solid var(--line-soft);
+  }
 }
 
 @media (max-width: 600px) {
@@ -509,20 +527,26 @@ html[lang="en"] .section-label {
   }
   .agent-preview-grid {
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
+    gap: 14px;
   }
   .everyday-jobs {
     margin-top: 28px;
   }
   .everyday-jobs ul {
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
+    gap: 16px;
   }
   .assistant-features,
   .retrieval-note,
   .assistant-path {
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
+    gap: 14px;
+  }
+  .assistant-path li + li,
+  .assistant-path li:nth-child(even) {
+    border-left: 0;
+    padding-left: 0;
+    border-top: 1px solid var(--line-soft);
   }
   .retrieval-note {
     padding-top: 28px;
@@ -552,61 +576,68 @@ html[lang="en"] .section-label {
 
 /* Host Capability Matrix Table & Quick Install Snippet */
 .host-matrix-wrap {
-  margin-top: 28px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(22, 26, 20, 0.78);
+  margin-top: 36px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   overflow-x: auto;
 }
 .host-matrix-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
-  line-height: 1.68;
+  font-size: 13.5px;
+  line-height: 1.78;
   text-align: left;
 }
 .host-matrix-table caption {
-  padding: 14px 18px 10px;
+  padding: 0 0 14px 0;
   text-align: left;
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  text-transform: none;
   color: var(--sage);
   border-bottom: 1px solid var(--line);
 }
 .host-matrix-table th,
 .host-matrix-table td {
-  padding: 12px 18px;
+  padding: 16px 24px 16px 0;
   border-bottom: 1px solid var(--line-soft);
   vertical-align: top;
 }
+.host-matrix-table td:last-child,
+.host-matrix-table th:last-child {
+  padding-right: 0;
+}
 .host-matrix-table thead th {
   font-size: 12px;
-  font-weight: 600;
-  color: #e6ecdd;
-  background: rgba(30, 36, 26, 0.65);
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 24px 12px 0;
   white-space: nowrap;
 }
 .host-matrix-table tbody th {
   font-weight: 560;
   color: #eef3e8;
-  min-width: 160px;
+  min-width: 150px;
 }
 .host-matrix-table tbody td {
   color: var(--muted);
 }
 .host-matrix-table tbody tr:last-child th,
 .host-matrix-table tbody tr:last-child td {
-  border-bottom: 0;
+  border-bottom: 1px solid var(--line);
 }
 .fact-sheet-table {
-  border-top: 1px solid var(--line);
+  margin-top: 44px;
+  border-top: 0;
 }
 .inline-link {
   color: var(--sage);
   text-decoration: underline;
-  text-decoration-color: rgba(183, 196, 161, 0.42);
+  text-decoration-color: rgba(183, 196, 161, 0.36);
   text-underline-offset: 3px;
   transition: color var(--dur-1) var(--ease-out), text-decoration-color var(--dur-1) var(--ease-out);
 }
@@ -617,44 +648,46 @@ html[lang="en"] .section-label {
 .trust-box {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-  margin-top: 28px;
-  padding: 20px 24px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(20, 24, 18, 0.72);
+  gap: 36px;
+  margin-top: 36px;
+  padding: 28px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
   text-align: left;
 }
 .trust-col strong {
   display: block;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 560;
   color: var(--sage);
-  margin-bottom: 6px;
-  letter-spacing: 0.02em;
+  margin-bottom: 8px;
 }
 .trust-col p {
   margin: 0;
-  font-size: 12.5px;
-  line-height: 1.72;
+  font-size: 13px;
+  line-height: 1.8;
   color: var(--muted);
+  max-width: 58ch;
 }
 @media (max-width: 760px) {
   .trust-box {
     grid-template-columns: 1fr;
-    gap: 14px;
-    padding: 16px 18px;
+    gap: 20px;
+    padding: 22px 0 0;
   }
 }
 .host-matrix-table code,
 .brew-snippet code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(183, 196, 161, 0.09);
-  border: 1px solid rgba(183, 196, 161, 0.18);
-  color: #dce6cc;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  color: #dbe5cb;
+  overflow-wrap: break-word;
 }
 .brew-snippet {
   display: inline-flex;
@@ -662,7 +695,7 @@ html[lang="en"] .section-label {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   border-radius: 6px;
   border: 1px solid var(--line);
   background: #141812;

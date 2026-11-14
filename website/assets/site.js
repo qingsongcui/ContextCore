@@ -126,10 +126,14 @@ function syncLanguageControls(lang) {
   if (group) group.setAttribute('aria-label', lang === 'en' ? 'Language' : '语言');
 }
 
+let hasTranslated = false;
 function applyLanguage(lang) {
-  if (!isStaticEnPage) {
+  if (!isStaticEnPage && (hasTranslated || lang !== docDefaultLang)) {
+    hasTranslated = true;
     applyText(lang);
     applyMeta(lang);
+  } else if (!isStaticEnPage) {
+    document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
   }
   syncLanguageControls(lang);
   syncNavigationLabel();
@@ -156,7 +160,10 @@ function syncPageVisibility() {
 document.addEventListener('visibilitychange', syncPageVisibility);
 syncPageVisibility();
 const heroVisual = document.querySelector('.hero-visual');
-if (heroVisual && 'ResizeObserver' in window) mountSphere(heroVisual);
+if (heroVisual) {
+  if ('ResizeObserver' in window) mountSphere(heroVisual);
+  else heroVisual.classList.add('no-sphere');
+}
 
 const navToggle = document.querySelector('[data-nav-toggle]');
 const nav = document.querySelector('#site-navigation');
@@ -178,7 +185,7 @@ navToggle.addEventListener('click', () => {
   navToggle.setAttribute('aria-expanded', String(open));
   syncNavigationLabel();
 });
-nav.addEventListener('click', event => { const link = event.target.closest('a'); if (!link) return; closeNav(); const target = document.querySelector(link.hash); if (target) { target.setAttribute('tabindex', '-1'); target.focus({ preventScroll: true }); } });
+nav.addEventListener('click', event => { const link = event.target.closest('a'); if (!link) return; closeNav(); const target = link.hash ? document.querySelector(link.hash) : null; if (target) { target.setAttribute('tabindex', '-1'); target.focus({ preventScroll: true }); } });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && nav.dataset.open === 'true') closeNav(true); });
 document.addEventListener('click', event => { if (nav.dataset.open === 'true' && !event.target.closest('.site-header')) closeNav(); });
 window.matchMedia('(min-width: 901px)').addEventListener('change', () => closeNav());
@@ -207,7 +214,7 @@ if ('IntersectionObserver' in window) {
       });
     }
   }, { rootMargin: '-15% 0px -60% 0px', threshold: 0 });
-  nav.querySelectorAll('a').forEach(link => { const section = document.querySelector(link.hash); if (section) sectionObserver.observe(section); });
+  nav.querySelectorAll('a').forEach(link => { if (!link.hash) return; const section = document.querySelector(link.hash); if (section) sectionObserver.observe(section); });
 }
 
 document.querySelectorAll('[data-lang]').forEach(control => {

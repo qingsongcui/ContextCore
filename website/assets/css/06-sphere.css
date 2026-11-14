@@ -1,4 +1,5 @@
-/* Quiet shared-context diagram. Labels stay legible while the globe rotates. */
+/* Quiet shared-context diagram. Pre-styled under .has-js so first paint matches mounted canvas geometry with zero flash. */
+.has-js .hero-visual:not(.no-sphere),
 .hero-visual.has-sphere {
   --field-line: rgb(199 213 181 / .13);
   --field-muted: #8b9580;
@@ -6,56 +7,99 @@
   justify-self: center; aspect-ratio: 1; touch-action: pan-y;
   background: radial-gradient(ellipse at 50% 50%, #252b201c, transparent 68%);
 }
-.has-sphere .orbital, .has-sphere .core-waves { display: none; }
+.has-js .hero-visual:not(.no-sphere) .orbital,
+.has-js .hero-visual:not(.no-sphere) .core-waves,
+.has-sphere .orbital,
+.has-sphere .core-waves { display: none; }
 .sphere-canvas { position: absolute; inset: 0; display: block; pointer-events: none; }
 /* Explicit dimensions keep the brand mark inside its tile. */
+.has-js .hero-visual:not(.no-sphere) .core,
 .has-sphere .core { z-index: 2; width: 76px; height: 76px; gap: 0; pointer-events: none; }
+.has-js .hero-visual:not(.no-sphere) .core-inner,
 .has-sphere .core-inner {
-  width: 76px; height: 76px; border-radius: 22px;
+  width: 76px; height: 76px; border-radius: 14px;
   border: 1px solid rgb(205 222 183 / .24);
   background: linear-gradient(145deg, #303729, #20251d 80%);
   box-shadow: inset 0 1px 0 rgb(237 247 219 / .09), 0 12px 32px #0003;
   animation: none;
 }
+.has-js .hero-visual:not(.no-sphere) .core-inner .brand-symbol,
 .has-sphere .core-inner .brand-symbol { width: 35px; height: 46px; transform: none; }
+.has-js .hero-visual:not(.no-sphere) .core > span,
 .has-sphere .core > span { position: absolute; top: calc(100% + 14px); white-space: nowrap; font-size: 10px; font-weight: 500; letter-spacing: 2.5px; color: #a6b198; }
+.has-js .hero-visual:not(.no-sphere) .orbit-host,
 .has-sphere .orbit-host {
-  left: 0; top: 0; transform: translate(-50%, -50%); z-index: 3;
+  transform: translate(-50%, -50%); z-index: 3;
   min-height: 36px; padding: 8px 11px; gap: 8px;
   font-size: 12px; font-weight: 450; line-height: 1;
-  border: 1px solid var(--field-line); border-radius: 9px;
-  color: #bdc5b4; background: #1c201b; box-shadow: 0 3px 12px #0002;
+  border: 1px solid rgba(183, 196, 161, 0.2); border-radius: 7px;
+  color: #bdc5b4; background: rgba(24, 29, 22, 0.92); box-shadow: 0 3px 12px #0002;
   -webkit-backdrop-filter: none; backdrop-filter: none; white-space: nowrap;
   transition: color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out);
 }
+.has-js .hero-visual:not(.no-sphere) .host-codex { left: clamp(54px, 23%, calc(100% - 54px)); top: 25%; }
+.has-js .hero-visual:not(.no-sphere) .host-cursor { left: clamp(54px, 77%, calc(100% - 54px)); top: 25%; }
+.has-js .hero-visual:not(.no-sphere) .host-antigravity { left: clamp(70px, 83%, calc(100% - 70px)); top: 50%; }
+.has-js .hero-visual:not(.no-sphere) .host-opencode { left: clamp(64px, 77%, calc(100% - 64px)); top: 75%; }
+.has-js .hero-visual:not(.no-sphere) .host-omp { left: clamp(47px, 23%, calc(100% - 47px)); top: 75%; }
+.has-js .hero-visual:not(.no-sphere) .host-claude-code { left: clamp(73px, 17%, calc(100% - 73px)); top: 50%; }
+.has-js .hero-visual:not(.no-sphere) .orbit-host::after,
 .has-sphere .orbit-host::after { display: none; }
 .has-sphere .orbit-host[data-active="true"] { color: #e3ebd7; border-color: #8fa77680; background: #282f22; }
+.has-js .hero-visual:not(.no-sphere) .host-mark,
 .has-sphere .host-mark { font-size: 13px; color: #909e81; width: 14px; text-align: center; }
+.has-js .hero-visual:not(.no-sphere) .orbit-host .host-point,
 .has-js .has-sphere .host-point { width: 3px; height: 3px; margin-left: 1px; background: #606d54; box-shadow: none; animation: none; }
 .has-sphere .orbit-host[data-active="true"] .host-point { background: #c9dfa9; box-shadow: 0 0 0 3px #bdd49b0c; }
+.has-js .hero-visual:not(.no-sphere) .visual-corner,
 .has-sphere .visual-corner { left: 7%; right: 7%; font-size: 10px; font-weight: 400; letter-spacing: 1.4px; color: var(--field-muted); }
+.has-js .hero-visual:not(.no-sphere) .visual-corner.top,
 .has-sphere .visual-corner.top { top: 6%; display: flex; align-items: center; gap: 14px; }
+.has-js .hero-visual:not(.no-sphere) .visual-corner.top span,
 .has-sphere .visual-corner.top span { color: #68735e; }
+.has-js .hero-visual:not(.no-sphere) .visual-corner.bottom,
 .has-sphere .visual-corner.bottom { bottom: 6%; gap: 12px; font-size: 10px; letter-spacing: .7px; border-top: 1px solid #adbd9710; padding-top: 12px; }
+.has-js .hero-visual:not(.no-sphere) .visual-corner.bottom span,
 .has-sphere .visual-corner.bottom span { color: #7f8b73; font-size: 10px; letter-spacing: .3px; }
+.has-js .hero-visual:not(.no-sphere) .visual-corner .coordinate,
 .has-sphere .visual-corner .coordinate { display: none; }
 @media (max-width: 1100px) {
+  .has-js .hero-visual:not(.no-sphere) .orbit-host,
   .has-sphere .orbit-host { font-size: 11px; padding: 7px 9px; gap: 6px; min-height: 32px; }
+  .has-js .hero-visual:not(.no-sphere) .core,
   .has-sphere .core { width: 64px; height: 64px; }
+  .has-js .hero-visual:not(.no-sphere) .core-inner,
   .has-sphere .core-inner { width: 64px; height: 64px; border-radius: 18px; }
+  .has-js .hero-visual:not(.no-sphere) .core-inner .brand-symbol,
   .has-sphere .core-inner .brand-symbol { width: 29px; height: 38px; }
 }
 @media (max-width: 600px) {
+  .has-js .hero-visual:not(.no-sphere),
   .hero-visual.has-sphere { max-width: 420px; margin: 24px auto 0; }
+  .has-js .hero-visual:not(.no-sphere) .orbit-host,
   .has-sphere .orbit-host { padding: 7px 8px; gap: 5px; min-height: 30px; }
+  .has-js .hero-visual:not(.no-sphere) .host-mark,
   .has-sphere .host-mark { display: none; }
+  .has-js .hero-visual:not(.no-sphere) .host-point,
   .has-sphere .host-point { display: none; }
+  .has-js .hero-visual:not(.no-sphere) .host-antigravity { left: clamp(44px, 83%, calc(100% - 44px)); }
+  .has-js .hero-visual:not(.no-sphere) .host-claude-code { left: clamp(48px, 17%, calc(100% - 48px)); }
+  .has-js .hero-visual:not(.no-sphere) .core,
   .has-sphere .core { width: 54px; height: 54px; }
+  .has-js .hero-visual:not(.no-sphere) .core-inner,
   .has-sphere .core-inner { width: 54px; height: 54px; border-radius: 16px; }
+  .has-js .hero-visual:not(.no-sphere) .core-inner .brand-symbol,
   .has-sphere .core-inner .brand-symbol { width: 25px; height: 33px; }
+  .has-js .hero-visual:not(.no-sphere) .core > span,
   .has-sphere .core > span { top: calc(100% + 10px); font-size: 10px; letter-spacing: 1.7px; }
+  .has-js .hero-visual:not(.no-sphere) .visual-corner,
   .has-sphere .visual-corner { left: 4%; right: 4%; letter-spacing: .7px; }
+  .has-js .hero-visual:not(.no-sphere) .visual-corner.top,
   .has-sphere .visual-corner.top { top: 3%; }
+  .has-js .hero-visual:not(.no-sphere) .visual-corner.bottom,
   .has-sphere .visual-corner.bottom { bottom: 2%; }
 }
-@media (prefers-reduced-motion: reduce) { .has-sphere .orbit-host { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .has-js .hero-visual:not(.no-sphere) .orbit-host,
+  .has-sphere .orbit-host { transition: none; }
+}

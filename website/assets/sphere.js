@@ -19,7 +19,10 @@ export function mountSphere(region) {
   canvas.className = 'sphere-canvas';
   canvas.setAttribute('aria-hidden', 'true');
   const ctx = canvas.getContext('2d');
-  if (!ctx) return;
+  if (!ctx) {
+    region.classList.add('no-sphere');
+    return;
+  }
   region.prepend(canvas);
   region.classList.add('has-sphere');
   const lattice = fibonacciSphere(760);
