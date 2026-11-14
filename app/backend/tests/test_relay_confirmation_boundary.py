@@ -136,7 +136,7 @@ def test_relay_discovery_reports_sync_failure_without_raw_exception(pending, mon
     from app.services import connection_service
     def fail():
         raise RuntimeError('synthetic-private-detail-not-for-response')
-    monkeypatch.setattr(connection_service, 'list_connections', fail)
+    monkeypatch.setattr(connection_service, 'sync_recent_connections_for_relay', fail)
     result = handoff_service.discover_relay_projects(sync_first=True)
     assert result['sync_failed'] is True
     assert result['synced_agents'][0]['status'] == 'error'

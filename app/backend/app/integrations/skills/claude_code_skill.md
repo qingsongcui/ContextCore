@@ -1,39 +1,47 @@
-# ContextCore Handoff & Auto-Memory Skill
+---
+name: contextcore
+description: "ContextCore (续境) 跨 Agent 工作记忆闭环与对话接力技能。日常开发、切换任务或恢复上下文前主动调用 bootstrap_working_memory 按需查记忆；推进中用 upsert_working_task + cite_memory 维护短期任务与真实引用；用户输入 /contextcore、接力、接着做、continue 时跨 Agent 接力历史对话。"
+---
 
-Use this skill when the user invokes `/contextcore` or says to continue/relay work from an earlier conversation ("接力", "接着做", "continue"), or implicitly during normal conversations to summarize and persist project memories.
+# ContextCore Working Memory & Handoff Skill (Claude Code)
 
-ContextCore hooks stay silent. Call MCP tools; do not expect auto-injected context.
+ContextCore hooks stay silent and never auto-inject noisy dumps. Drive both **Daily Working Memory Closed Loop** and **Explicit `/contextcore` Relay** via MCP tools.
 
-## 1. Cross-Agent Conversation Relay (`跨 Agent 对话接力`)
+## 1. Daily Working Memory Closed Loop (`日常工作记忆闭环`)
 
-1. When the user types `/contextcore` or says "接力", "接着做", or "continue" without specifying a conversation, call `discover_relay_conversations(cwd="<current_working_directory>")` or `relay_conversation(cwd="<current_working_directory>")` (or `list_relay_conversations(cwd="<current_working_directory>")`), always passing the current project directory `cwd` so conversations are scoped to the current project. It automatically syncs recent chat histories across all authorized agents (`claude-code`, `codex`, `cursor`, `antigravity`, `omp`, `opencode`) and returns a numbered candidate list of recent conversation records (`question_prompt` and `conversation_candidates`, showing `#序号 · [来源Agent] · 【所属项目】 · 时间 · 对话标题 — 简短摘要`).
-2. Present the numbered conversation list to the user and ask which conversation record they want to continue.
-3. Once the user replies with a conversation number (e.g. `1`) or `conversation_id`, call `relay_conversation(conversation_id=..., cwd="<current_working_directory>")`.
-4. `relay_conversation` loads **that selected conversation's detailed context (recent complete message turns + six-element summary + active project memories/constraints)**, automatically truncating older turns if a single conversation exceeds the token budget.
-5. **Report to the user that loading is complete (`✅ 已加载对话上下文：《<标题>》`)**, summarize the previous goal and latest progress in 2–3 concise lines, and **stop to wait for the user's instruction on what to do next** (unless the user already included a specific task instruction alongside their selection, in which case execute that instruction). Do not redo completed work (`do_not_redo`) or reuse historical decisions.
+1. **Proactive Scoped Read (`收到任务先按需查`)**:
+   - Before starting substantive coding, debugging, refactoring, or design work in a project — or when switching tasks/projects/Agents, when the user mentions `"上次"` / `"按之前的"`, hitting a potential pitfall, or recovering after context compaction — call `bootstrap_working_memory(cwd="<current_working_directory>", query="<current_task_summary>")`.
+   - Skip calling it for trivial 1-turn Q&A (e.g. `"现在有几个分支"`, `"git status"`).
+   - Need deeper lookup on a specific topic? Call `search_memory(query=..., project_id=...)` or `read_memory(id=...)`.
+2. **Read ≠ Execution Permission (`读取不等于授权改代码`)**:
+   - If `bootstrap_working_memory` returns `must_not_execute=True` (`execution_mode="discussion_only"` or unconfirmed handoff), OR if the user is only discussing a plan/architecture, **stay strictly in discussion mode** — NEVER edit files until the user explicitly authorizes code changes.
+   - If `task_selection_required=True` (multiple active tasks) or `pending_conflicts` is non-empty, ask the user before assuming one.
+   - For lessons with `applicability` / `applicability_warning`, verify environment/version match before applying.
+3. **Restrained 4-Event Writes (`克制写入，零噪音`)**:
+   - **(a) User explicit decision / preference / correction**: Call `save_memory(cwd=..., category="decision"|"preference", title=..., content=..., is_user_correction=True|False)` (use `scope="global"` only for cross-project personal preferences).
+   - **(b) Short-term task progress / blocker / failed attempt / one-off constraint (`"这次先别..."`)**: Call `upsert_working_task(cwd=..., title=..., goal=..., add_completed_step=..., current_state=..., add_temp_constraint=..., add_failed_attempt=..., blockers=..., next_steps=..., execution_mode="discussion_only"|"approved")`. NEVER store `"这次先别..."` or transient progress in long-term `save_memory`.
+   - **(c) Validated reusable conditional lesson**: Call `promote_task_lesson(task_id=..., title=..., content=..., applicability={"when": "...", "env": "..."})`.
+   - **(d) User declares an old rule obsolete**: Call `mark_memory_outdated(memory_id=..., reason=...)`.
+   - **Strictly Forbidden**: Never save unconfirmed AI proposals (`"我建议..."`), unverified debugging guesses (`"可能是因为..."`), or raw command/traceback logs.
+4. **Honest Citation & Lightweight Feedback (`真实引用与反馈`)**:
+   - When loaded memories genuinely guide your code or decisions, pass `cited_memory_ids=[...]` to `upsert_working_task(...)` or call `cite_memory(memory_ids=[...], reason=..., task_id=...)`.
+   - Briefly mention referenced constraints/task state to the user (e.g. `💡 已参考项目约束：<标题>` / `💡 已更新续境记忆：<标题>`).
 
-## 2. Local CLI / HTTP Fallback (When MCP Tools Are Not Loaded in Current Session)
+## 2. Explicit `/contextcore` Cross-Agent Relay (`跨 Agent 对话接力`)
 
-If `discover_relay_conversations`, `relay_conversation`, `assemble_context`, or `start_handoff` are not visible in the current session's MCP tool list (e.g. the user has not restarted Claude Code after connecting), **NEVER stop and claim that handoff tools are missing**. Immediately query the local ContextCore loopback API via shell (passing `cwd=$PWD` so only the current project's conversations are returned):
+1. When the user types `/contextcore` or says `"接力"`, `"接着做"`, or `"continue"` without specifying a conversation, call `discover_relay_conversations(cwd="<current_working_directory>")` or `relay_conversation(cwd="<current_working_directory>")` (or `relay_project` for project-level relay), always passing `cwd`.
+2. Present the numbered candidate list — **every row MUST show `#序号 · [来源Agent] · 时间 · 对话主题 (title) + 对话简介 (brief_summary：聊了什么、停在哪) · ID / 原生会话ID` (NEVER omit `brief_summary`)** — and ask which conversation to continue.
+3. Once the user replies with a number (e.g. `1`) or `conversation_id`, call `relay_conversation(conversation_id=..., cwd="<current_working_directory>")`.
+4. If `status="loaded"` (`must_not_execute=True`) or `status="sync_pending"`, report `✅ 已加载对话上下文：《<标题>》` (noting if background history refresh is still pending) with a 2–3 line summary of the goal and latest progress, and **stop to wait for the user's concrete next instruction**. Only execute immediately when `must_not_execute=False` (`status="confirmed"` / `continuation.status="ready"`). Never redo `do_not_redo` items.
 
-1. **Discover & list recent conversations for the current project across agents**:
-   ```bash
-   curl -sS -G "http://127.0.0.1:8420/api/handoffs/relay/conversation" --data-urlencode "consumer=claude-code" --data-urlencode "cwd=$PWD" || curl -sS -G "http://127.0.0.1:18420/api/handoffs/relay/conversation" --data-urlencode "consumer=claude-code" --data-urlencode "cwd=$PWD"
-   ```
-   Display `question_prompt` / `conversation_candidates` to the user and ask which conversation number (`#1`, `#2`, ...) to continue.
-2. **Confirm & load the selected conversation (`<N>` or `<conversation_id>`)**:
-   ```bash
-   curl -sS -G "http://127.0.0.1:8420/api/handoffs/relay/conversation" --data-urlencode "conversation_id=<N>" --data-urlencode "consumer=claude-code" --data-urlencode "cwd=$PWD" || curl -sS -G "http://127.0.0.1:18420/api/handoffs/relay/conversation" --data-urlencode "conversation_id=<N>" --data-urlencode "consumer=claude-code" --data-urlencode "cwd=$PWD"
-   ```
-   Read `context_text` and `continuation`, report `✅ 已加载对话上下文：《<标题>》` with a 2–3 line summary of the goal and latest progress, and wait for the user's next instruction before executing tasks.
+## 3. Local CLI / HTTP Fallback (When MCP Tools Are Not Loaded Yet)
 
-## 3. Real-Time Implicit Memory Saving (`实时顺手记记忆`)
+If MCP tools are not yet visible in the current session (e.g. before restarting Claude Code), NEVER claim handoff tools are missing — query the local ContextCore loopback API (`$PWD`):
 
-During normal conversations, do NOT wait for the user to explicitly say "remember this". Whenever any of the following signals emerge in dialogue, automatically and implicitly call `save_memory` (passing `cwd` to auto-match/create the project, or `scope="global"` for universal preferences) or `auto_summarize_memory` in the background:
-- **User Preferences (`preference`)**: coding style, language/framework choices, prohibited operations, workflow habits.
-- **Project Background (`background`)**: domain context, repository layout, environment setup.
-- **Architectural Decisions (`decision`)**: technical trade-offs, schema/API contracts, chosen solutions.
-- **Task Progress (`task`)**: milestone completion, blockers, next steps (or call `update_task_progress`).
-- **Pitfalls & Lessons (`knowledge` / `lesson`)**: root causes of bugs, environment gotchas, verified workarounds.
+```bash
+# List candidate conversations
+curl -sS -G "http://127.0.0.1:8420/api/handoffs/relay/conversation" --data-urlencode "consumer=claude-code" --data-urlencode "cwd=$PWD" || curl -sS -G "http://127.0.0.1:18420/api/handoffs/relay/conversation" --data-urlencode "consumer=claude-code" --data-urlencode "cwd=$PWD"
 
-After implicitly saving or summarizing memory in the background, append a brief, non-intrusive line at the end of your reply: `💡 已自动记入续境记忆：<记忆标题>`.
+# Load selected conversation (<N> or <conversation_id>)
+curl -sS -G "http://127.0.0.1:8420/api/handoffs/relay/conversation" --data-urlencode "conversation_id=<N>" --data-urlencode "consumer=claude-code" --data-urlencode "cwd=$PWD" || curl -sS -G "http://127.0.0.1:18420/api/handoffs/relay/conversation" --data-urlencode "consumer=claude-code" --data-urlencode "cwd=$PWD"
+```

@@ -44,6 +44,9 @@ SECRET_PATTERNS = (
     (re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{24,}"), "Slack token"),
     (re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"), "AWS access-key ID"),
 )
+WORKTREE_PRIVACY_PATTERNS = (
+    (re.compile(r"/(?:Users|home)/" + "qiao" + r"zhi(?=/|['\"\s`)|])"), "private workstation home path"),
+)
 PIN = re.compile(r"([A-Za-z0-9][A-Za-z0-9_.-]*)(?:\[[A-Za-z0-9_,.-]+\])?==([A-Za-z0-9][A-Za-z0-9_.+!-]*)")
 
 # One reviewed false positive, not a tests-directory or credential-prefix
@@ -70,8 +73,15 @@ def normalize_name(name: str) -> str:
 def public_audit_environment() -> dict[str, str]:
     # Do not inherit private index credentials, injected pip-audit options or uv
     # configuration. Neither audit contacts a private registry or loads .netrc.
-    env = {key: value for key, value in os.environ.items()
-           if not key.startswith(("PIP_", "UV_", "PIP_AUDIT_"))}
+    # Also omit SOCKS ALL_PROXY/all_proxy because isolated pip-audit runs without pysocks.
+    env = {
+        key: value for key, value in os.environ.items()
+        if not key.startswith(("PIP_", "UV_", "PIP_AUDIT_"))
+        and not (
+            key in ("ALL_PROXY", "all_proxy")
+            and value.strip().lower().startswith("socks")
+        )
+    }
     env.update({"PIP_CONFIG_FILE": os.devnull, "PIP_INDEX_URL": "https://pypi.org/simple",
                 "UV_DEFAULT_INDEX": "https://pypi.org/simple", "NETRC": os.devnull,
                 "UV_PYTHON_DOWNLOADS": "never", "UV_KEYRING_PROVIDER": "disabled"})
@@ -235,7 +245,7 @@ def content_findings(content: bytes, relative: str) -> list[tuple[int, str]]:
     return findings
 
 
-def inspect_source(relative: str, content: bytes, location: str) -> bool:
+def inspect_source(relative: str, content: bytes, location: str, *, check_worktree_privacy: bool = False) -> bool:
     clean = True
     if prohibited_path(relative):
         log(f"  FAIL: prohibited runtime/key artifact at {location}.")
@@ -243,6 +253,13 @@ def inspect_source(relative: str, content: bytes, location: str) -> bool:
     for line, description in content_findings(content, relative):
         log(f"  FAIL: {description} at {location}, line {line} (matched content withheld).")
         clean = False
+    if check_worktree_privacy:
+        text = content.decode("latin-1")
+        for pattern, description in WORKTREE_PRIVACY_PATTERNS:
+            for match in pattern.finditer(text):
+                line = text.count("\n", 0, match.start()) + 1
+                log(f"  FAIL: {description} at {location}, line {line} (matched content withheld).")
+                clean = False
     return clean
 
 
@@ -318,7 +335,7 @@ def check_repository_hygiene() -> bool:
             except OSError:
                 raise HygieneError(f"source-unreadable: {location}") from None
             scanned += 1
-            clean = inspect_source(relative, content, location) and clean
+            clean = inspect_source(relative, content, location, check_worktree_privacy=True) and clean
 
         # --all includes branch/tag history, including removed files. Report
         # object hashes and redacted/escaped paths, never matched credential bytes.

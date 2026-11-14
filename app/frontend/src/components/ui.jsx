@@ -17,9 +17,11 @@ export function Button({
 }
 export function Badge({
   children,
-  tone = ''
+  tone = '',
+  className = '',
+  ...props
 }) {
-  return <span className={`badge ${tone}`}>{children}</span>;
+  return <span className={['badge', tone, className].filter(Boolean).join(' ')} {...props}>{children}</span>;
 }
 export function EmptyState({
   title,

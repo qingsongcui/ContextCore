@@ -17,7 +17,7 @@ import stat
 import tomllib
 import zipfile
 import unicodedata
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from functools import wraps
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -89,8 +89,9 @@ def set_secret_store(store: SecretStore | None) -> None:
 
 def ensure_schema(conn: sqlite3.Connection | None = None) -> None:
     if conn is None:
-        settings.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(settings.db_path) as local:
+        from app.database import db
+
+        with db() as local:
             ensure_schema(local)
         return
     conn.execute("""CREATE TABLE IF NOT EXISTS management_entities (
@@ -201,6 +202,7 @@ class ManagementService:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA busy_timeout = 5000")
+        conn.execute("PRAGMA mmap_size = 0")
         try:
             with conn:
                 yield conn
@@ -2381,9 +2383,17 @@ class ManagementService:
         cc_db_path = self.home / ".cc-switch/cc-switch.db"
         if not cc_db_path.parent.is_symlink() and not cc_db_path.is_symlink() and cc_db_path.is_file():
             try:
-                conn = sqlite3.connect(cc_db_path.as_uri() + "?mode=ro", uri=True, timeout=3)
-                conn.row_factory = sqlite3.Row
+                from app.adapters.base import isolated_sqlite_snapshot
+
+                cc_stack = ExitStack()
                 try:
+                    staged_cc_db = cc_stack.enter_context(isolated_sqlite_snapshot(cc_db_path, host="claude-code"))
+                    conn = sqlite3.connect(staged_cc_db, timeout=3)
+                    cc_stack.callback(conn.close)
+                    conn.row_factory = sqlite3.Row
+                    conn.execute("PRAGMA mmap_size = 0")
+                    conn.execute("PRAGMA trusted_schema = OFF")
+                    conn.execute("PRAGMA query_only = ON")
                     tables = {
                         r["name"]
                         for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
@@ -2645,7 +2655,7 @@ class ManagementService:
                                     pass
                     stats["sources"].append("cc-switch.db")
                 finally:
-                    conn.close()
+                    cc_stack.close()
             except Exception:
                 self._note_sync_failure("cc-switch", "cc-switch.db")
 
@@ -2768,12 +2778,6 @@ class ManagementService:
                         pass
 
         # 3. Sync local Skills directories (~/.claude/skills, ~/.codex/skills, ~/.agents/skills, ~/.cc-switch/skills)
-        try:
-            from app.integrations.installer import refresh_owned_skill_files
-
-            refresh_owned_skill_files(home=self.home)
-        except Exception:
-            pass
         doc_secret_re = re.compile(
             r"(?i)sk-[A-Za-z0-9_-]{8,}|bearer\s+[^\s\"']+|(?:authorization|x-api-key)\s*[:=]|--(?:api[-_]key|token|secret|password|auth)(?:[=\s]|$)"
         )
@@ -2877,7 +2881,7 @@ class ManagementService:
                         if merged_a != (ex.get("agent_ids") or []):
                             patch_skill["agent_ids"] = merged_a
                     ex_source = ex.get("source") if isinstance(ex.get("source"), dict) else {}
-                    if s_name.lower() == "contextcore-handoff" and ex_source.get("type") == "local":
+                    if s_name.lower() in ("contextcore", "contextcore-handoff") and ex_source.get("type") == "local":
                         try:
                             raw_md = skill_md.read_bytes()
                             if len(raw_md) <= 400000:

@@ -26,13 +26,24 @@ def compute_normalized_content_hash(project_id: str | None, category: str, title
 
 
 def _has_content_tombstone(conn, project_id: str | None, category: str, title: str, content: str) -> bool:
+    from app.services import governance_guardrails
+
     raw_hash = compute_content_hash(project_id, category, title, content)
     norm_hash = compute_normalized_content_hash(project_id, category, title, content)
     row = conn.execute(
         "SELECT 1 FROM tombstones WHERE entity_type IN ('content', 'memory', 'document') AND dedupe_key IN (?, ?)",
         (raw_hash, norm_hash),
     ).fetchone()
-    return row is not None
+    if row is not None:
+        return True
+    return governance_guardrails.is_tombstoned_memory(
+        conn,
+        project_id,
+        category,
+        title,
+        content,
+        include_cross_category=True,
+    )
 
 
 def queue_distillation(conversation_id: str, *, _connection=None,
@@ -178,6 +189,11 @@ def _unconfirmed_decision_evidence(text: str, ev_msg_text: str = "") -> bool:
 
 _BARE_ACKNOWLEDGEMENTS = {"好的", "好", "ok", "okay", "yes", "继续", "行", "可以", "嗯", "收到", "没问题"}
 _REJECTED_SUMMARY_STANCES = {"suggestion", "assumption", "negation", "quote"}
+_EXPLICIT_TASK_SCOPE_RE = re.compile(
+    r"(?:这次|本次|这回|本轮|当前任务|当前会话|当前分支|仅限本次|仅限当前任务|不要升级为长期规则|"
+    r"\b(?:for\s+this\s+(?:task|turn|session)|this\s+time\s+only|temporarily)\b)",
+    re.IGNORECASE,
+)
 
 
 def _normalized_claim(text: str) -> str:
@@ -346,6 +362,70 @@ def apply_distilled_memories(
                 else _unconfirmed_user_evidence(m_content)
             )
 
+        if user_confirmed:
+            if _unconfirmed_user_evidence(user_msg_text) or _unconfirmed_user_evidence(str(quote or "")):
+                user_confirmed = False
+            elif cat == "decision" or isinstance(m.get("supersedes"), dict):
+                if _unconfirmed_decision_evidence(str(quote or ""), user_msg_text):
+                    user_confirmed = False
+            elif _has_preceding_negation(str(quote or ""), user_msg_text) and not _DECISION_NEGATION_RE.search(m_content):
+                user_confirmed = False
+
+        from app.services import governance_guardrails, working_memory_service
+
+        is_quarantined_user_stance = (
+            stance in _REJECTED_SUMMARY_STANCES
+            and is_valid_user_idx
+            and isinstance(raw_messages[user_msg_idx], dict)
+            and raw_messages[user_msg_idx].get("role") == "user"
+            and isinstance(quote, str)
+            and bool(quote.strip())
+            and (quote in user_msg_text)
+            and not _EXPLICIT_TASK_SCOPE_RE.search(f"{m_title}\n{m_content}")
+        )
+        eff_origin_hint = (
+            "user_confirmed"
+            if user_confirmed
+            else (str(m.get("origin_authority") or "").strip() or None)
+        )
+        verdict = governance_guardrails.classify_write_candidate(
+            title=m_title,
+            content=m_content,
+            category=cat,
+            origin_authority=eff_origin_hint,
+            is_agent_write=True,
+            actor=actor,
+            kind="memory",
+        )
+        if not is_quarantined_user_stance:
+            if verdict["action"] == "route_to_working_task":
+                source_is_non_user = (
+                    index is not None
+                    and 0 <= index < len(raw_messages)
+                    and isinstance(raw_messages[index], dict)
+                    and raw_messages[index].get("role") != "user"
+                )
+                if project_id and not source_is_non_user:
+                    working_memory_service.add_temp_constraint_to_active_task(
+                        project_id,
+                        verdict["extracted_constraint"] or m_content,
+                        cwd=conv.get("cwd"),
+                        title_hint=m_title,
+                        agent=actor,
+                        conn=conn,
+                    )
+                continue
+            if not verdict["allowed"] and not isinstance(m.get("supersedes"), dict):
+                if cat == "decision" and not user_confirmed:
+                    existing_active = conn.execute(
+                        "SELECT id, content FROM contents WHERE project_id IS ? AND category = 'decision' AND title = ? AND status = 'active'",
+                        (project_id, m_title),
+                    ).fetchone()
+                    if existing_active and existing_active["content"] != m_content:
+                        conflict_reason = f"Assistant-suggested decision on '{m_title}' lacks explicit user confirmation"
+                        _record_conflict(conn, project_id, existing_active["id"], m_title, m_content, cat, m.get("tags") or [], quote, conflict_reason, actor, now)
+                continue
+
         if cat == "preference" and (conv_id or quote or index is not None):
             if (
                 not user_confirmed
@@ -356,14 +436,6 @@ def apply_distilled_memories(
                 )
             ):
                 continue
-        if user_confirmed:
-            if _unconfirmed_user_evidence(user_msg_text) or _unconfirmed_user_evidence(str(quote or "")):
-                user_confirmed = False
-            elif cat == "decision" or isinstance(m.get("supersedes"), dict):
-                if _unconfirmed_decision_evidence(str(quote or ""), user_msg_text):
-                    user_confirmed = False
-            elif _has_preceding_negation(str(quote or ""), user_msg_text) and not _DECISION_NEGATION_RE.search(m_content):
-                user_confirmed = False
 
         supersedes = m.get("supersedes")
 
@@ -401,10 +473,11 @@ def apply_distilled_memories(
             )
 
             if is_explicit_confirmed:
+                mid = new_id("cnt")
                 # Atomically retire old active decision
                 cursor = conn.execute(
-                    "UPDATE contents SET status = 'historical', updated_at = ? WHERE id = ? AND version = ? AND status = 'active'",
-                    (now, target_id, expected_ver),
+                    "UPDATE contents SET status = 'historical', superseded_by_id = ?, updated_at = ? WHERE id = ? AND version = ? AND status = 'active'",
+                    (mid, now, target_id, expected_ver),
                 )
                 if cursor.rowcount == 0:
                     # Concurrent change detected; route to conflict
@@ -420,16 +493,18 @@ def apply_distilled_memories(
                 log_audit(actor=actor, action="content.supersede", target=target_id, conn=conn)
 
                 # Insert new active decision with provenance link
-                mid = new_id("cnt")
                 tags = m.get("tags") or []
+                norm_app = governance_guardrails.normalize_applicability(m.get("applicability"))
+                can_key = governance_guardrails.canonical_memory_key(project_id, cat, m_title, m_content)
                 conn.execute(
                     """
                     INSERT INTO contents (
                         id, project_id, kind, category, title, content, tags, agent,
-                        status, version, related_ids, content_hash, created_at, updated_at
-                    ) VALUES (?, ?, 'memory', ?, ?, ?, ?, ?, 'active', 1, ?, ?, ?, ?)
+                        status, version, related_ids, content_hash,
+                        applicability, origin_authority, canonical_key, created_at, updated_at
+                    ) VALUES (?, ?, 'memory', ?, ?, ?, ?, ?, 'active', 1, ?, ?, ?, 'user_confirmed', ?, ?, ?)
                     """,
-                    (mid, project_id, cat, m_title, m_content, encode(tags), actor, encode([target_id]), c_hash, now, now),
+                    (mid, project_id, cat, m_title, m_content, encode(tags), actor, encode([target_id]), c_hash, encode(norm_app), can_key, now, now),
                 )
                 conn.execute(
                     """
@@ -527,27 +602,106 @@ def apply_distilled_memories(
             if existing_mem:
                 if existing_mem["content"] == m_content:
                     continue
+                if cat == "preference":
+                    tech_clash, clash_reason = governance_guardrails._has_exclusive_tech_clash(
+                        f"{m_title} {existing_mem['content']}", f"{m_title} {m_content}"
+                    )
+                    pol_clash = governance_guardrails._has_polarity_clash(existing_mem["content"], m_content)
+                    if not user_confirmed or tech_clash or pol_clash:
+                        conflict_reason = clash_reason or f"Distilled preference conflicts with active memory '{m_title}'"
+                        _record_conflict(conn, project_id, existing_mem["id"], m_title, m_content, cat, m.get("tags") or [], quote, conflict_reason, actor, now)
+                        continue
                 if user_confirmed:
                     created_ids.append(_retire_and_replace(
                         conn, project_id, existing_mem["id"], cat, m_title, m_content,
                         m.get("tags") or [], actor, quote, conv_id, conv_title, conv.get("agent") or actor, now,
+                        applicability=m.get("applicability"),
+                        origin_authority="user_confirmed",
                     ))
                     continue
                 conflict_reason = f"Distilled memory conflicts with active memory '{m_title}'"
                 _record_conflict(conn, project_id, existing_mem["id"], m_title, m_content, cat, m.get("tags") or [], quote, conflict_reason, actor, now)
                 continue
 
+        if cat != "task" and not is_quarantined_user_stance:
+            active_candidates = conn.execute(
+                """
+                SELECT * FROM contents
+                WHERE project_id IS ? AND kind = 'memory' AND status = 'active' AND category != 'task'
+                ORDER BY updated_at DESC, id DESC
+                LIMIT 100
+                """,
+                (project_id,),
+            ).fetchall()
+            handled_by_reconcile = False
+            for cand_row in active_candidates:
+                cand = row_to_dict(cand_row)
+                relation, rel_reason = governance_guardrails.compare_memory_claims(
+                    cand, m_title, m_content, cat
+                )
+                if relation == "equivalent" and cand["category"] == cat and not stance:
+                    handled_by_reconcile = True
+                    break
+                if relation == "contradiction":
+                    if (
+                        cand["category"] in governance_guardrails.PROTECTED_CONFLICT_CATEGORIES
+                        or cat in governance_guardrails.PROTECTED_CONFLICT_CATEGORIES
+                        or not user_confirmed
+                    ):
+                        _record_conflict(
+                            conn,
+                            project_id,
+                            cand["id"],
+                            m_title,
+                            m_content,
+                            cat,
+                            m.get("tags") or [],
+                            quote,
+                            rel_reason or f"Contradicts active {cand['category']} '{cand['title']}'",
+                            actor,
+                            now,
+                        )
+                    else:
+                        created_ids.append(
+                            _retire_and_replace(
+                                conn,
+                                project_id,
+                                cand["id"],
+                                cat,
+                                m_title,
+                                m_content,
+                                m.get("tags") or [],
+                                actor,
+                                quote,
+                                conv_id,
+                                conv_title,
+                                conv.get("agent") or actor,
+                                now,
+                                applicability=m.get("applicability"),
+                                origin_authority="user_confirmed",
+                            )
+                        )
+                    handled_by_reconcile = True
+                    break
+            if handled_by_reconcile:
+                continue
+
         # Ordinary new memory insertion
         mid = new_id("cnt")
         tags = m.get("tags") or []
+        norm_app = governance_guardrails.normalize_applicability(m.get("applicability"))
+        eff_origin = "user_confirmed" if user_confirmed else (verdict["origin_authority"] or "manual")
+        can_key = governance_guardrails.canonical_memory_key(project_id, cat, m_title, m_content)
+        initial_status = "historical" if m.get("_archive_only") else "active"
         conn.execute(
             """
             INSERT INTO contents (
                 id, project_id, kind, category, title, content, tags, agent,
-                status, version, related_ids, content_hash, created_at, updated_at
-            ) VALUES (?, ?, 'memory', ?, ?, ?, ?, ?, 'active', 1, '[]', ?, ?, ?)
+                status, version, related_ids, content_hash,
+                applicability, origin_authority, canonical_key, created_at, updated_at
+            ) VALUES (?, ?, 'memory', ?, ?, ?, ?, ?, ?, 1, '[]', ?, ?, ?, ?, ?, ?)
             """,
-            (mid, project_id, cat, m_title, m_content, encode(tags), actor, c_hash, now, now),
+            (mid, project_id, cat, m_title, m_content, encode(tags), actor, initial_status, c_hash, encode(norm_app), eff_origin, can_key, now, now),
         )
         conn.execute(
             """
@@ -895,14 +1049,6 @@ _IMPLICIT_SIGNAL_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
             re.IGNORECASE,
         ),
     ),
-    (
-        "background",
-        "任务进展与阶段背景",
-        re.compile(
-            r"(?:下一步需要|待办[:：]|TODO[:：]|已完成[:：]|正在推进|任务目标[:：]|接下来要|next step is|milestone completed)",
-            re.IGNORECASE,
-        ),
-    ),
 ]
 
 
@@ -911,9 +1057,13 @@ def extract_implicit_memories_from_messages(
     *,
     existing_summary: str = "",
 ) -> dict[str, Any]:
-    """Extract companion implicit memories and a concise session summary from dialogue turns."""
+    """Extract companion implicit memories, temporary task constraints, and a concise session summary from dialogue turns."""
+    from app.services import governance_guardrails
+
     extracted: list[dict[str, Any]] = []
+    temp_constraints: list[str] = []
     seen_keys: set[tuple[str, str]] = set()
+    seen_temp_constraints: set[str] = set()
     user_points: list[str] = []
     assistant_points: list[str] = []
 
@@ -931,11 +1081,31 @@ def extract_implicit_memories_from_messages(
         elif role == "assistant" and first_line:
             assistant_points.append(first_line)
 
-        # Split into sentences/lines for signal detection
+        # Never auto-promote assistant progress/proposals/guesses into long-term memory.
+        if role != "user":
+            continue
+
+        # Split user turns into sentences/lines for signal detection
         segments = [seg.strip() for seg in re.split(r"[\n。！？!?；;]+", text) if seg.strip()]
         for seg in segments:
-            if len(seg) < 6 or len(seg) > 500:
+            if len(seg) < 4 or len(seg) > 500:
                 continue
+            clean_seg = re.sub(r"\s+", " ", seg).strip()
+            verdict = governance_guardrails.classify_write_candidate(
+                title="",
+                content=clean_seg,
+                category="preference",
+                is_agent_write=True,
+            )
+            if verdict["action"] == "route_to_working_task":
+                constraint_text = verdict["extracted_constraint"] or clean_seg
+                if constraint_text.lower() not in seen_temp_constraints:
+                    seen_temp_constraints.add(constraint_text.lower())
+                    temp_constraints.append(constraint_text)
+                continue
+            if not verdict["allowed"] or len(seg) < 6:
+                continue
+
             for category, label_prefix, pattern in _IMPLICIT_SIGNAL_PATTERNS:
                 if pattern.search(seg):
                     stance = category if category in {"decision", "preference"} else "fact"
@@ -954,7 +1124,6 @@ def extract_implicit_memories_from_messages(
                             stance = "quote"
                     if stance in NON_DECISION_STANCES and stance != "fact":
                         category = "knowledge"
-                    clean_seg = re.sub(r"\s+", " ", seg).strip()
                     short_title = clean_seg[:48].rstrip("，,:： ")
                     title = f"{label_prefix}：{short_title}"
                     dedupe = (category, short_title.lower())
@@ -969,7 +1138,7 @@ def extract_implicit_memories_from_messages(
                                 "content": clean_seg,
                                 "tags": [*tags, f"message_index:{message_index}"],
                                 "quote": seg,
-                                "user_message_index": message_index if role == "user" else None,
+                                "user_message_index": message_index,
                                 "source_message_index": message_index,
                             }
                         )
@@ -987,12 +1156,13 @@ def extract_implicit_memories_from_messages(
     return {
         "process_summary": process_summary,
         "memories": extracted[:15],
+        "temp_constraints": temp_constraints[:10],
     }
 
 
 def _save_checkpoint_summary(conn, source, summary: str) -> dict[str, Any]:
     """Update derived summary and its revision together, never over a newer capture."""
-    from app.services.conversation_service import compute_content_revision_hash
+    from app.services.conversation_service import _update_relay_index, compute_content_revision_hash
 
     current = conn.execute("SELECT * FROM conversations WHERE id=?", (source["id"],)).fetchone()
     if not current or any(current[key] != source[key] for key in (
@@ -1005,9 +1175,11 @@ def _save_checkpoint_summary(conn, source, summary: str) -> dict[str, Any]:
         "UPDATE conversations SET process_summary=?,content_hash=? WHERE id=?",
         (summary, revision, current["id"]),
     )
+    updated = row_to_dict(conn.execute("SELECT * FROM conversations WHERE id=?", (current["id"],)).fetchone())
+    _update_relay_index(conn, current["id"], revision, {**updated, "messages": messages})
     if current["content_hash"] != revision or current["process_summary"] != summary:
         queue_distillation(current["id"], _connection=conn)
-    return row_to_dict(conn.execute("SELECT * FROM conversations WHERE id=?", (current["id"],)).fetchone())
+    return updated
 
 
 def _retire_and_replace(
@@ -1024,24 +1196,33 @@ def _retire_and_replace(
     conversation_title,
     source_agent,
     now,
+    *,
+    applicability: dict[str, Any] | None = None,
+    origin_authority: str = "user_confirmed",
 ) -> str:
+    from app.services import content_service, governance_guardrails
+
+    mid = new_id("cnt")
     cursor = conn.execute(
-        "UPDATE contents SET status = 'historical', updated_at = ? WHERE id = ? AND status = 'active'",
-        (now, old_id),
+        "UPDATE contents SET status = 'historical', superseded_by_id = ?, version = COALESCE(version, 1) + 1, updated_at = ? WHERE id = ? AND status = 'active'",
+        (mid, now, old_id),
     )
     if cursor.rowcount == 0:
         raise HTTPException(status_code=409, detail="The memory being replaced is no longer active")
+    content_service._record_current_version_snapshot(conn, old_id, actor or "user", now)
     log_audit(actor=actor, action="content.supersede", target=old_id, conn=conn)
-    mid = new_id("cnt")
     content_hash = compute_content_hash(project_id, category, title, content)
+    norm_app = governance_guardrails.normalize_applicability(applicability)
+    can_key = governance_guardrails.canonical_memory_key(project_id, category, title, content)
     conn.execute(
         """
         INSERT INTO contents (
             id, project_id, kind, category, title, content, tags, agent,
-            status, version, related_ids, content_hash, created_at, updated_at
-        ) VALUES (?, ?, 'memory', ?, ?, ?, ?, ?, 'active', 1, ?, ?, ?, ?)
+            status, version, related_ids, content_hash,
+            applicability, origin_authority, canonical_key, created_at, updated_at
+        ) VALUES (?, ?, 'memory', ?, ?, ?, ?, ?, 'active', 1, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (mid, project_id, category, title, content, encode(tags), actor, encode([old_id]), content_hash, now, now),
+        (mid, project_id, category, title, content, encode(tags), actor, encode([old_id]), content_hash, encode(norm_app), origin_authority, can_key, now, now),
     )
     conn.execute(
         """
@@ -1091,69 +1272,85 @@ def _agent_summary_eligible(mem: dict[str, Any]) -> bool:
     return mem.get("category") in VALID_CATEGORIES
 
 
-def _apply_agent_supplied_summary(conn, *, project_id, conversation_id, actor, mem) -> dict[str, Any]:
+def _apply_agent_supplied_summary(conn, *, project_id, conversation_id, actor, mem, cwd: str | None = None) -> dict[str, Any]:
     from app.services import content_service
 
-    existing = conn.execute(
-        """
-        SELECT id, content FROM contents
-        WHERE project_id IS ? AND category = ? AND title = ? AND status = 'active'
-        """,
-        (project_id, mem["category"], mem["title"]),
-    ).fetchone()
-    supersedes_id = None
-    action = "created"
-    if existing:
-        if existing["content"] == mem["content"]:
-            return {
-                "id": existing["id"],
-                "category": mem["category"],
-                "title": mem["title"],
-                "content": mem["content"],
-                "action": "unchanged",
-                "version": None,
-                "supersedes_id": None,
-            }
-        if mem.get("category") == "decision":
-            _record_conflict(
-                conn, project_id, existing["id"], mem["title"], mem["content"], "decision",
-                mem.get("tags") or [], mem.get("quote"),
-                "Same-title decision matches an active memory without an explicit supersedes object",
-                actor, now_iso(),
-            )
-            return {
-                "id": existing["id"],
-                "category": mem["category"],
-                "title": mem["title"],
-                "content": mem["content"],
-                "action": "conflict_recorded",
-                "version": None,
-                "supersedes_id": None,
-            }
-        supersedes_id = existing["id"]
-        action = "updated"
-    created = content_service.create_content(
+    reconcile_res = content_service.reconcile_long_term_memory(
         title=mem["title"],
         content=mem["content"],
         project_id=project_id,
-        kind="memory",
         category=mem["category"],
         tags=mem.get("tags") or [],
+        applicability=mem.get("applicability"),
+        origin_authority=mem.get("origin_authority"),
         agent=actor,
+        actor=actor,
+        is_agent_write=True,
+        is_user_correction=bool(mem.get("user_confirmed")),
         source_id=conversation_id,
         source_kind="conversation" if conversation_id else None,
         quote=mem.get("quote"),
-        supersedes_id=supersedes_id,
+        cwd=cwd,
         _connection=conn,
     )
+    rec_action = reconcile_res.get("action")
+    if rec_action in ("ADD", "SUPERSEDE"):
+        created = reconcile_res["memory"]
+        return {
+            "_saved": True,
+            "id": created["id"],
+            "category": mem["category"],
+            "title": created["title"],
+            "content": created["content"],
+            "action": "updated" if rec_action == "SUPERSEDE" else "created",
+            "version": created["version"],
+            "supersedes_id": reconcile_res.get("superseded_id"),
+        }
+    if rec_action == "NOOP":
+        existing_mem = reconcile_res["memory"]
+        return {
+            "_saved": True,
+            "id": existing_mem["id"],
+            "category": mem["category"],
+            "title": existing_mem["title"],
+            "content": existing_mem["content"],
+            "action": "unchanged",
+            "version": existing_mem.get("version"),
+            "supersedes_id": None,
+        }
+    if rec_action == "OPEN_CONFLICT":
+        return {
+            "_saved": False,
+            "id": reconcile_res.get("existing_id"),
+            "conflict_id": reconcile_res.get("conflict_id"),
+            "category": mem["category"],
+            "title": mem["title"],
+            "content": mem["content"],
+            "action": "conflict_recorded",
+        }
+    if rec_action == "ROUTE_TO_WORKING_TASK":
+        wt = reconcile_res.get("working_task") or {}
+        return {
+            "_saved": False,
+            "task_id": wt.get("id"),
+            "category": mem["category"],
+            "title": mem["title"],
+            "content": mem["content"],
+            "action": "routed_to_working_task",
+        }
+    if rec_action == "DROP_TOMBSTONED":
+        return {
+            "_saved": False,
+            "category": mem["category"],
+            "title": mem["title"],
+            "action": "skipped_tombstoned",
+        }
     return {
-        "id": created["id"],
+        "_saved": False,
         "category": mem["category"],
-        "title": created["title"],
-        "content": created["content"],
-        "action": action,
-        "version": created["version"],
-        "supersedes_id": supersedes_id,
+        "title": mem["title"],
+        "reason": reconcile_res.get("reason"),
+        "action": "rejected_by_guardrails",
     }
 
 
@@ -1174,7 +1371,7 @@ def auto_summarize_memory(
     triggered on conversation checkpoints. Supports both explicit structured memories
     and automatic signal extraction from conversation messages.
     """
-    from app.services import conversation_service, project_service
+    from app.services import conversation_service, project_service, working_memory_service
 
     conv: dict[str, Any] | None = None
     message_index_offset = 0
@@ -1210,9 +1407,12 @@ def auto_summarize_memory(
         effective_messages = conv["messages"]
 
     batch_extracted_memories: list[dict[str, Any]] = []
+    batch_temp_constraints: list[dict[str, Any]] = []
     batch_summaries: list[str] = []
-    summary_source = None
+    archive_source: tuple[Any, str, int] | None = None
     if not effective_messages and auto_extract_from_messages and not conversation_id:
+        from app.services import governance_guardrails
+
         with db() as conn:
             if resolved_project_id:
                 rows = conn.execute(
@@ -1226,15 +1426,7 @@ def auto_summarize_memory(
                     (resolved_project_id,),
                 ).fetchall()
             else:
-                rows = conn.execute(
-                    """
-                    SELECT *
-                    FROM conversations
-                    WHERE project_id IS NOT NULL AND project_id != ''
-                    ORDER BY COALESCE(updated_at, created_at) DESC
-                    LIMIT 15
-                    """
-                ).fetchall()
+                rows = []
             for row in rows:
                 try:
                     row_msgs = json.loads(row["messages"] or "[]") if isinstance(row["messages"], str) else (row["messages"] or [])
@@ -1252,8 +1444,23 @@ def auto_summarize_memory(
                         batch_summaries.append(row_summary)
                     if not str(row["process_summary"] or "").strip():
                         row = _save_checkpoint_summary(conn, row, row_summary)
-                    if summary_source is None:
-                        summary_source = row
+                if archive_source is None:
+                    for m_idx, msg in enumerate(row_msgs):
+                        if not isinstance(msg, dict) or msg.get("role") != "user":
+                            continue
+                        u_text = str(msg.get("content") or "").strip()
+                        if not u_text:
+                            continue
+                        chk = governance_guardrails.classify_write_candidate(
+                            title=str(row["title"] or "会话观察")[:48],
+                            content=u_text,
+                            category="background",
+                            is_agent_write=True,
+                            actor=actor,
+                        )
+                        if chk["allowed"]:
+                            archive_source = (row, u_text, m_idx)
+                            break
                 row_mems = h_res.get("memories") or []
                 for m_item in row_mems:
                     batch_extracted_memories.append(
@@ -1264,18 +1471,30 @@ def auto_summarize_memory(
                             "_source_version": row["content_hash"],
                         }
                     )
-            if not batch_extracted_memories and batch_summaries and summary_source is not None:
-                latest_row = summary_source
-                conv_title = str(latest_row["title"] or "近期会话").strip()[:48]
+                for tc in (h_res.get("temp_constraints") or []):
+                    batch_temp_constraints.append(
+                        {
+                            "constraint": tc,
+                            "project_id": row["project_id"] or resolved_project_id,
+                            "cwd": row["cwd"] or effective_cwd,
+                        }
+                    )
+            if not batch_extracted_memories and not batch_temp_constraints and archive_source is not None:
+                src_row, src_user_text, src_msg_idx = archive_source
+                conv_title = str(src_row["title"] or "近期会话").strip()[:48]
                 batch_extracted_memories.append(
                     {
                         "category": "background",
-                        "title": f"任务进展与阶段背景：{conv_title}",
-                        "content": batch_summaries[0],
-                        "tags": ["implicit_auto", f"agent:{latest_row['agent'] or 'unknown'}"],
-                        "_project_id": latest_row["project_id"] or resolved_project_id,
-                        "_conversation_id": latest_row["id"],
-                        "_source_version": latest_row["content_hash"],
+                        "title": f"会话观察归档：{conv_title}",
+                        "content": src_user_text[:400],
+                        "quote": src_user_text,
+                        "source_message_index": src_msg_idx,
+                        "user_message_index": src_msg_idx,
+                        "tags": ["implicit_auto", "archived_checkpoint", f"agent:{src_row['agent'] or 'unknown'}"],
+                        "_project_id": src_row["project_id"] or resolved_project_id,
+                        "_conversation_id": src_row["id"],
+                        "_source_version": src_row["content_hash"],
+                        "_archive_only": True,
                     }
                 )
 
@@ -1285,7 +1504,11 @@ def auto_summarize_memory(
             existing_summary=str((conv or {}).get("process_summary") or ""),
         )
         if auto_extract_from_messages and effective_messages
-        else {"process_summary": " | ".join(batch_summaries)[:600], "memories": batch_extracted_memories[:20]}
+        else {
+            "process_summary": " | ".join(batch_summaries)[:600],
+            "memories": batch_extracted_memories[:20],
+            "temp_constraints": [],
+        }
     )
 
     final_summary = (session_summary or "").strip() or heuristic.get("process_summary") or ""
@@ -1313,6 +1536,50 @@ def auto_summarize_memory(
             for key in ("source_message_index", "user_message_index"):
                 if type(extracted.get(key)) is int:
                     extracted[key] += message_index_offset
+
+    saved_items: list[dict[str, Any]] = []
+    skipped_items: list[dict[str, Any]] = []
+    routed_temp_constraints: list[dict[str, Any]] = []
+
+    pending_tcs = list(batch_temp_constraints)
+    for tc_str in (heuristic.get("temp_constraints") or []):
+        pending_tcs.append(
+            {
+                "constraint": tc_str,
+                "project_id": resolved_project_id,
+                "cwd": effective_cwd,
+            }
+        )
+    for tc_item in pending_tcs:
+        tc_pid = tc_item.get("project_id") or resolved_project_id
+        tc_text = str(tc_item.get("constraint") or "").strip()
+        if not tc_text:
+            continue
+        if tc_pid:
+            wt = working_memory_service.add_temp_constraint_to_active_task(
+                tc_pid,
+                tc_text,
+                cwd=tc_item.get("cwd") or effective_cwd,
+                title_hint=(conv or {}).get("title") or None,
+                agent=actor,
+            )
+            routed_entry = {
+                "category": "temp_constraint",
+                "title": tc_text[:80],
+                "content": tc_text,
+                "action": "routed_to_working_task",
+                "task_id": wt["id"],
+            }
+            routed_temp_constraints.append(routed_entry)
+            skipped_items.append(routed_entry)
+        else:
+            skipped_items.append(
+                {
+                    "category": "temp_constraint",
+                    "title": tc_text[:80],
+                    "action": "skipped_no_project_for_temp_constraint",
+                }
+            )
 
     candidate_memories: list[dict[str, Any]] = []
     seen_titles: set[tuple[str, str, str]] = set()
@@ -1355,6 +1622,8 @@ def auto_summarize_memory(
                 "title": title[:160],
                 "content": content,
                 "tags": tags,
+                "applicability": item.get("applicability"),
+                "origin_authority": item.get("origin_authority"),
                 "supersedes": item.get("supersedes"),
                 "supersedes_id": item.get("supersedes_id"),
                 "quote": item.get("quote"),
@@ -1365,11 +1634,10 @@ def auto_summarize_memory(
                 "_conversation_id": item.get("_conversation_id"),
                 "_source_version": item.get("_source_version"),
                 "_agent_supplied": supplied,
+                "_archive_only": bool(item.get("_archive_only")),
             }
         )
 
-    saved_items: list[dict[str, Any]] = []
-    skipped_items: list[dict[str, Any]] = []
     for mem in candidate_memories:
         cat = mem["category"]
         eff_pid = mem.get("_project_id") or resolved_project_id
@@ -1380,7 +1648,7 @@ def auto_summarize_memory(
             if eff_cid and not source_row:
                 skipped_items.append({"category": cat, "title": mem["title"], "action": "skipped_deleted_source"})
                 continue
-            source = row_to_dict(source_row) if source_row else {"id": None, "project_id": eff_pid, "title": "", "messages": []}
+            source = row_to_dict(source_row) if source_row else {"id": None, "project_id": eff_pid, "title": "", "messages": [], "cwd": effective_cwd}
             if source.get("project_id") != eff_pid:
                 raise HTTPException(409, "Memory source moved to another project; retry from current source")
             if conv and eff_cid == conv["id"] and source.get("content_hash") != conv.get("content_hash"):
@@ -1402,17 +1670,54 @@ def auto_summarize_memory(
                 skipped_items.append({"category": cat, "title": mem["title"], "action": "skipped_tombstoned"})
                 continue
             if _agent_summary_eligible(mem):
-                saved_items.append(_apply_agent_supplied_summary(
+                applied = _apply_agent_supplied_summary(
                     conn,
                     project_id=eff_pid,
                     conversation_id=eff_cid,
                     actor=actor,
                     mem=mem,
-                ))
+                    cwd=effective_cwd,
+                )
+                was_saved = bool(applied.pop("_saved", True))
+                if was_saved:
+                    saved_items.append(applied)
+                else:
+                    skipped_items.append(applied)
+                    if applied.get("action") == "routed_to_working_task":
+                        routed_temp_constraints.append(applied)
                 continue
+            before_wt_map: dict[str, list[str]] = {}
+            if eff_pid:
+                working_memory_service.ensure_schema(conn)
+                for wt_row in conn.execute(
+                    "SELECT id, temp_constraints FROM working_tasks WHERE project_id = ? AND status IN ('active', 'in_progress', 'blocked')",
+                    (eff_pid,),
+                ).fetchall():
+                    before_wt_map[wt_row["id"]] = decode(wt_row["temp_constraints"], [])
             ids = apply_distilled_memories(conn, source, [mem], actor, now_iso())
             if not ids:
-                skipped_items.append({"category": cat, "title": mem["title"], "action": "not_applied_by_governance"})
+                routed_task_id: str | None = None
+                if eff_pid:
+                    for wt_row in conn.execute(
+                        "SELECT id, temp_constraints FROM working_tasks WHERE project_id = ? AND status IN ('active', 'in_progress', 'blocked')",
+                        (eff_pid,),
+                    ).fetchall():
+                        after_tcs = decode(wt_row["temp_constraints"], [])
+                        if after_tcs != before_wt_map.get(wt_row["id"], []):
+                            routed_task_id = wt_row["id"]
+                            break
+                if routed_task_id:
+                    routed_entry = {
+                        "category": cat,
+                        "title": mem["title"],
+                        "content": mem["content"],
+                        "action": "routed_to_working_task",
+                        "task_id": routed_task_id,
+                    }
+                    routed_temp_constraints.append(routed_entry)
+                    skipped_items.append(routed_entry)
+                else:
+                    skipped_items.append({"category": cat, "title": mem["title"], "action": "not_applied_by_governance"})
                 continue
             for mid in ids:
                 item = conn.execute("SELECT * FROM contents WHERE id=?", (mid,)).fetchone()
@@ -1429,6 +1734,8 @@ def auto_summarize_memory(
     if saved_items:
         titles_preview = "、".join(f"[{m['category']}] {m['title']}" for m in saved_items[:4])
         summary_note = f"💡 已自动隐性总结并更新 {len(saved_items)} 条记忆：{titles_preview}"
+    elif routed_temp_constraints:
+        summary_note = f"💡 已将 {len(routed_temp_constraints)} 条临时约束写入当前工作任务（未污染长期记忆）。"
     elif final_summary:
         summary_note = f"💡 已自动更新当前会话过程总结：{final_summary[:80]}"
     else:
@@ -1448,6 +1755,7 @@ def auto_summarize_memory(
         "unchanged_count": unchanged_count,
         "skipped_count": len(skipped_items),
         "skipped_memories": skipped_items,
+        "routed_temp_constraints": routed_temp_constraints,
         "saved_memories": saved_items,
         "memories": saved_items,
         "summary_note": summary_note,

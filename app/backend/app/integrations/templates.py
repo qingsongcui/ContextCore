@@ -381,7 +381,7 @@ def render_skill_or_command(agent_id: HostId) -> dict[str, Any]:
             "target_path": HOST_CONFIG_PATHS["codex"]["skill"],
             "filename": "SKILL.md",
             "content": content,
-            "invocation": "$contextcore-handoff",
+            "invocation": "/contextcore",
         }
     elif agent_id == "omp":
         path = SKILLS_DIR / "omp_command.md"
@@ -399,7 +399,7 @@ def render_skill_or_command(agent_id: HostId) -> dict[str, Any]:
             "target_path": HOST_CONFIG_PATHS["cursor"]["skill"],
             "filename": "SKILL.md",
             "content": content,
-            "invocation": "/contextcore-handoff",
+            "invocation": "/contextcore",
         }
     elif agent_id == "antigravity":
         path = SKILLS_DIR / "antigravity_skill.md"
@@ -408,7 +408,7 @@ def render_skill_or_command(agent_id: HostId) -> dict[str, Any]:
             "target_path": HOST_CONFIG_PATHS["antigravity"]["skill"],
             "filename": "SKILL.md",
             "content": content,
-            "invocation": "/contextcore-handoff",
+            "invocation": "/contextcore",
         }
     elif agent_id == "claude-code":
         path = SKILLS_DIR / "claude_code_skill.md"
@@ -417,7 +417,7 @@ def render_skill_or_command(agent_id: HostId) -> dict[str, Any]:
             "target_path": HOST_CONFIG_PATHS["claude-code"]["skill"],
             "filename": "SKILL.md",
             "content": content,
-            "invocation": "/contextcore-handoff",
+            "invocation": "/contextcore",
         }
     elif agent_id == "opencode":
         path = SKILLS_DIR / "opencode_command.md"

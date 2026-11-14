@@ -37,7 +37,7 @@ def get_system_status():
     with db() as conn:
         p_count = conn.execute("SELECT COUNT(*) as c FROM projects WHERE status = 'active'").fetchone()["c"]
         c_count = conn.execute("SELECT COUNT(*) as c FROM conversations").fetchone()["c"]
-        m_count = conn.execute("SELECT COUNT(*) as c FROM contents WHERE kind = 'memory' AND status = 'active'").fetchone()["c"]
+        m_count = conn.execute("SELECT COUNT(*) as c FROM contents WHERE kind = 'memory' AND category != 'task' AND status = 'active'").fetchone()["c"]
         d_count = conn.execute("SELECT COUNT(*) as c FROM contents WHERE kind = 'document' AND status = 'active'").fetchone()["c"]
         cf_count = conn.execute("SELECT COUNT(*) as c FROM conflicts WHERE status = 'pending'").fetchone()["c"]
 

@@ -364,7 +364,7 @@ def test_failed_preflight_writes_nothing():
         temp_home = Path(temp_dir)
 
         # Pre-existing skill file that is unowned
-        skill_path = temp_home / ".agents" / "skills" / "contextcore-handoff" / "SKILL.md"
+        skill_path = temp_home / ".codex" / "skills" / "contextcore" / "SKILL.md"
         skill_path.parent.mkdir(parents=True, exist_ok=True)
         skill_path.write_text("# Existing unowned skill", encoding="utf-8")
 
@@ -437,43 +437,67 @@ def test_hook_runner_path_shell_quoted():
     assert f"'{path_with_spaces}'" in ag_cmd or f'"{path_with_spaces}"' in ag_cmd
 
 
-def test_refresh_owned_skill_files_upgrades_unmodified_and_preserves_modified():
-    """Owned skill refresh upgrades unmodified SKILL.md files and updates manifest hash, but never overwrites user-modified SKILL.md."""
+def test_local_sync_preserves_owned_host_skill_and_manifest():
+    """Importing local assets must never upgrade even an unmodified owned skill."""
     import hashlib
-    from app.integrations.installer import refresh_owned_skill_files
+    from app.database import create_schema
+    from app.services.management_service import ManagementService
 
+    create_schema()
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_home = Path(temp_dir)
-        apply_res = apply_host_integration("codex", token="cc-skill-refresh", confirmed=True, home=temp_home)
-        assert apply_res.status == "installed"
-
-        skill_path = temp_home / ".agents" / "skills" / "contextcore-handoff" / "SKILL.md"
+        installed = apply_host_integration("codex", token="cc-skill-refresh", confirmed=True, home=temp_home)
+        assert installed.status == "installed"
+        skill_path = temp_home / ".codex" / "skills" / "contextcore" / "SKILL.md"
         manifest_path = temp_home / ".contextcore" / "manifests" / "codex.json"
-        assert skill_path.is_file()
-        assert manifest_path.is_file()
-
-        # Simulate an older ContextCore-owned skill file whose hash matches manifest["skill_hash"]
-        old_bytes = b"# Legacy ContextCore Skill\nUse assemble_context and start_handoff.\n"
-        old_hash = hashlib.sha256(old_bytes).hexdigest()
+        old_bytes = b"# Legacy ContextCore Skill\nKeep this installed version.\n"
         skill_path.write_bytes(old_bytes)
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        manifest["skill_hash"] = old_hash
+        manifest["skill_hash"] = hashlib.sha256(old_bytes).hexdigest()
+        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        before = {
+            str(path.relative_to(temp_home)): path.read_bytes()
+            for path in temp_home.rglob("*") if path.is_file()
+        }
+
+        ManagementService(home=temp_home).sync_local_environment()
+
+        after = {
+            str(path.relative_to(temp_home)): path.read_bytes()
+            for path in temp_home.rglob("*") if path.is_file()
+        }
+        assert after == before
+
+
+def test_legacy_contextcore_handoff_skill_migrates_cleanly_to_unified_contextcore():
+    """Upgrading a legacy contextcore-handoff installation writes unified /contextcore and removes the old duplicate."""
+    import hashlib
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_home = Path(temp_dir).resolve()
+        installed = apply_host_integration("codex", token="cc-legacy-mig", confirmed=True, home=temp_home)
+        assert installed.status == "installed"
+        new_skill_path = temp_home / ".codex" / "skills" / "contextcore" / "SKILL.md"
+        new_skill_path.unlink()
+
+        legacy_skill_path = temp_home / ".agents" / "skills" / "contextcore-handoff" / "SKILL.md"
+        legacy_skill_path.parent.mkdir(parents=True, exist_ok=True)
+        legacy_bytes = b"---\nname: contextcore-handoff\ndescription: legacy\n---\nLegacy skill body\n"
+        legacy_skill_path.write_bytes(legacy_bytes)
+
+        manifest_path = temp_home / ".contextcore" / "manifests" / "codex.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["skill_target"] = str(legacy_skill_path)
+        manifest["skill_hash"] = hashlib.sha256(legacy_bytes).hexdigest()
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-        upgraded = refresh_owned_skill_files(home=temp_home, host_ids=["codex"])
-        assert str(skill_path.resolve()) in upgraded
-        new_text = skill_path.read_text(encoding="utf-8")
-
-        assert "discover_relay_conversations" in new_text
-        assert "http://127.0.0.1:8420/api/handoffs/relay/conversation" in new_text
-
+        migrated = apply_host_integration(
+            "codex", token="cc-legacy-mig", confirmed=True, home=temp_home, components=["skill"]
+        )
+        assert migrated.status == "installed"
+        assert new_skill_path.is_file()
+        assert "name: contextcore\n" in new_skill_path.read_text(encoding="utf-8")
+        assert not legacy_skill_path.exists()
+        assert not legacy_skill_path.parent.exists()
         updated_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        assert updated_manifest["skill_hash"] == hashlib.sha256(skill_path.read_bytes()).hexdigest()
-
-        # Now simulate user modification to SKILL.md: refresh must NOT overwrite it
-        user_custom = b"# User Modified Skill\nCustom notes.\n"
-        skill_path.write_bytes(user_custom)
-        upgraded_after_edit = refresh_owned_skill_files(home=temp_home, host_ids=["codex"])
-        assert upgraded_after_edit == []
-        assert skill_path.read_bytes() == user_custom
-
+        assert updated_manifest["skill_target"] == str(new_skill_path)

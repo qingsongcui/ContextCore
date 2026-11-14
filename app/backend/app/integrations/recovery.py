@@ -13,7 +13,7 @@ import shlex
 import stat
 import tomllib
 
-from app.integrations.constants import HOST_CONFIG_PATHS, SUPPORTED_HOSTS
+from app.integrations.constants import HOST_CONFIG_PATHS, LEGACY_HOST_SKILL_PATHS, SUPPORTED_HOSTS
 from app.integrations.installer import (
     _assert_path_safe, _atomic_write_file, _resolve_host_path,
     _remove_codex_toml, _clean_hook_entry, _matches_owned_entry,
@@ -80,10 +80,17 @@ def plan_recovery(host: str, home: Path, components: list[str] | None = None) ->
     paths = {}
     for key, config_key in [('mcp_target', 'mcp'), ('hooks_target', 'hooks'), ('skill_target', 'skill')]:
         pattern = HOST_CONFIG_PATHS[host].get(config_key) or HOST_CONFIG_PATHS[host].get('command')
-        expected = _resolve_host_path(pattern, home)
-        if manifest.get(key) != str(expected):
+        expected = _resolve_host_path(pattern, home).resolve()
+        allowed = {expected}
+        if key == 'skill_target':
+            allowed.update(_resolve_host_path(p, home).resolve() for p in LEGACY_HOST_SKILL_PATHS.get(host, ()))
+        raw_val = manifest.get(key)
+        if not isinstance(raw_val, str) or not raw_val:
             raise RecoveryConflict(f'Unexpected ownership path: {key}')
-        paths[key] = expected
+        resolved_actual = _assert_path_safe(Path(raw_val), home)
+        if resolved_actual not in allowed:
+            raise RecoveryConflict(f'Unexpected ownership path: {key}')
+        paths[key] = resolved_actual
     token = home/'.contextcore/credentials'/f'{host}.token'
     if manifest.get('token_path') != str(token):
         raise RecoveryConflict('Unexpected credential path')
@@ -215,7 +222,13 @@ def apply_recovery(plan: RecoveryPlan, backup: Path, *, confirmed=False):
             if read_file(change.path, plan.home) != (change.before, change.mode):
                 raise RecoveryConflict(f'Configuration changed during recovery: {change.path}')
             if change.before == change.after: continue
-            if change.after is None: change.path.unlink()
+            if change.after is None:
+                change.path.unlink()
+                if change.path.parent.name in ('contextcore', 'contextcore-handoff'):
+                    try:
+                        change.path.parent.rmdir()
+                    except OSError:
+                        pass
             else: _atomic_write_file(change.path, change.after, mode=change.mode)
             applied.append(change)
             if read_file(change.path, plan.home)[0] != change.after:

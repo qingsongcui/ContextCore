@@ -5,7 +5,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 from app.config import settings
 from app.event_bus import discard_pending_events, publish_pending_events, queue_event
@@ -48,6 +48,7 @@ JSON_COLUMNS = {
     "sources",
     "versions",
     "counts",
+    "applicability",
 }
 
 
@@ -69,6 +70,7 @@ def db(path: Path | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("PRAGMA mmap_size = 0")
     try:
         yield conn
         conn.commit()
@@ -80,6 +82,44 @@ def db(path: Path | None = None) -> sqlite3.Connection:
     finally:
         discard_pending_events(conn)
         conn.close()
+
+
+class _WalKeeperHandle:
+    """Pin the WAL-index (-shm) refcount >= 1 while the server runs without holding any SQL lock."""
+
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path
+        self._keeper: sqlite3.Connection | None = None
+
+    def __enter__(self) -> sqlite3.Connection:
+        db_path = self.path or settings.db_path
+        data_dir = os.environ.get("CONTEXTCORE_DATA_DIR")
+        prepare_database(db_path, data_directory=Path(data_dir) if data_dir else None)
+        keeper = sqlite3.connect(db_path, timeout=10, check_same_thread=False)
+        try:
+            keeper.execute("PRAGMA journal_mode = WAL")
+            keeper.execute("PRAGMA busy_timeout = 5000")
+            keeper.execute("PRAGMA mmap_size = 0")
+            keeper.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchall()
+            keeper.commit()
+        except BaseException:
+            keeper.close()
+            raise
+        self._keeper = keeper
+        return keeper
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Literal[False]:
+        if self._keeper is not None:
+            try:
+                self._keeper.close()
+            finally:
+                self._keeper = None
+        return False
+
+
+def hold_wal_keeper(path: Path | None = None) -> _WalKeeperHandle:
+    """Pin the WAL-index (-shm) refcount >= 1 while the server runs without holding any SQL lock."""
+    return _WalKeeperHandle(path)
 
 
 def log_audit(actor: str, action: str, target: str, result: str = "ok", conn: sqlite3.Connection | None = None) -> dict[str, Any]:
@@ -135,6 +175,131 @@ def _check_and_add_column(conn: sqlite3.Connection, table: str, column: str, col
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
 
 
+_STANDARD_CONTENT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("id", "TEXT PRIMARY KEY"),
+    ("project_id", "TEXT REFERENCES projects(id)"),
+    ("kind", "TEXT NOT NULL CHECK(kind IN ('memory', 'document'))"),
+    ("category", "TEXT NOT NULL CHECK(category IN ('preference', 'background', 'decision', 'task', 'lesson', 'knowledge'))"),
+    ("title", "TEXT NOT NULL"),
+    ("content", "TEXT NOT NULL"),
+    ("tags", "TEXT NOT NULL DEFAULT '[]'"),
+    ("agent", "TEXT"),
+    ("status", "TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'outdated', 'historical'))"),
+    ("version", "INTEGER NOT NULL DEFAULT 1"),
+    ("related_ids", "TEXT NOT NULL DEFAULT '[]'"),
+    ("content_hash", "TEXT"),
+    ("applicability", "TEXT NOT NULL DEFAULT '{}'"),
+    ("origin_authority", "TEXT NOT NULL DEFAULT 'manual'"),
+    ("superseded_by_id", "TEXT"),
+    ("outdated_at", "TEXT"),
+    ("outdated_reason", "TEXT"),
+    ("promoted_from_task_id", "TEXT"),
+    ("canonical_key", "TEXT"),
+    ("created_at", "TEXT NOT NULL"),
+    ("updated_at", "TEXT NOT NULL"),
+)
+
+
+def _migrate_contents_table_if_needed(conn: sqlite3.Connection) -> None:
+    """Add governance columns and idempotently rebuild `contents` if CHECK(status) lacks 'outdated'."""
+    _check_and_add_column(conn, "contents", "applicability", "TEXT NOT NULL DEFAULT '{}'")
+    _check_and_add_column(conn, "contents", "origin_authority", "TEXT NOT NULL DEFAULT 'manual'")
+    _check_and_add_column(conn, "contents", "superseded_by_id", "TEXT")
+    _check_and_add_column(conn, "contents", "outdated_at", "TEXT")
+    _check_and_add_column(conn, "contents", "outdated_reason", "TEXT")
+    _check_and_add_column(conn, "contents", "promoted_from_task_id", "TEXT")
+    _check_and_add_column(conn, "contents", "canonical_key", "TEXT")
+
+    master_row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='contents'"
+    ).fetchone()
+    if master_row and "'outdated'" not in (master_row["sql"] or ""):
+        saved_indexes = [
+            r["sql"]
+            for r in conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='contents' AND sql IS NOT NULL"
+            ).fetchall()
+        ]
+        saved_triggers = [
+            r["sql"]
+            for r in conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='trigger' AND tbl_name='contents' AND sql IS NOT NULL"
+            ).fetchall()
+        ]
+
+        standard_names = {col_name for col_name, _ in _STANDARD_CONTENT_COLUMNS}
+        extra_col_defs: list[tuple[str, str]] = []
+        for col_info in conn.execute("PRAGMA table_info(contents)").fetchall():
+            cname = col_info["name"]
+            if cname not in standard_names:
+                ctype = col_info["type"] or "TEXT"
+                extra_col_defs.append((cname, ctype))
+
+        all_col_defs = [*_STANDARD_CONTENT_COLUMNS, *extra_col_defs]
+        col_names_csv = ", ".join(cname for cname, _ in all_col_defs)
+        col_ddl_csv = ",\n                    ".join(f"{cname} {cdef}" for cname, cdef in all_col_defs)
+
+        if conn.in_transaction:
+            conn.commit()
+        conn.execute("PRAGMA foreign_keys = OFF")
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("DROP TABLE IF EXISTS _contents_rebuild")
+            conn.execute(f"CREATE TABLE _contents_rebuild (\n                    {col_ddl_csv}\n                )")
+            conn.execute(
+                f"INSERT INTO _contents_rebuild ({col_names_csv}) SELECT {col_names_csv} FROM contents"
+            )
+            conn.execute("DROP TABLE contents")
+            conn.execute("ALTER TABLE _contents_rebuild RENAME TO contents")
+            for idx_sql in saved_indexes:
+                conn.execute(idx_sql)
+            for trg_sql in saved_triggers:
+                conn.execute(trg_sql)
+            conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS content_identity_insert AFTER INSERT ON contents
+                WHEN NEW.content_hash IS NOT NULL BEGIN
+                    INSERT OR IGNORE INTO content_identity_history VALUES(NEW.id,NEW.content_hash,NEW.project_id);
+                END
+                """
+            )
+            conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS content_identity_update BEFORE UPDATE OF content_hash ON contents
+                WHEN OLD.content_hash IS NOT NEW.content_hash BEGIN
+                    INSERT OR IGNORE INTO content_identity_history
+                        SELECT OLD.id,OLD.content_hash,OLD.project_id WHERE OLD.content_hash IS NOT NULL;
+                    INSERT OR IGNORE INTO content_identity_history
+                        SELECT NEW.id,NEW.content_hash,NEW.project_id WHERE NEW.content_hash IS NOT NULL;
+                END
+                """
+            )
+            conn.commit()
+        except Exception:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.execute("PRAGMA foreign_keys = ON")
+
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_contents_canonical_key
+        ON contents(project_id, canonical_key)
+        WHERE canonical_key IS NOT NULL
+        """
+    )
+
+    from app.services.governance_guardrails import canonical_memory_key
+
+    missing_ck = conn.execute(
+        "SELECT id, project_id, category, title, substr(content, 1, 1024) AS content_head FROM contents WHERE canonical_key IS NULL"
+    ).fetchall()
+    for r in missing_ck:
+        ck = canonical_memory_key(r["project_id"], r["category"], r["title"] or "", r["content_head"] or "")
+        conn.execute("UPDATE contents SET canonical_key = ? WHERE id = ?", (ck, r["id"]))
+
+
 def create_schema(db_path: Path | None = None) -> None:
     target_path = db_path or settings.db_path
     with db(target_path) as conn:
@@ -168,10 +333,17 @@ def create_schema(db_path: Path | None = None) -> None:
                 content TEXT NOT NULL,
                 tags TEXT NOT NULL DEFAULT '[]',
                 agent TEXT,
-                status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'historical')),
+                status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'outdated', 'historical')),
                 version INTEGER NOT NULL DEFAULT 1,
                 related_ids TEXT NOT NULL DEFAULT '[]',
                 content_hash TEXT,
+                applicability TEXT NOT NULL DEFAULT '{}',
+                origin_authority TEXT NOT NULL DEFAULT 'manual',
+                superseded_by_id TEXT,
+                outdated_at TEXT,
+                outdated_reason TEXT,
+                promoted_from_task_id TEXT,
+                canonical_key TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -226,6 +398,8 @@ def create_schema(db_path: Path | None = None) -> None:
                 agent TEXT NOT NULL,
                 title TEXT NOT NULL,
                 cwd TEXT,
+                git_branch TEXT,
+                git_head TEXT,
                 source_path TEXT,
                 started_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -413,6 +587,12 @@ def create_schema(db_path: Path | None = None) -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS relay_discovery_snapshots (
+                scope_key TEXT PRIMARY KEY,
+                mapping_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             """
         )
 
@@ -421,7 +601,10 @@ def create_schema(db_path: Path | None = None) -> None:
         _check_and_add_column(conn, "projects", "archived_at", "TEXT")
         _check_and_add_column(conn, "conversations", "external_id", "TEXT")
         _check_and_add_column(conn, "conversations", "cwd", "TEXT")
+        _check_and_add_column(conn, "conversations", "git_branch", "TEXT")
+        _check_and_add_column(conn, "conversations", "git_head", "TEXT")
         _check_and_add_column(conn, "handoffs", "source_revisions", "TEXT NOT NULL DEFAULT '{}'")
+        _migrate_contents_table_if_needed(conn)
 
         # 4. Migrate legacy knowledge_items to contents once (never resurrect deleted items)
         migration_done = get_app_setting("legacy_migration_done", default=False, conn=conn)
@@ -565,6 +748,10 @@ def create_schema(db_path: Path | None = None) -> None:
         ensure_context_epochs(conn)
         from app.services.migration_service import ensure_schema as ensure_migrations
         ensure_migrations(conn)
+        from app.services.working_memory_service import ensure_schema as ensure_working_memory
+        from app.services.telemetry_service import ensure_schema as ensure_telemetry
+        ensure_working_memory(conn)
+        ensure_telemetry(conn)
 
         # 6. Seal schema version
         set_app_setting("schema_version", settings.schema_version, conn=conn)

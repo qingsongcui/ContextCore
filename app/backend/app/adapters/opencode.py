@@ -9,13 +9,12 @@ parts injected by the ContextCore plugin are never re-captured.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
-from urllib.parse import quote
 
 from .base import (
     usage_metadata_record,
@@ -23,8 +22,11 @@ from .base import (
     bound_process_summary,
     AgentAdapterError,
     PartialHistoryError,
+    isolated_sqlite_snapshot,
+    raw_path_str,
     validate_file_safety,
     validate_path,
+    validate_path_str,
 )
 
 SKIP_PART_TYPES = frozenset({
@@ -73,12 +75,13 @@ def _find_database(roots: list[str]) -> Path | None:
     return None
 
 
-def _connect_readonly(path: Path) -> tuple[sqlite3.Connection, bool]:
-    # Immutable mode ignores WAL and can falsely claim a current full history.
-    # An unavailable live read must remain an explicit retryable failure.
-    uri = f"file:{quote(path.as_posix())}?mode=ro"
-    connection = sqlite3.connect(uri, uri=True, timeout=2.0)
+def _connect_readonly(staged_path: Path) -> tuple[sqlite3.Connection, bool]:
+    # Opened from a private isolated snapshot so concurrent writer WAL checkpoints
+    # or -shm truncation/unlinking cannot SIGBUS this reader.
+    connection = sqlite3.connect(staged_path, timeout=2.0)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA mmap_size = 0")
+    connection.execute("PRAGMA trusted_schema = OFF")
     connection.execute("PRAGMA query_only = ON")
     return connection, False
 
@@ -261,45 +264,61 @@ def _build_database_session(session: dict[str, Any], connection: sqlite3.Connect
 
 
 def _iter_database_sessions(db_path: Path, roots: list[Path]) -> Iterator[dict[str, Any]]:
-    validate_file_safety(db_path, roots)
-    connection, immutable = _connect_readonly(db_path)
     try:
-        connection.execute("BEGIN")
-        tables = _tables(connection)
-        missing = {"session", "message", "part"} - tables
-        if missing:
-            raise AgentAdapterError(
-                host="opencode",
-                code="schema_version_unsupported",
-                path=str(db_path),
-                detail=f"opencode.db is missing tables: {', '.join(sorted(missing))}",
+        resolved_db = validate_path(db_path, roots)
+    except AgentAdapterError as exc:
+        raise AgentAdapterError(
+            host="opencode",
+            code=exc.code,
+            path=exc.path or str(db_path),
+            detail=exc.detail,
+            retryable=exc.retryable,
+        ) from exc
+    with isolated_sqlite_snapshot(resolved_db, host="opencode") as staged_db:
+        connection, immutable = _connect_readonly(staged_db)
+        try:
+            connection.execute("BEGIN")
+            tables = _tables(connection)
+            missing = {"session", "message", "part"} - tables
+            if missing:
+                raise AgentAdapterError(
+                    host="opencode",
+                    code="schema_version_unsupported",
+                    path=str(db_path),
+                    detail=f"opencode.db is missing tables: {', '.join(sorted(missing))}",
+                )
+            session_columns = _columns(connection, "session")
+            where_parent = "WHERE parent_id IS NULL" if "parent_id" in session_columns else ""
+            rows = connection.execute(
+                f"SELECT id, title, directory, time_created, time_updated FROM session {where_parent} ORDER BY time_updated DESC"
             )
-        session_columns = _columns(connection, "session")
-        where_parent = "WHERE parent_id IS NULL" if "parent_id" in session_columns else ""
-        rows = connection.execute(
-            f"SELECT id, title, directory, time_created, time_updated FROM session {where_parent} ORDER BY time_updated DESC"
-        )
-        yielded = False
-        failures: list[dict[str, str]] = []
-        for row in rows:
-            session = dict(row)
-            session_id = str(session.get("id") or "")
-            try:
-                built = _build_database_session(session, connection, str(db_path))
-            except sqlite3.Error as error:
-                failures.append({"path": str(db_path), "code": "unsupported_format", "detail": f"{session_id}: {error}"})
-                continue
-            if built:
-                if immutable:
-                    built["process_summary"] = (built["process_summary"] + "\n- **freshness** [warn]: WAL was not readable; recent writes may be missing").strip()
-                yielded = True
-                yield built
-        if yielded and failures:
-            raise PartialHistoryError(host="opencode", code="partial_sync", detail="Some source records could not be read", failures=failures)
-        if failures and not yielded:
-            raise AgentAdapterError(host="opencode", code=failures[0]["code"], path=str(db_path), detail=failures[0]["detail"])
-    finally:
-        connection.close()
+            yielded = False
+            failures: list[dict[str, Any]] = []
+            for row in rows:
+                session = dict(row)
+                session_id = str(session.get("id") or "")
+                try:
+                    built = _build_database_session(session, connection, str(db_path))
+                except sqlite3.Error as error:
+                    failures.append({"path": str(db_path), "code": "unsupported_format", "detail": f"{session_id}: {error}"})
+                    continue
+                if built:
+                    if immutable:
+                        built["process_summary"] = (built["process_summary"] + "\n- **freshness** [warn]: WAL was not readable; recent writes may be missing").strip()
+                    yielded = True
+                    yield built
+            if yielded and failures:
+                raise PartialHistoryError(host="opencode", code="partial_sync", detail="Some source records could not be read", failures=failures)
+            if failures and not yielded:
+                raise AgentAdapterError(
+                    host="opencode",
+                    code=failures[0]["code"],
+                    path=str(db_path),
+                    detail=failures[0]["detail"],
+                    retryable=bool(failures[0].get("retryable", False)),
+                )
+        finally:
+            connection.close()
 
 
 def _parse_database(db_path: Path, roots: list[Path]) -> list[dict[str, Any]]:
@@ -313,19 +332,26 @@ def _parse_database(db_path: Path, roots: list[Path]) -> list[dict[str, Any]]:
     return sessions
 
 
-def _iter_json_files(directory: Path, *, sort_entries: bool = False) -> Iterator[Path]:
+def _iter_json_files(directory: str | Path, *, sort_entries: bool = False) -> Iterator[str]:
     """Walk legacy storage with O(depth) memory; sort only within one session."""
+    dir_str = raw_path_str(directory)
     if sort_entries:
         try:
-            for path in sorted(directory.glob("*.json")):
-                yield path
+            with os.scandir(dir_str) as it:
+                matched = sorted(
+                    entry.path
+                    for entry in it
+                    if entry.is_file(follow_symlinks=True) and entry.name.endswith(".json")
+                )
         except OSError as exc:
-            raise AgentAdapterError(host="opencode", code="permission_denied", path=str(directory), detail=str(exc)) from exc
+            raise AgentAdapterError(host="opencode", code="permission_denied", path=dir_str, detail=str(exc)) from exc
+        for path in matched:
+            yield path
         return
     try:
-        stack = [os.scandir(directory)]
+        stack = [os.scandir(dir_str)]
     except OSError as exc:
-        raise AgentAdapterError(host="opencode", code="permission_denied", path=str(directory), detail=str(exc)) from exc
+        raise AgentAdapterError(host="opencode", code="permission_denied", path=dir_str, detail=str(exc)) from exc
     while stack:
         try:
             entry = next(stack[-1])
@@ -334,7 +360,7 @@ def _iter_json_files(directory: Path, *, sort_entries: bool = False) -> Iterator
             continue
         except OSError as exc:
             iterator = stack.pop()
-            path = getattr(iterator, "path", directory)
+            path = getattr(iterator, "path", dir_str)
             iterator.close()
             for pending in stack:
                 pending.close()
@@ -344,7 +370,7 @@ def _iter_json_files(directory: Path, *, sort_entries: bool = False) -> Iterator
             if entry.is_dir(follow_symlinks=False):
                 stack.append(os.scandir(entry.path))
             elif entry.is_file(follow_symlinks=True) and entry.name.endswith(".json"):
-                yield Path(entry.path)
+                yield entry.path
         except OSError as exc:
             for pending in stack:
                 pending.close()
@@ -352,49 +378,66 @@ def _iter_json_files(directory: Path, *, sort_entries: bool = False) -> Iterator
             raise AgentAdapterError(host="opencode", code="permission_denied", path=entry.path, detail=str(exc)) from exc
 
 
-def _legacy_json(path: Path, roots: list[Path]) -> dict[str, Any]:
-    validate_path(path, roots)
-    validate_file_safety(path, host="opencode")
+def _legacy_json(path: str | Path, roots: list[str | Path]) -> dict[str, Any]:
+    raw_p = raw_path_str(path)
+    validate_path_str(raw_p, roots)
+    validate_file_safety(raw_p, host="opencode")
     try:
-        return _load_json(path.read_text(encoding="utf-8"))
+        with open(raw_p, "r", encoding="utf-8") as fh:
+            return _load_json(fh.read())
     except (OSError, UnicodeError) as exc:
-        raise AgentAdapterError(host="opencode", code="unsupported_format", path=str(path), detail=str(exc)) from exc
+        raise AgentAdapterError(host="opencode", code="unsupported_format", path=raw_p, detail=str(exc)) from exc
 
 
-def _iter_legacy_sessions(root: Path, roots: list[Path], *, source_paths: list[str] | None = None) -> Iterator[dict[str, Any]]:
-    storage = root if root.name == "storage" else root / "storage"
-    session_dir = storage / "session"
-    if not session_dir.is_dir():
+def _is_under_dir(candidate_path: str, parent_real: str) -> bool:
+    try:
+        cand_real = os.path.realpath(candidate_path, strict=os.path.ALLOW_MISSING)
+        return cand_real != parent_real and os.path.commonpath([cand_real, parent_real]) == parent_real
+    except (OSError, ValueError):
+        return False
+
+
+def _iter_legacy_sessions(root: str | Path, roots: list[str | Path], *, source_paths: list[str] | None = None) -> Iterator[dict[str, Any]]:
+    root_str = raw_path_str(root)
+    storage_str = root_str if os.path.basename(root_str.rstrip("/\\")) == "storage" else os.path.join(root_str, "storage")
+    session_dir_str = os.path.join(storage_str, "session")
+    if not os.path.isdir(session_dir_str):
         return
+    root_strs: list[str | Path] = [raw_path_str(r) for r in roots]
     if source_paths is None:
-        session_files = _iter_json_files(session_dir)
+        session_files: Iterable[str] = _iter_json_files(session_dir_str)
     else:
         # Targeted compatibility reads accept session records directly. Service
         # sync passes the storage directory and streams the tree instead.
-        session_files = (Path(path) for path in source_paths
-                         if Path(path).suffix == ".json" and session_dir in Path(path).parents)
+        session_dir_real = os.path.realpath(session_dir_str, strict=os.path.ALLOW_MISSING)
+        session_files = (
+            path for path in source_paths
+            if os.path.splitext(path)[1] == ".json" and _is_under_dir(path, session_dir_real)
+        )
     for session_file in session_files:
-        session = _legacy_json(session_file, roots)
-        session_id = str(session.get("id") or session_file.stem)
+        session = _legacy_json(session_file, root_strs)
+        session_stem = os.path.splitext(os.path.basename(session_file))[0]
+        session_id = str(session.get("id") or session_stem)
         if session.get("parentID"):
             continue
-        message_dir = storage / "message" / session_id
+        message_dir_str = os.path.join(storage_str, "message", session_id)
         messages: list[dict[str, Any]] = []
         grouped: dict[str, list[dict[str, Any]]] = {}
-        if message_dir.is_dir():
-            for message_file in _iter_json_files(message_dir, sort_entries=True):
-                data = _legacy_json(message_file, roots)
-                message_id = str(data.get("id") or message_file.stem)
+        if os.path.isdir(message_dir_str):
+            for message_file in _iter_json_files(message_dir_str, sort_entries=True):
+                data = _legacy_json(message_file, root_strs)
+                msg_stem = os.path.splitext(os.path.basename(message_file))[0]
+                message_id = str(data.get("id") or msg_stem)
                 messages.append({"id": message_id, "time_created": (data.get("time") or {}).get("created"), "data": json.dumps(data)})
-                part_dir = storage / "part" / message_id
-                if part_dir.is_dir():
-                    grouped[message_id] = [_legacy_json(part_file, roots) for part_file in _iter_json_files(part_dir, sort_entries=True)]
+                part_dir_str = os.path.join(storage_str, "part", message_id)
+                if os.path.isdir(part_dir_str):
+                    grouped[message_id] = [_legacy_json(part_file, root_strs) for part_file in _iter_json_files(part_dir_str, sort_entries=True)]
         built = _build_session(
             {"id": session_id, "title": session.get("title"), "directory": session.get("directory"),
              "time_created": (session.get("time") or {}).get("created"), "time_updated": (session.get("time") or {}).get("updated")},
             messages,
             grouped,
-            str(session_file),
+            session_file,
         )
         if built:
             yield built
@@ -410,23 +453,26 @@ def iter_opencode_sessions(roots: list[str], *, source_paths: list[str] | None =
     """Yield one normalized session at a time, preserving partial-source errors."""
     if not roots:
         raise AgentAdapterError(host="opencode", code="root_not_granted", detail="No authorized OpenCode root")
-    normalized = [Path(root).expanduser() for root in roots]
+    normalized = [Path(os.path.expanduser(raw_path_str(root))) for root in roots]
     databases: dict[str, Path] = {}
-    explicit_legacy_dirs: dict[str, Path] = {}
+    explicit_legacy_dirs: dict[str, str] = {}
     if source_paths is not None:
         for raw_path in source_paths:
-            candidate = Path(raw_path).expanduser()
-            if candidate.name == "opencode.db" and candidate.is_file():
-                databases[str(candidate.resolve())] = candidate
-            elif candidate.is_dir() and (candidate / "session").is_dir():
-                explicit_legacy_dirs[str(candidate.resolve())] = candidate
+            exp = os.path.expanduser(raw_path)
+            if os.path.basename(exp) == "opencode.db" and os.path.isfile(exp):
+                canon = os.path.realpath(exp)
+                databases[canon] = Path(canon)
+            elif os.path.isdir(exp) and os.path.isdir(os.path.join(exp, "session")):
+                canon = os.path.realpath(exp)
+                explicit_legacy_dirs[canon] = canon
     else:
         for root in roots:
             candidate = _find_database([root])
             if candidate:
-                databases[str(candidate.resolve())] = candidate
+                canon = os.path.realpath(raw_path_str(candidate))
+                databases[canon] = Path(canon)
 
-    failures: list[dict[str, str]] = []
+    failures: list[dict[str, Any]] = []
     yielded = False
     for path in databases.values():
         try:
@@ -437,29 +483,42 @@ def iter_opencode_sessions(roots: list[str], *, source_paths: list[str] | None =
         except PartialHistoryError as exc:
             failures.extend(exc.failures)
         except (AgentAdapterError, sqlite3.Error) as exc:
-            failures.append({"path": str(path), "code": getattr(exc, "code", "unsupported_format"), "detail": str(exc)})
+            failures.append({
+                "path": raw_path_str(path),
+                "code": getattr(exc, "code", "unsupported_format"),
+                "detail": str(exc),
+                "retryable": bool(getattr(exc, "retryable", False)),
+            })
 
     if failures:
         if yielded:
             raise PartialHistoryError(host="opencode", code="partial_sync", failures=failures,
                                       detail="Some databases could not be read")
         first = failures[0]
-        raise AgentAdapterError(host="opencode", code=first["code"], path=first["path"], detail=first["detail"])
+        retryable = all(bool(item.get("retryable", False)) for item in failures)
+        raise AgentAdapterError(
+            host="opencode",
+            code=first["code"],
+            path=first["path"],
+            detail=first["detail"],
+            retryable=retryable,
+        )
     if databases:
         return
 
     # Legacy JSON storage is emitted one session at a time. A service-planned
     # storage directory means the exact tree was snapshotted as one atomic source;
     # direct callers may instead provide exact source files without another rglob.
-    legacy_roots = list(explicit_legacy_dirs.values())
+    legacy_roots: list[str] = list(explicit_legacy_dirs.values())
     directory_snapshot = bool(legacy_roots)
     if not legacy_roots:
         for root in normalized:
-            if not root.is_dir():
+            r_str = raw_path_str(root)
+            if not os.path.isdir(r_str):
                 continue
-            storage = root if root.name == "storage" else root / "storage"
-            if (storage / "session").is_dir():
-                legacy_roots.append(storage)
+            storage_str = r_str if os.path.basename(r_str.rstrip("/\\")) == "storage" else os.path.join(r_str, "storage")
+            if os.path.isdir(os.path.join(storage_str, "session")):
+                legacy_roots.append(storage_str)
     legacy_found = False
     for storage in legacy_roots:
         legacy_found = True

@@ -4,6 +4,7 @@ Projects affect relevance, never authorization. SQLite contents remain authorita
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import asyncio
 from datetime import datetime, timedelta, timezone
@@ -11,7 +12,7 @@ import json
 import math
 import re
 import sqlite3
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import HTTPException
 
@@ -95,31 +96,60 @@ def _has_fts(conn) -> bool:
     return True
 
 
+def _is_tombstoned_item(conn, item: dict, *, content_sample: str | None = None) -> bool:
+    from app.services import governance_guardrails
+
+    entity_id = item["id"]
+    tombstone = conn.execute(
+        """SELECT 1 FROM tombstones
+        WHERE entity_type IN ('content','memory','document',?) AND dedupe_key IN (?,?) LIMIT 1""",
+        (item["kind"], entity_id, item.get("content_hash") or ""),
+    ).fetchone()
+    if tombstone is not None:
+        return True
+    canonical_key = item.get("canonical_key")
+    if canonical_key and governance_guardrails.is_tombstoned_canonical_key(conn, canonical_key):
+        return True
+    body_text = content_sample if content_sample is not None else (item.get("content") or "")
+    return governance_guardrails.is_tombstoned_memory(
+        conn,
+        item.get("project_id"),
+        item.get("category") or "knowledge",
+        item.get("title") or "",
+        body_text,
+        include_cross_category=(item.get("kind") == "memory"),
+    )
+
+
 def _valid_content(conn, entity_id: str, version: int | None = None) -> dict | None:
     row = conn.execute("SELECT * FROM contents WHERE id=? AND status='active'", (entity_id,)).fetchone()
     if row is None or version is not None and row["version"] != version:
         return None
     item = dict(row)
-    tombstone = conn.execute("""SELECT 1 FROM tombstones
-        WHERE entity_type IN ('content',?) AND dedupe_key IN (?,?) LIMIT 1""",
-        (item["kind"], entity_id, item.get("content_hash") or "")).fetchone()
-    return None if tombstone else item
+    return None if _is_tombstoned_item(conn, item) else item
 
 
 def _valid_content_metadata(conn, entity_id: str, version: int | None = None) -> dict | None:
     """Validate a candidate without reading its full authoritative body."""
-    row = conn.execute(
-        "SELECT id,project_id,kind,category,title,status,version,content_hash FROM contents "
-        "WHERE id=? AND status='active'",
-        (entity_id,),
-    ).fetchone()
+    try:
+        row = conn.execute(
+            "SELECT id,project_id,kind,category,title,status,version,content_hash,canonical_key,"
+            "applicability,substr(content,1,1024) AS content_head FROM contents "
+            "WHERE id=? AND status='active'",
+            (entity_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        row = conn.execute(
+            "SELECT id,project_id,kind,category,title,status,version,content_hash,"
+            "substr(content,1,1024) AS content_head FROM contents "
+            "WHERE id=? AND status='active'",
+            (entity_id,),
+        ).fetchone()
     if row is None or version is not None and row["version"] != version:
         return None
     item = dict(row)
-    tombstone = conn.execute("""SELECT 1 FROM tombstones
-        WHERE entity_type IN ('content',?) AND dedupe_key IN (?,?) LIMIT 1""",
-        (item["kind"], entity_id, item.get("content_hash") or "")).fetchone()
-    return None if tombstone else item
+    sample = item.pop("content_head", "") or ""
+    return None if _is_tombstoned_item(conn, item, content_sample=sample) else item
 
 
 def _sources(conn, entity_id: str) -> list[dict]:
@@ -268,6 +298,41 @@ def get_status() -> dict:
             "scope": "global", "index_is_authority": False}
 
 
+def _extract_applicability(item: dict) -> tuple[dict[str, Any], str | None]:
+    from app.services import governance_guardrails
+
+    raw_app = item.get("applicability")
+    if isinstance(raw_app, str):
+        raw_app = decode(raw_app, {})
+    norm = governance_guardrails.normalize_applicability(raw_app)
+    if not governance_guardrails.has_non_empty_applicability(norm):
+        return {}, None
+    parts: list[str] = []
+    for key in ("when", "env", "version_range", "os", "runtime", "framework", "branch"):
+        val = norm.get(key)
+        if val:
+            parts.append(f"{key}={val}")
+    paths = norm.get("paths")
+    if isinstance(paths, list) and paths:
+        parts.append(f"paths={', '.join(str(p) for p in paths)}")
+    for key, val in norm.items():
+        if key not in {"when", "env", "version_range", "os", "runtime", "framework", "branch", "paths"} and val:
+            parts.append(f"{key}={val}")
+    detail = "; ".join(parts)
+    warning = f"适用条件/前提（套用前请先核验版本/环境/路径条件）: {detail}" if detail else None
+    return norm, warning
+
+
+def _tags_for_item(item: dict) -> list[str]:
+    raw = item.get("tags")
+    if isinstance(raw, list):
+        return [str(t) for t in raw]
+    if isinstance(raw, str):
+        parsed = decode(raw, [])
+        return [str(t) for t in parsed] if isinstance(parsed, list) else []
+    return []
+
+
 def _hit(conn, item: dict, query: str, score: float, channels: list[str]) -> dict:
     content = item["content"]
     position = content.lower().find(query.lower().strip()) if query.strip() else 0
@@ -276,14 +341,16 @@ def _hit(conn, item: dict, query: str, score: float, channels: list[str]) -> dic
         position = min((x for x in positions if x >= 0), default=0)
     start = max(0, position - 80)
     snippet = content[start:start + 480]
-    tags = item.get("tags") if isinstance(item.get("tags"), list) else []
+    tags = _tags_for_item(item)
     is_pinned = "pinned" in tags
+    applicability, applicability_warning = _extract_applicability(item)
     return {"id": item["id"], "entity_id": item["id"], "version": item["version"],
             "kind": item["kind"], "category": item["category"], "title": item["title"],
             "pinned": is_pinned, "scope": "global" if not item.get("project_id") else "project",
             "snippet": snippet, "range": {"start": start, "end": start + len(snippet)},
             "evidence_id": evidence_id(item["id"], item["version"]),
             "project_id": item["project_id"], "score": score, "channels": channels,
+            "applicability": applicability, "applicability_warning": applicability_warning,
             "sources": _sources(conn, item["id"])}
 
 
@@ -442,24 +509,119 @@ def _entry_text(hit: dict, body: str) -> str:
     sources = hit["sources"]
     labels = [f"{s.get('title') or s['id']}（已删除）" if s["deleted"] else str(s.get("title") or s["id"]) for s in sources]
     suffix = f" (来源: {'; '.join(labels)})" if labels else ""
-    return f"- [id: {hit['id']} v{hit['version']}] {hit['title']}: {body}{suffix}\n  evidence: {hit['evidence_id']}"
+    base = f"- [id: {hit['id']} v{hit['version']}] {hit['title']}: {body}{suffix}\n  evidence: {hit['evidence_id']}"
+    if hit.get("applicability_warning"):
+        base += f"\n  applicability: {hit['applicability_warning']}"
+    return base
+
+
+def select_context_task(
+    working_tasks: list[dict[str, Any]],
+    *,
+    task_id: str | None = None,
+    query: str = "",
+    git_branch: str | None = None,
+) -> tuple[dict[str, Any] | None, bool]:
+    if not working_tasks:
+        return None, False
+    if task_id and str(task_id).strip():
+        tid = str(task_id).strip()
+        for wt in working_tasks:
+            if wt["id"] == tid or wt.get("legacy_content_id") == tid:
+                return wt, False
+        return None, len(working_tasks) > 1
+    if len(working_tasks) == 1:
+        return working_tasks[0], False
+
+    from app.services import working_memory_service
+
+    clean_q = (query or "").strip()
+    if clean_q:
+        q_low = clean_q.lower()
+        q_norm = working_memory_service.normalize_task_title(clean_q)
+        exact_matches = [
+            wt for wt in working_tasks
+            if (q_norm and working_memory_service.normalize_task_title(wt.get("title") or "") == q_norm)
+            or (wt.get("title") and (wt["title"].lower() in q_low or q_low in wt["title"].lower()))
+        ]
+        if len(exact_matches) == 1:
+            return exact_matches[0], False
+
+    clean_branch = (git_branch or "").strip()
+    if clean_branch:
+        branch_matches = [wt for wt in working_tasks if (wt.get("git_branch") or "").strip() == clean_branch]
+        if len(branch_matches) == 1:
+            return branch_matches[0], False
+
+    return None, True
+
+
+def bootstrap_must_not_execute(
+    selected_task: dict[str, Any] | None,
+    task_selection_required: bool,
+    pending_unconfirmed_handoff: bool = False,
+) -> bool:
+    """Single execution gate shared by the primary and fallback bootstrap paths.
+
+    Ambiguous task selection (multiple active tasks) is not execution permission,
+    and a `discussion_only` task may only be discussed.
+    """
+    return bool(
+        ((selected_task or {}).get("execution_mode") == "discussion_only")
+        or task_selection_required
+        or pending_unconfirmed_handoff
+    )
 
 
 def assemble_context(query: str = "", project_id: str | None = None, budget_tokens: int | None = None,
-                     context_epoch: str = "default", consumer_id: str = "web",
+                     context_epoch: str = "default", consumer_id: str | None = None,
                      protected: list[dict] | None = None, limit: int = 15,
                      *, max_tokens: int | None = None, handoff_id: str | None = None) -> dict:
     budget = budget_tokens if budget_tokens is not None else max_tokens
     budget = get_settings()["context_budget_tokens"] if budget is None else budget
     if type(budget) is not int or not 1 <= budget <= 32000:
         raise HTTPException(422, "Context budget must be between 1 and 32000")
-    if not context_epoch or len(context_epoch) > 200 or not consumer_id or len(consumer_id) > 200:
+    effective_epoch = "default" if context_epoch is None or context_epoch == "" else context_epoch
+    if not isinstance(effective_epoch, str) or not effective_epoch.strip() or len(effective_epoch) > 200:
+        raise HTTPException(422, "Context epoch and consumer identity are required")
+    effective_epoch = effective_epoch.strip()
+    consumer_supplied = consumer_id is not None
+    effective_consumer = "web" if consumer_id is None else consumer_id
+    if not isinstance(effective_consumer, str) or not effective_consumer.strip() or len(effective_consumer) > 200:
         raise HTTPException(422, "Context epoch and consumer identity are required")
     protected = protected or []
     if len(protected) > 100 or any(not isinstance(x.get("text"), str) or len(x["text"]) > 100000 for x in protected):
         raise HTTPException(422, "Invalid protected context")
+    from app.services import telemetry_service, working_memory_service
     from app.services.handoff_service import lookup_continuation, budget_blocked_continuation
-    continuation = lookup_continuation(consumer_id, project_id, query, handoff_id=handoff_id)
+    continuation = lookup_continuation(effective_consumer, project_id, query, handoff_id=handoff_id)
+    working_tasks: list[dict[str, Any]] = []
+    if project_id:
+        with db() as conn:
+            working_memory_service.ensure_legacy_tasks_synced(project_id, conn=conn)
+            working_tasks = working_memory_service.list_working_tasks(
+                project_id, active_only=True, include_events=False, conn=conn
+            )
+    matched_wt, task_selection_required = select_context_task(
+        working_tasks,
+        task_id=(continuation or {}).get("selected_task_id"),
+        query=query,
+    )
+    task_discussion_only = bool(matched_wt and matched_wt.get("execution_mode") == "discussion_only")
+    if task_discussion_only and isinstance(continuation, dict):
+        continuation = {
+            **continuation,
+            "must_not_execute": True,
+            "execution_mode": "discussion_only",
+            "resume_from": None,
+        }
+    # Ambiguous parallel work is not an execution permission either: fail closed
+    # until the user names the task.
+    must_not_execute = bool(
+        (continuation and continuation.get("must_not_execute"))
+        or task_discussion_only
+        or task_selection_required
+    )
     prefix_parts = [x["text"] for x in protected]
     if continuation:
         # The complete readback/cursor is part of this bounded fragment, not
@@ -470,11 +632,14 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
     pack_id = new_id("pack")
     response = {"id": pack_id, "status": "ready", "text": prefix, "entries": [], "omitted": [],
                 "estimated_tokens": base_cost, "budget_tokens": budget, "shortfall_tokens": 0,
-                "context_epoch": context_epoch, "consumer_id": consumer_id,
+                "context_epoch": effective_epoch, "consumer_id": effective_consumer,
                 "budget_scope": "senrelay_fragment_only", "token_estimate": "utf8_byte_upper_bound",
-                "continuation": continuation}
+                "continuation": continuation, "working_tasks": working_tasks,
+                "task_selection_required": task_selection_required,
+                "must_not_execute": must_not_execute}
     if base_cost > budget:
-        response.update(status="insufficient_budget", text="", shortfall_tokens=base_cost - budget)
+        response.update(status="insufficient_budget", text="", shortfall_tokens=base_cost - budget,
+                        must_not_execute=True)
         response["coverage"] = {"scope": "global", "lexical": "not_run", "semantic": "not_run"}
         response["continuation"] = budget_blocked_continuation(continuation)
         return response
@@ -484,8 +649,9 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
     blocks = [prefix] if prefix else []
     selected_sources = (
         set(continuation.get("source_ids") or [])
-        if continuation and continuation.get("status") in {"awaiting_confirmation", "ready"} else None
+        if continuation and continuation.get("status") in {"awaiting_confirmation", "ready", "discussion_only"} else None
     )
+    is_explicit_session_epoch = effective_epoch != "default"
     with db() as conn:
         conn.execute("BEGIN IMMEDIATE")
         ensure_schema(conn)
@@ -511,17 +677,18 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
             item = _valid_content(conn, row["id"])
             if item is None:
                 continue
-            emitted = conn.execute("""SELECT 1 FROM context_injections WHERE consumer_id=? AND context_epoch=?
-                AND entity_id=? AND content_version=?""", (consumer_id, context_epoch, item["id"], item["version"])).fetchone()
-            if emitted and selected_sources is None:
-                continue
+            if is_explicit_session_epoch and selected_sources is None:
+                emitted = conn.execute("""SELECT 1 FROM context_injections WHERE consumer_id=? AND context_epoch=?
+                    AND entity_id=? AND content_version=?""", (effective_consumer, effective_epoch, item["id"], item["version"])).fetchone()
+                if emitted:
+                    continue
             hit = _hit(conn, item, query, 1.0, ["protected_constraint"])
             rendered = _entry_text(hit, item["content"])
             blocks.append(rendered)
             pinned_ids.add(item["id"])
             response["entries"].append({**hit, "tier": "protected", "text": rendered,
                                         "estimated_tokens": estimate_tokens(rendered)})
-        if continuation and continuation.get("selected_task_id") and continuation.get("status") == "ready":
+        if continuation and continuation.get("selected_task_id") and continuation.get("status") in {"ready", "discussion_only"}:
             selected_item = _valid_content(conn, continuation["selected_task_id"])
             if selected_item is not None and selected_item["id"] not in pinned_ids:
                 hit = _hit(conn, selected_item, query, 1.0, ["confirmed_handoff"])
@@ -533,7 +700,8 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
         protected_cost = estimate_tokens("\n\n".join(blocks))
         if protected_cost > budget:
             response.update(status="insufficient_budget", text="", entries=[],
-                            estimated_tokens=protected_cost, shortfall_tokens=protected_cost - budget)
+                            estimated_tokens=protected_cost, shortfall_tokens=protected_cost - budget,
+                            must_not_execute=True)
             response["omitted"] = [{"entity_id": ident, "reason": "protected_budget"} for ident in sorted(pinned_ids)]
             response["continuation"] = budget_blocked_continuation(continuation)
             return response
@@ -560,11 +728,13 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
             if item.get("category") == "task" and not is_open_task(item):
                 response["omitted"].append({"entity_id": hit["id"], "reason": "completed_task"})
                 continue
-            used = conn.execute("""SELECT 1 FROM context_injections WHERE consumer_id=? AND context_epoch=?
-                AND entity_id=? AND content_version=?""", (consumer_id, context_epoch, hit["id"], hit["version"])).fetchone()
-            if used:
-                response["omitted"].append({"entity_id": hit["id"], "reason": "already_emitted_in_epoch"})
-                continue
+            is_protected_rule = category in {"decision", "preference"} or bool(hit.get("pinned"))
+            if not is_protected_rule or is_explicit_session_epoch:
+                used = conn.execute("""SELECT 1 FROM context_injections WHERE consumer_id=? AND context_epoch=?
+                    AND entity_id=? AND content_version=?""", (effective_consumer, effective_epoch, hit["id"], hit["version"])).fetchone()
+                if used:
+                    response["omitted"].append({"entity_id": hit["id"], "reason": "already_emitted_in_epoch"})
+                    continue
             chosen = None
             # A todo is not shortened into a passage that can be mistaken for the
             # whole item. It is included in full, or replaced by an explicit pointer.
@@ -591,13 +761,748 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
                  "source_state": x["sources"]}
                 for x in response["entries"]]
         conn.execute("INSERT INTO context_packs VALUES (?,?,?,?,?,?)",
-                     (pack_id, consumer_id, context_epoch, encode(refs), "prepared", now_iso()))
+                     (pack_id, effective_consumer, effective_epoch, encode(refs), "prepared", now_iso()))
         for entry in response["entries"]:
             ids = {entry["id"], *(source["id"] for source in entry["sources"] if source["id"])}
             for entity_id in ids:
                 conn.execute("INSERT OR IGNORE INTO context_pack_refs VALUES (?,?)", (pack_id, entity_id))
+        if consumer_supplied and effective_consumer.lower() != "web" and response["entries"]:
+            returned_ids = [entry["id"] for entry in response["entries"] if entry.get("id")]
+            versions_map = {
+                entry["id"]: int(entry["version"])
+                for entry in response["entries"]
+                if entry.get("id") and entry.get("version")
+            }
+            telemetry_service.record_provided(
+                returned_ids,
+                agent=effective_consumer,
+                project_id=project_id,
+                task_id=(matched_wt or {}).get("id") or (continuation or {}).get("selected_task_id"),
+                session_key=effective_epoch if is_explicit_session_epoch else None,
+                surface="assemble_context",
+                content_versions=versions_map,
+                dedupe_session=is_explicit_session_epoch,
+                conn=conn,
+            )
     return response
 
+
+def _bootstrap_trim(value: Any, limit: int) -> str:
+    """Shorten *optional descriptive* prose with an explicit omission marker.
+
+    Never applied to applicable safety rules or to `temp_constraints`: those are
+    delivered whole or the payload is refused with `insufficient_budget`.
+    """
+    text = str(value or "")
+    if limit <= 0 or len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)].rstrip() + "..."
+
+
+BOOTSTRAP_TASK_IDENTITY_KEYS = ("id", "title", "status")
+BOOTSTRAP_TASK_DESCRIPTIVE_KEYS = ("goal", "current_state", "blockers", "next_steps")
+
+
+def _bootstrap_path_key(value: Any) -> str | None:
+    text = str(value or "").strip().rstrip("/\\")
+    return text or None
+
+
+def bootstrap_protected_task(task: dict[str, Any], *, base_cwd: str | None = None) -> dict[str, Any]:
+    """Task projection that carries execution safety and is never lossy.
+
+    Identity, execution mode and every `temp_constraints` entry stay whole,
+    including the last sentence of a long restriction. A per-task `cwd` is kept
+    when it differs from the payload-level cwd, so two checkouts never look like
+    one working directory.
+    """
+    projection: dict[str, Any] = {key: task.get(key) for key in BOOTSTRAP_TASK_IDENTITY_KEYS}
+    projection["execution_mode"] = task.get("execution_mode") or "approved"
+    projection["temp_constraints"] = [str(item) for item in task.get("temp_constraints") or []]
+    task_cwd = _bootstrap_path_key(task.get("cwd"))
+    if task_cwd and task_cwd != _bootstrap_path_key(base_cwd):
+        projection["cwd"] = task.get("cwd")
+    return projection
+
+
+def bootstrap_compact_task(wt: dict[str, Any], *, base_cwd: str | None = None) -> dict[str, Any]:
+    compact = bootstrap_protected_task(wt, base_cwd=base_cwd)
+    for key in ("goal", "current_state"):
+        if wt.get(key):
+            compact[key] = str(wt[key])
+    for key in ("blockers", "next_steps"):
+        values = [str(item) for item in wt.get(key) or []]
+        if values:
+            compact[key] = values
+    return compact
+
+
+def _bootstrap_payload_cost(payload: dict[str, Any]) -> int:
+    """Serialized UTF-8 byte upper bound for the whole payload, meter included."""
+    probe = {**payload, "estimated_tokens": 0}
+    for _ in range(8):
+        cost = estimate_tokens(json.dumps(probe, ensure_ascii=False))
+        if cost == probe["estimated_tokens"]:
+            return cost
+        probe["estimated_tokens"] = cost
+    return int(probe["estimated_tokens"])
+
+
+def _bootstrap_feedback(payload: dict[str, Any]) -> str:
+    """Concise summary derived from whatever the bounded payload actually carries."""
+    constraints = payload.get("applicable_constraints") or []
+    lessons = payload.get("relevant_lessons") or []
+    conflicts = payload.get("pending_conflicts") or []
+    tasks = payload.get("active_tasks") or []
+    selected = payload.get("selected_task")
+    parts = [f"已加载 {len(constraints)} 条长期约束"]
+    if lessons:
+        parts[0] += f"、{len(lessons)} 条相关经验"
+    if isinstance(selected, dict) and selected.get("title"):
+        mode_tag = (
+            "（仅讨论方案/尚未授权改代码）"
+            if selected.get("execution_mode") == "discussion_only"
+            else ""
+        )
+        parts.append(f"当前任务「{selected['title']}」[{selected.get('status')}]{mode_tag}")
+    elif payload.get("task_selection_required"):
+        parts.append(f"存在 {len(tasks)} 个并行活跃任务（需先选定任务再执行）")
+    else:
+        parts.append("当前无活跃工作任务")
+    if conflicts:
+        parts.append(f"存在 {len(conflicts)} 条待裁决冲突")
+    summary = "与".join(parts[:2]) + (("；" + "；".join(parts[2:])) if len(parts) > 2 else "")
+    counters = [
+        int(payload.get(key) or 0)
+        for key in ("omitted_constraints_count", "omitted_lessons_count",
+                    "omitted_active_tasks_count", "omitted_conflicts_count")
+    ]
+    if payload.get("tasks_truncated") or any(counters):
+        summary += "；部分描述性细节已按预算省略（见 omitted_* 计数）"
+    return summary
+
+
+def _bootstrap_task_targets(work: dict[str, Any], *, selected: bool) -> list[dict[str, Any]]:
+    """Task dicts to reduce, grouped by whether they are the selected task.
+
+    The selected task also appears inside `active_tasks` as a separate dict, so
+    both projections are reduced together; otherwise one copy keeps verbose state.
+    """
+    selected_task = work.get("selected_task")
+    selected_id = selected_task.get("id") if isinstance(selected_task, dict) else None
+    targets: list[dict[str, Any]] = [
+        task for task in work.get("active_tasks") or [] if isinstance(task, dict)
+    ]
+    if isinstance(selected_task, dict):
+        targets.append(selected_task)
+    if selected_id is None:
+        return [] if selected else targets
+    return [task for task in targets if (task.get("id") == selected_id) == selected]
+
+
+def _trim_bootstrap_lessons(work: dict[str, Any], limit: int) -> bool:
+    changed = False
+    for item in work.get("relevant_lessons") or []:
+        content = item.get("content")
+        if isinstance(content, str) and len(content) > limit:
+            item["content"] = _bootstrap_trim(content, limit)
+            changed = True
+    return changed
+
+
+def _trim_bootstrap_task_fields(work: dict[str, Any], *, task_chars: int, selected: bool) -> bool:
+    changed = False
+    for task in _bootstrap_task_targets(work, selected=selected):
+        for key in ("goal", "current_state"):
+            value = task.get(key)
+            if isinstance(value, str) and task_chars and len(value) > task_chars:
+                task[key] = _bootstrap_trim(value, task_chars)
+                changed = True
+        for key in ("blockers", "next_steps"):
+            values = task.get(key)
+            if not isinstance(values, list):
+                continue
+            trimmed = [
+                _bootstrap_trim(item, task_chars)
+                if isinstance(item, str) and task_chars and len(item) > task_chars else item
+                for item in values
+            ]
+            if trimmed != values:
+                task[key] = trimmed
+                changed = True
+    if changed:
+        work["tasks_truncated"] = True
+    return changed
+
+
+def _cap_bootstrap_task_lists(work: dict[str, Any], *, keep: int, selected: bool) -> bool:
+    """Cap descriptive blockers/next_steps only; `temp_constraints` are never capped."""
+    changed = False
+    for task in _bootstrap_task_targets(work, selected=selected):
+        for key in ("blockers", "next_steps"):
+            values = task.get(key)
+            if isinstance(values, list) and len(values) > keep:
+                task[key] = values[:keep]
+                changed = True
+    if changed:
+        work["tasks_truncated"] = True
+    return changed
+
+
+def _drop_bootstrap_task_paths(work: dict[str, Any]) -> bool:
+    """Drop only per-task cwds that duplicate the payload-level cwd.
+
+    A distinct task working directory is a real distinction, not redundancy.
+    """
+    base = _bootstrap_path_key(work.get("cwd"))
+    if not base:
+        return False
+    targets: list[dict[str, Any]] = [
+        task for task in work.get("active_tasks") or [] if isinstance(task, dict)
+    ]
+    selected = work.get("selected_task")
+    if isinstance(selected, dict):
+        targets.append(selected)
+    changed = False
+    for task in targets:
+        task_cwd = _bootstrap_path_key(task.get("cwd"))
+        if task_cwd and task_cwd == base:
+            task.pop("cwd", None)
+            changed = True
+    if changed:
+        work["tasks_truncated"] = True
+    return changed
+
+
+def _drop_bootstrap_lessons(work: dict[str, Any]) -> bool:
+    lessons = work.get("relevant_lessons") or []
+    if not lessons:
+        return False
+    lessons.pop()
+    work["omitted_lessons_count"] = int(work.get("omitted_lessons_count") or 0) + 1
+    return True
+
+
+def _drop_bootstrap_conflicts(work: dict[str, Any]) -> bool:
+    conflicts = work.get("pending_conflicts") or []
+    if not conflicts:
+        return False
+    conflicts.pop()
+    work["omitted_conflicts_count"] = int(work.get("omitted_conflicts_count") or 0) + 1
+    return True
+
+
+def _strip_bootstrap_task_descriptive(work: dict[str, Any], *, selected: bool) -> bool:
+    changed = False
+    for task in _bootstrap_task_targets(work, selected=selected):
+        for key in BOOTSTRAP_TASK_DESCRIPTIVE_KEYS:
+            if task.pop(key, None) is not None:
+                changed = True
+    if changed:
+        work["tasks_truncated"] = True
+    return changed
+
+
+def _bootstrap_reducers(work: dict[str, Any]) -> list[Callable[[], bool]]:
+    """Budget reducers in ascending order of information loss.
+
+    Descriptive lessons/state are trimmed and dropped first. Applicable safety
+    rules (whole `content`) and every `temp_constraints` entry are never reduced,
+    so a payload that still does not fit is refused, not delivered incomplete.
+    """
+    return [
+        lambda: _trim_bootstrap_lessons(work, 360),
+        lambda: _trim_bootstrap_task_fields(work, task_chars=240, selected=False),
+        lambda: _trim_bootstrap_lessons(work, 200),
+        lambda: _trim_bootstrap_task_fields(work, task_chars=160, selected=False),
+        lambda: _cap_bootstrap_task_lists(work, keep=8, selected=False),
+        lambda: _drop_bootstrap_task_paths(work),
+        lambda: _trim_bootstrap_task_fields(work, task_chars=240, selected=True),
+        lambda: _trim_bootstrap_lessons(work, 140),
+        lambda: _cap_bootstrap_task_lists(work, keep=8, selected=True),
+        lambda: _drop_bootstrap_lessons(work),
+        lambda: _strip_bootstrap_task_descriptive(work, selected=False),
+        lambda: _trim_bootstrap_task_fields(work, task_chars=120, selected=True),
+        lambda: _cap_bootstrap_task_lists(work, keep=3, selected=True),
+        lambda: _drop_bootstrap_conflicts(work),
+        lambda: _trim_bootstrap_lessons(work, 90),
+        lambda: _strip_bootstrap_task_descriptive(work, selected=True),
+    ]
+
+
+def _bootstrap_insufficient_budget(work: dict[str, Any], *, max_tokens: int, required_tokens: int) -> dict[str, Any]:
+    """Explicit refusal: no source text, no safety flag cleared, exact requirement."""
+    payload: dict[str, Any] = {
+        "ok": False,
+        "status": "insufficient_budget",
+        "must_not_execute": True,
+        "task_selection_required": bool(work.get("task_selection_required")),
+        "project_id": work.get("project_id"),
+        "project_name": work.get("project_name"),
+        "cwd": work.get("cwd"),
+        "git_branch": work.get("git_branch"),
+        "applicable_constraints": [],
+        "active_tasks": [],
+        "selected_task": None,
+        "relevant_lessons": [],
+        "pending_conflicts": [],
+        "feedback_summary": "",
+        "max_tokens": max_tokens,
+        "budget_tokens": max_tokens,
+        "required_tokens": required_tokens,
+        "shortfall_tokens": max(0, required_tokens - max_tokens),
+        "token_estimate": "utf8_byte_upper_bound",
+        "budget_scope": "serialized_application_payload",
+        "host_context_usage": "unknown",
+        "coverage": "none",
+        "omitted_constraints_count": 0,
+        "omitted_lessons_count": 0,
+        "omitted_active_tasks_count": 0,
+        "omitted_conflicts_count": 0,
+        "tasks_truncated": False,
+        "message": (
+            "预算不足：完整的安全规则与临时约束无法在该预算内原样交付，因此未输出任何上下文。"
+            f"请立即将 max_tokens 提高到至少 {required_tokens}（当前 {max_tokens}）重新调用 bootstrap_working_memory；在拿到完整上下文前，不要确认或执行任务。"
+            " Insufficient budget to deliver every safety rule and temp constraint intact "
+            f"(required {required_tokens} > {max_tokens}); immediately call bootstrap_working_memory again with max_tokens>={required_tokens}, and do not confirm or execute task actions before receiving full context."
+        ),
+        "estimated_tokens": 0,
+    }
+    payload["estimated_tokens"] = _bootstrap_payload_cost(payload)
+    return payload
+
+
+def bound_bootstrap_payload(payload: dict[str, Any], max_tokens: int) -> dict[str, Any]:
+    """Fit the serialized bootstrap payload inside `max_tokens` without safety loss.
+
+    Invariants:
+    * Applicable safety rules (whole `content`) and every task's `temp_constraints`
+      are protected: never truncated, capped, or dropped.
+    * Descriptive task state, lessons and conflicts are reduced first, with
+      `tasks_truncated` / `omitted_*` counters reporting each loss.
+    * When even the fully compacted protected content cannot fit, the caller gets
+      an explicit `insufficient_budget` refusal with exact `required_tokens`
+      instead of an oversized or silently shortened `ready` fragment.
+    """
+    work: dict[str, Any] = {
+        **payload,
+        "applicable_constraints": [
+            dict(item) for item in payload.get("applicable_constraints") or [] if isinstance(item, dict)
+        ],
+        "relevant_lessons": [
+            dict(item) for item in payload.get("relevant_lessons") or [] if isinstance(item, dict)
+        ],
+        "pending_conflicts": [
+            dict(item) for item in payload.get("pending_conflicts") or [] if isinstance(item, dict)
+        ],
+        "active_tasks": [dict(item) for item in payload.get("active_tasks") or [] if isinstance(item, dict)],
+        "selected_task": (
+            dict(payload["selected_task"]) if isinstance(payload.get("selected_task"), dict) else None
+        ),
+    }
+    work["tasks_truncated"] = bool(work.get("tasks_truncated", False))
+    for counter in ("omitted_constraints_count", "omitted_lessons_count",
+                    "omitted_active_tasks_count", "omitted_conflicts_count"):
+        work[counter] = int(work.get(counter) or 0)
+    work["feedback_summary"] = ""
+
+    def _cost(state: dict[str, Any]) -> int:
+        state["feedback_summary"] = _bootstrap_feedback(state)
+        return _bootstrap_payload_cost(state)
+
+    def _min_budget(state: dict[str, Any]) -> int:
+        """Smallest budget at which this exact state serializes within itself."""
+        probe = {**state, "estimated_tokens": 0}
+        budget = _cost(probe)
+        for _ in range(8):
+            probe["max_tokens"] = budget
+            probe["budget_tokens"] = budget
+            cost = _cost(probe)
+            if cost <= budget:
+                return budget
+            budget = cost
+        return budget
+
+    def _finalize() -> dict[str, Any]:
+        work["estimated_tokens"] = _cost(work)
+        return work
+
+    # Exact floor: the smallest budget reachable by the same reducers, measured
+    # on a copy so counters, feedback and the echoed budget digits are included.
+    probe = copy.deepcopy(work)
+    required = _min_budget(probe)
+    for reduce_step in _bootstrap_reducers(probe):
+        while reduce_step():
+            required = min(required, _min_budget(probe))
+    if required > max_tokens:
+        return _bootstrap_insufficient_budget(work, max_tokens=max_tokens, required_tokens=required)
+    if _cost(work) <= max_tokens:
+        return _finalize()
+    for reduce_step in _bootstrap_reducers(work):
+        while reduce_step():
+            if _cost(work) <= max_tokens:
+                return _finalize()
+    return _finalize()
+
+
+def bootstrap_working_memory(
+    *,
+    cwd: str | None = None,
+    project_id: str | None = None,
+    query: str = "",
+    task_id: str | None = None,
+    consumer_id: str | None = None,
+    session_key: str | None = None,
+    max_tokens: int = 12000,
+) -> dict[str, Any]:
+    """Assemble minimal, project-isolated startup working memory without raw chat dumps."""
+    if type(max_tokens) is not int or not 1 <= max_tokens <= 32000:
+        raise HTTPException(422, "max_tokens must be between 1 and 32000")
+    if len(query or "") > 8000:
+        raise HTTPException(422, "Query is too long")
+
+    from app.services import conflict_service, project_service, telemetry_service, working_memory_service
+    from app.services.handoff_service import lookup_continuation
+
+    clean_cwd = (cwd or "").strip() or None
+    norm_cwd = project_service.canonical_project_path(clean_cwd) if clean_cwd else None
+    checkout = project_service.read_git_checkout(norm_cwd) if norm_cwd else None
+    cur_branch = (checkout or {}).get("branch") if checkout and not checkout.get("detached") else None
+
+    resolved_pid: str | None = None
+    project_name: str | None = None
+    if project_id and str(project_id).strip():
+        clean_pid = str(project_id).strip()
+        with db() as conn:
+            prow = conn.execute(
+                "SELECT id, name FROM projects WHERE id = ? AND status = 'active'",
+                (clean_pid,),
+            ).fetchone()
+        if not prow:
+            raise HTTPException(404, f"Project '{clean_pid}' not found")
+        resolved_pid = prow["id"]
+        project_name = prow["name"]
+    elif norm_cwd:
+        matched, is_ambiguous = project_service.resolve_project_by_path(norm_cwd)
+        if matched and not is_ambiguous:
+            resolved_pid = matched["id"]
+            project_name = matched.get("name")
+        elif not is_ambiguous:
+            repo = project_service.repository_identity(norm_cwd)
+            if repo and repo.get("common_root"):
+                matched2, is_ambig2 = project_service.resolve_project_by_path(repo["common_root"])
+                if matched2 and not is_ambig2:
+                    resolved_pid = matched2["id"]
+                    project_name = matched2.get("name")
+
+    refresh_index()
+
+    with db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        ensure_schema(conn)
+        working_memory_service.ensure_schema(conn)
+        telemetry_service.ensure_schema(conn)
+
+        # 1. Layer 1: Applicable constraints (project + global preference/decision/pinned, 0 time-decay)
+        if resolved_pid is not None:
+            constraint_rows = conn.execute(
+                """
+                SELECT id FROM contents
+                WHERE status = 'active'
+                  AND (project_id = ? OR project_id IS NULL)
+                  AND (
+                      category IN ('decision', 'preference')
+                      OR EXISTS (
+                          SELECT 1 FROM json_each(
+                              CASE WHEN json_valid(tags) AND json_type(tags)='array' THEN tags ELSE '[]' END
+                          ) AS pt WHERE pt.value = 'pinned'
+                      )
+                  )
+                ORDER BY CASE WHEN project_id = ? THEN 0 ELSE 1 END,
+                         CASE category WHEN 'decision' THEN 0 WHEN 'preference' THEN 1 ELSE 2 END,
+                         id ASC
+                """,
+                (resolved_pid, resolved_pid),
+            ).fetchall()
+        else:
+            constraint_rows = conn.execute(
+                """
+                SELECT id FROM contents
+                WHERE status = 'active'
+                  AND project_id IS NULL
+                  AND (
+                      category IN ('decision', 'preference')
+                      OR EXISTS (
+                          SELECT 1 FROM json_each(
+                              CASE WHEN json_valid(tags) AND json_type(tags)='array' THEN tags ELSE '[]' END
+                          ) AS pt WHERE pt.value = 'pinned'
+                      )
+                  )
+                ORDER BY CASE category WHEN 'decision' THEN 0 WHEN 'preference' THEN 1 ELSE 2 END,
+                         id ASC
+                """
+            ).fetchall()
+
+        raw_constraints: list[dict[str, Any]] = []
+        constraint_ids_set: set[str] = set()
+        for r in constraint_rows:
+            item = _valid_content(conn, r["id"])
+            if item is None or item.get("category") == "task":
+                continue
+            tags = _tags_for_item(item)
+            app_dict, app_warn = _extract_applicability(item)
+            constraint_ids_set.add(item["id"])
+            raw_constraints.append(
+                {
+                    "id": item["id"],
+                    "version": item["version"],
+                    "category": item["category"],
+                    "scope": "project" if item.get("project_id") else "global",
+                    "project_id": item.get("project_id"),
+                    "title": item["title"],
+                    "content": item["content"],
+                    "pinned": "pinned" in tags,
+                    "origin_authority": item.get("origin_authority") or "manual",
+                    "applicability": app_dict,
+                    "applicability_warning": app_warn,
+                    "evidence_id": evidence_id(item["id"], item["version"]),
+                }
+            )
+
+        # 2. Layer 2: Active working_tasks (strictly active/in_progress/blocked)
+        active_tasks: list[dict[str, Any]] = []
+        if resolved_pid is not None:
+            working_memory_service.ensure_legacy_tasks_synced(resolved_pid, conn=conn)
+            active_tasks = working_memory_service.list_working_tasks(
+                resolved_pid, active_only=True, include_events=False, conn=conn
+            )
+
+        selected_task: dict[str, Any] | None = None
+        if task_id and str(task_id).strip():
+            tid = str(task_id).strip()
+            for wt in active_tasks:
+                if wt["id"] == tid or wt.get("legacy_content_id") == tid:
+                    selected_task = wt
+                    break
+            if selected_task is None:
+                trow = conn.execute(
+                    "SELECT * FROM working_tasks WHERE id = ? OR legacy_content_id = ?",
+                    (tid, tid),
+                ).fetchone()
+                if not trow:
+                    raise HTTPException(404, f"Working task '{tid}' not found")
+                if resolved_pid and trow["project_id"] != resolved_pid:
+                    raise HTTPException(422, f"Working task '{tid}' does not belong to project '{resolved_pid}'")
+                selected_task = working_memory_service.get_working_task(trow["id"], include_events=False, conn=conn)
+                task_selection_required = False
+            else:
+                task_selection_required = False
+        else:
+            selected_task, task_selection_required = select_context_task(
+                active_tasks,
+                task_id=None,
+                query=query,
+                git_branch=cur_branch,
+            )
+
+        # 3. Layer 5: Pending conflicts for project_id (and global NULL if any)
+        if resolved_pid is not None:
+            c_rows = conn.execute(
+                "SELECT id, project_id, existing_id, proposed, reason, status, resolution, created_at, resolved_at "
+                "FROM conflicts WHERE project_id = ? AND status = 'pending' ORDER BY created_at DESC",
+                (resolved_pid,),
+            ).fetchall()
+        else:
+            c_rows = conn.execute(
+                "SELECT id, project_id, existing_id, proposed, reason, status, resolution, created_at, resolved_at "
+                "FROM conflicts WHERE project_id IS NULL AND status = 'pending' ORDER BY created_at DESC"
+            ).fetchall()
+        pending_conflicts: list[dict[str, Any]] = [
+            {
+                "id": cr["id"],
+                "project_id": cr["project_id"],
+                "existing_id": cr["existing_id"],
+                "proposed": decode(cr["proposed"], {}),
+                "reason": cr["reason"],
+                "status": cr["status"],
+                "resolution": cr["resolution"],
+                "created_at": cr["created_at"],
+                "resolved_at": cr["resolved_at"],
+            }
+            for cr in c_rows
+        ]
+
+        # 4. Layer 4: Relevant lessons / background / knowledge (strictly project + global, 0 popularity bias)
+        if resolved_pid is not None:
+            lesson_rows = conn.execute(
+                """
+                SELECT id FROM contents
+                WHERE status = 'active'
+                  AND (project_id = ? OR project_id IS NULL)
+                  AND category IN ('lesson', 'background', 'knowledge')
+                ORDER BY CASE WHEN project_id = ? THEN 0 ELSE 1 END,
+                         CASE category WHEN 'lesson' THEN 0 WHEN 'background' THEN 1 ELSE 2 END,
+                         updated_at DESC, id ASC
+                LIMIT 200
+                """,
+                (resolved_pid, resolved_pid),
+            ).fetchall()
+        else:
+            lesson_rows = conn.execute(
+                """
+                SELECT id FROM contents
+                WHERE status = 'active'
+                  AND project_id IS NULL
+                  AND category IN ('lesson', 'background', 'knowledge')
+                ORDER BY CASE category WHEN 'lesson' THEN 0 WHEN 'background' THEN 1 ELSE 2 END,
+                         updated_at DESC, id ASC
+                LIMIT 200
+                """
+            ).fetchall()
+
+        q_terms = _terms(query)[:64] if (query or "").strip() else []
+        scored_lessons: list[tuple[float, str, dict[str, Any]]] = []
+        for rank_idx, r in enumerate(lesson_rows):
+            if r["id"] in constraint_ids_set:
+                continue
+            item = _valid_content(conn, r["id"])
+            if item is None:
+                continue
+            haystack = f"{item['title']} {item['content']}".lower()
+            if q_terms:
+                matched_terms = sum(1 for term in q_terms if term in haystack)
+                if matched_terms == 0 and (query or "").strip().lower() not in haystack:
+                    continue
+                lex_score = matched_terms / max(1, len(q_terms))
+            else:
+                lex_score = 1.0 / (20.0 + rank_idx)
+
+            scope_boost = 0.05 if (resolved_pid and item.get("project_id") == resolved_pid) else 0.0
+            cat_boost = 0.03 if item.get("category") == "lesson" else (0.015 if item.get("category") == "background" else 0.0)
+            app_dict, app_warn = _extract_applicability(item)
+            path_boost = 0.0
+            if norm_cwd and isinstance(app_dict.get("paths"), list):
+                for p in app_dict["paths"]:
+                    p_str = str(p).strip()
+                    if p_str and p_str in norm_cwd:
+                        path_boost = 0.04
+                        break
+            # Explicitly 0 weight on read_count / provided_count / cited_count!
+            total_score = lex_score + scope_boost + cat_boost + path_boost
+            content_text = item["content"]
+            snippet = content_text if len(content_text) <= 480 else (content_text[:477].rstrip() + "...")
+            scored_lessons.append(
+                (
+                    total_score,
+                    item["id"],
+                    {
+                        "id": item["id"],
+                        "version": item["version"],
+                        "category": item["category"],
+                        "scope": "project" if item.get("project_id") else "global",
+                        "project_id": item.get("project_id"),
+                        "title": item["title"],
+                        "content": snippet,
+                        "origin_authority": item.get("origin_authority") or "manual",
+                        "applicability": app_dict,
+                        "applicability_warning": app_warn,
+                        "evidence_id": evidence_id(item["id"], item["version"]),
+                    },
+                )
+            )
+        scored_lessons.sort(key=lambda t: (-t[0], t[1]))
+        candidate_lessons = [entry for _, _, entry in scored_lessons[:10]]
+
+        # 5. Layer 3: must_not_execute (discussion_only task OR pending unconfirmed handoff)
+        pending_unconfirmed_handoff = False
+        if consumer_id and resolved_pid:
+            unconf_row = conn.execute(
+                """
+                SELECT 1 FROM handoffs
+                WHERE project_id = ? AND lower(target_agent) = ? AND status = 'awaiting_confirmation'
+                LIMIT 1
+                """,
+                (resolved_pid, str(consumer_id).strip().lower()),
+            ).fetchone()
+            if unconf_row is not None:
+                pending_unconfirmed_handoff = True
+            else:
+                cont = lookup_continuation(consumer_id, resolved_pid, query)
+                if cont and cont.get("status") in {
+                    "awaiting_confirmation",
+                    "ambiguous_continuation",
+                    "confirmation_review_required",
+                } and cont.get("must_not_execute"):
+                    pending_unconfirmed_handoff = True
+
+        must_not_execute = bootstrap_must_not_execute(
+            selected_task, task_selection_required, pending_unconfirmed_handoff
+        )
+
+        # 6. Budget fitting within max_tokens. The meter covers the WHOLE
+        # serialized payload (constraints, tasks, conflicts, lessons, shell);
+        # counting only the rendered summary let verbose tasks overshoot badly.
+        # `bound_bootstrap_payload` owns compaction and derives the summary, so
+        # safety rules survive or the call is refused with `insufficient_budget`.
+        base_shell: dict[str, Any] = {
+            "ok": True,
+            "status": "ready",
+            "project_id": resolved_pid,
+            "project_name": project_name,
+            "cwd": norm_cwd,
+            "git_branch": cur_branch,
+            "applicable_constraints": raw_constraints,
+            "active_tasks": [bootstrap_compact_task(wt, base_cwd=norm_cwd) for wt in active_tasks],
+            "selected_task": (
+                bootstrap_compact_task(selected_task, base_cwd=norm_cwd) if selected_task else None
+            ),
+            "task_selection_required": task_selection_required,
+            "must_not_execute": must_not_execute,
+            "relevant_lessons": candidate_lessons,
+            "pending_conflicts": [
+                {
+                    "id": c["id"],
+                    "existing_id": c["existing_id"],
+                    "reason": c["reason"],
+                    "proposed": c["proposed"],
+                }
+                for c in pending_conflicts
+            ],
+            "feedback_summary": "",
+            "max_tokens": max_tokens,
+            "budget_tokens": max_tokens,
+            "estimated_tokens": 0,
+            "omitted_constraints_count": 0,
+            "omitted_lessons_count": 0,
+            "omitted_active_tasks_count": 0,
+            "omitted_conflicts_count": 0,
+            "tasks_truncated": False,
+        }
+        base_shell = bound_bootstrap_payload(base_shell, max_tokens)
+        if base_shell.get("status") != "ready":
+            # A refused payload delivers no memory text, so it records no receipt.
+            return base_shell
+        fitted_constraints: list[dict[str, Any]] = base_shell["applicable_constraints"]
+        fitted_lessons: list[dict[str, Any]] = base_shell["relevant_lessons"]
+
+        # 7. Observational telemetry: record 'provided' only for memory actually returned
+        returned_long_term = [*fitted_constraints, *fitted_lessons]
+        if returned_long_term and (consumer_id is None or str(consumer_id).strip().lower() != "web"):
+            returned_ids = [m["id"] for m in returned_long_term]
+            versions_map = {m["id"]: int(m["version"]) for m in returned_long_term}
+            telemetry_service.record_provided(
+                returned_ids,
+                agent=(consumer_id or "mcp"),
+                project_id=resolved_pid,
+                task_id=(selected_task or {}).get("id"),
+                session_key=session_key,
+                surface="bootstrap_working_memory",
+                content_versions=versions_map,
+                dedupe_session=bool(session_key),
+                conn=conn,
+            )
+
+        return base_shell
 
 def record_injection(pack_id: str, consumer_id: str | None = None) -> dict:
     """Record emission, not proof that a host/model read or adopted the fragment."""

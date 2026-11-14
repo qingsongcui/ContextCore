@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.config import settings
-from app.database import create_schema, seed_data, db, decode, now_iso
+from app.database import create_schema, seed_data, db, decode, now_iso, hold_wal_keeper
 from app.exceptions import register_exception_handlers
 from app.security import SecurityMiddleware
 from app.mcp_server import contextcore_mcp
@@ -55,6 +55,13 @@ async def _background_worker(wakeup: asyncio.Event | None = None):
                     except Exception:
                         # Detailed error is already recorded in connections table by sync_connection
                         pass
+                try:
+                    from app.services import conversation_service
+                    if not stop.is_set():
+                        remaining_idx = conversation_service.backfill_relay_index_batch(limit=150, stop=stop)
+                        pending = pending or bool(remaining_idx)
+                except Exception:
+                    pass
                 return pending
 
             # Run blocking filesystem / sync operations off the event loop
@@ -103,40 +110,47 @@ async def lifespan(app: FastAPI):
         pass
     create_schema()
     seed_data()
-    from app.services.processing_jobs import initialize_processing_jobs, recover_processing_jobs
-    initialize_processing_jobs()
-    recover_processing_jobs()
-    from app.services.routing_service import recover_interrupted_attempts
-    recover_interrupted_attempts()
-    try:
-        from app.routers.connections import discover_connections_endpoint
-        discover_connections_endpoint()
-    except Exception:
-        pass
-    from app.services.history_watcher import watch_authorized_histories
-    wakeup = asyncio.Event()
-    worker_task = asyncio.create_task(_background_worker(wakeup))
-    watcher_task = asyncio.create_task(watch_authorized_histories(wakeup))
-    try:
-        async with AsyncExitStack() as stack:
-            await stack.enter_async_context(contextcore_mcp.session_manager.run())
-            yield
-    finally:
+    with hold_wal_keeper():
+        from app.services.processing_jobs import initialize_processing_jobs, recover_processing_jobs
+        initialize_processing_jobs()
+        recover_processing_jobs()
+        from app.services.routing_service import recover_interrupted_attempts
+        recover_interrupted_attempts()
         try:
-            from app.event_bus import notify_shutdown
-            notify_shutdown()
+            from app.routers.connections import discover_connections_endpoint
+            discover_connections_endpoint()
         except Exception:
             pass
-        worker_task.cancel()
-        watcher_task.cancel()
+        from app.services.history_watcher import watch_authorized_histories
+        wakeup = asyncio.Event()
+        worker_task = asyncio.create_task(_background_worker(wakeup))
+        watcher_task = asyncio.create_task(watch_authorized_histories(wakeup))
         try:
-            await watcher_task
-        except asyncio.CancelledError:
-            pass
-        try:
-            await worker_task
-        except asyncio.CancelledError:
-            pass
+            async with AsyncExitStack() as stack:
+                if getattr(getattr(contextcore_mcp, "_session_manager", None), "_has_started", False):
+                    contextcore_mcp._session_manager = None
+                    fresh_mcp_app = contextcore_mcp.streamable_http_app()
+                    for route in app.routes:
+                        if getattr(route, "path", None) == "/mcp":
+                            route.app = fresh_mcp_app
+                await stack.enter_async_context(contextcore_mcp.session_manager.run())
+                yield
+        finally:
+            try:
+                from app.event_bus import notify_shutdown
+                notify_shutdown()
+            except Exception:
+                pass
+            worker_task.cancel()
+            watcher_task.cancel()
+            try:
+                await watcher_task
+            except asyncio.CancelledError:
+                pass
+            try:
+                await worker_task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(
@@ -174,13 +188,14 @@ app.include_router(settings_router.router)
 app.include_router(events.router)
 from app.routers import processing
 app.include_router(processing.router)
-from app.routers import retrieval, usage, routing, manage, provider_checks, migration
+from app.routers import retrieval, usage, routing, manage, provider_checks, migration, working_tasks
 app.include_router(retrieval.router)
 app.include_router(usage.router)
 app.include_router(routing.router)
 app.include_router(manage.router)
 app.include_router(provider_checks.router)
 app.include_router(migration.router)
+app.include_router(working_tasks.router)
 
 # 5. Static uploads directory (protected by loopback/host middleware)
 settings.upload_dir.mkdir(parents=True, exist_ok=True)

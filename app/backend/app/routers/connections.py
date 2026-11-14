@@ -48,7 +48,7 @@ def one_click_connect_endpoint(connection_id: str, request: Request, payload: di
     from app.services.connection_plans import ConnectionPlans, public_plan
     from app.services.host_registry import HOST_DEFINITIONS
     from app.integrations.config_transactions import ConfigurationError
-    from app.integrations.installer import _load_manifest, refresh_owned_skill_files
+    from app.integrations.installer import _load_manifest
 
     connection_service.discover_connections()
     current = connection_service.get_connection(connection_id)
@@ -69,10 +69,6 @@ def one_click_connect_endpoint(connection_id: str, request: Request, payload: di
     plan_result = None
     conflict_error = None
     if connection_id in HOST_DEFINITIONS:
-        try:
-            refresh_owned_skill_files(host_ids=[connection_id])
-        except Exception:
-            pass
         try:
             home_dir = Path.home().resolve()
             cred_file = home_dir / ".contextcore" / "credentials" / f"{connection_id}.token"
@@ -335,7 +331,12 @@ def receive_hook_event_endpoint(
 
         # Reconstruct or resolve project (pass metadata name ONLY when explicitly provided)
         proj_meta = {"name": record.get("project_name")} if record.get("project_name") else None
-        project_id = project_service.reconstruct_or_resolve_project(cwd, metadata=proj_meta)
+        event_activity_at = record.get("updated_at") or record.get("started_at") or record.get("timestamp")
+        project_id = project_service.reconstruct_or_resolve_project(
+            cwd,
+            metadata=proj_meta,
+            activity_at=event_activity_at,
+        )
 
         conv = conversation_service.upsert_conversation(
             agent=connection_id,
@@ -356,12 +357,13 @@ def receive_hook_event_endpoint(
         from app.services import distillation_service
 
         explicit_auto = payload.get("auto_summarize") is True or isinstance(payload.get("memories"), list)
-        implicit_candidates = (
-            distillation_service.extract_implicit_memories_from_messages(messages).get("memories", [])
+        implicit_extract = (
+            distillation_service.extract_implicit_memories_from_messages(messages)
             if (not explicit_auto and payload.get("auto_summarize") is not False and has_messages and conv.get("_changed", True))
-            else []
+            else {}
         )
-        if explicit_auto or implicit_candidates:
+        has_implicit_work = bool(implicit_extract.get("memories") or implicit_extract.get("temp_constraints"))
+        if explicit_auto or has_implicit_work:
             auto_memory_res = distillation_service.auto_summarize_memory(
                 project_id=project_id,
                 conversation_id=conv["id"],

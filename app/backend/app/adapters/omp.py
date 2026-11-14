@@ -178,8 +178,9 @@ def parse_omp_session_file(file_path: Path, roots: list[str | Path]) -> dict[str
     session_id = str(header.get("id") or resolved_path.stem)
     cwd = header.get("cwd") or ""
     started_at = header.get("timestamp") or ""
-    title = slot_title or header.get("title") or "Untitled Session"
-
+    is_subagent = bool(header.get("parentSession"))
+    explicit_title = (slot_title or header.get("title") or "").strip()
+    title = explicit_title or "Untitled Session"
     def parse_json_record(raw: str, number: int) -> dict[str, Any]:
         try:
             value = json.loads(raw.strip())
@@ -266,7 +267,9 @@ def parse_omp_session_file(file_path: Path, roots: list[str | Path]) -> dict[str
                 if timestamp:
                     updated_at = timestamp
                 if entry.get("type") == "title_change" and entry.get("title"):
-                    title = entry["title"]
+                    explicit_title = str(entry["title"]).strip()
+                    if explicit_title:
+                        title = explicit_title
                 message = entry.get("message")
                 if message is not None:
                     message["timestamp"] = timestamp
@@ -288,11 +291,22 @@ def parse_omp_session_file(file_path: Path, roots: list[str | Path]) -> dict[str
         usage_observations = [json.loads(row[0]) for row in index.execute(
             "SELECT usage FROM entries WHERE usage IS NOT NULL ORDER BY line")]
         project_name = os.path.basename(cwd.rstrip("/\\")) if cwd else None
+        if not explicit_title and messages:
+            import re as _re
+            for msg in messages:
+                if msg.get("role") != "user":
+                    continue
+                raw_u = _re.sub(r"<system-(?:reminder|notice)\b[^>]*>.*?</system-(?:reminder|notice)>", " ", str(msg.get("content") or ""), flags=_re.S)
+                clean_u = " ".join(raw_u.split()).strip()
+                if clean_u:
+                    title = clean_u[:120]
+                    break
         return {
             "external_id": f"omp:{session_id}", "title": title, "cwd": cwd,
             "project_name": project_name, "started_at": started_at, "updated_at": updated_at,
             "messages": messages, "process_summary": formatted_summary,
             "source_path": str(resolved_path), "usage_observations": usage_observations,
+            "is_subagent": is_subagent,
         }
     finally:
         index.close()
@@ -304,6 +318,8 @@ def read_omp_sessions(roots: list[str], *, source_paths: list[str] | None = None
     sessions = []
     failures = []
     seen = set()
+    single_explicit_file = source_paths is None and len(roots) == 1 and Path(roots[0]).expanduser().is_file()
+    skip_subagents = source_paths is None and not single_explicit_file
     if source_paths is not None:
         candidates = [Path(p).expanduser() for p in source_paths if Path(p).suffix == ".jsonl"]
     else:
@@ -315,7 +331,10 @@ def read_omp_sessions(roots: list[str], *, source_paths: list[str] | None = None
             continue
         seen.add(str(candidate.absolute()))
         try:
-            sessions.append(parse_omp_session_file(candidate, roots))
+            parsed = parse_omp_session_file(candidate, roots)
+            if skip_subagents and parsed.get("is_subagent"):
+                continue
+            sessions.append(parsed)
         except AgentAdapterError as exc:
             failures.append({"path": str(candidate), "code": exc.code, "detail": exc.detail})
     if failures:

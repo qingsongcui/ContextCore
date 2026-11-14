@@ -348,7 +348,7 @@ def test_antigravity_rule_limit_refuses_truncation_without_touching_files(env):
     assert not (manager.home / ".gemini").exists()
 
 
-@pytest.mark.parametrize("host,relative", [("omp", ".omp"), ("cursor", ".cursor"), ("antigravity", ".gemini"), ("codex-desktop", ".agents")])
+@pytest.mark.parametrize("host,relative", [("omp", ".omp"), ("cursor", ".cursor"), ("antigravity", ".gemini"), ("codex-desktop", ".codex")])
 def test_new_native_categories_never_relax_directory_symlink_safety(env, tmp_path, host, relative):
     manager, client = env
     outside = tmp_path / "outside"

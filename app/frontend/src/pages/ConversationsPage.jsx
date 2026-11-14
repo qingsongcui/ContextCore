@@ -122,22 +122,30 @@ export function ConversationsPage({
   revision,
   onChanged,
   initialId,
+  initialScope,
   onCloseInitial,
   onProject
 }) {
   const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState('');
   const [agent, setAgent] = useState('');
-  const [allProjects, setAllProjects] = useState(!projectId);
+  const [scope, setScope] = useState(() => initialScope || (projectId ? 'project' : 'all'));
   const [offset, setOffset] = useState(0);
   const [appliedQuery, setAppliedQuery] = useState('');
+  useEffect(() => {
+    if (initialScope) {
+      setScope(initialScope);
+      setOffset(0);
+    }
+  }, [initialScope]);
   useEffect(() => {
     const timer = setTimeout(() => { setAppliedQuery(query); setOffset(0); }, 350);
     return () => clearTimeout(timer);
   }, [query]);
   const id = initialId || selected;
+  const effectiveProjectId = scope === 'unassigned' ? '__unassigned__' : scope === 'all' ? '' : projectId;
   const resource = useResource(id ? null : '/api/conversations/index' + queryString({
-    project_id: allProjects ? '' : projectId,
+    project_id: effectiveProjectId,
     query: appliedQuery,
     agent,
     limit: 50,
@@ -152,7 +160,7 @@ export function ConversationsPage({
     resource.reload();
   }} />;
   return <section><div className="collection-toolbar"><div><h2>{t("相关聊天")}</h2><p>{t("不同 Agent 的协作过程，在同一个项目里相遇。")}</p></div></div>
-    <div className="search-bar"><Search size={18} /><input aria-label={t("搜索聊天")} placeholder={t("搜索原始对话…")} value={query} onChange={event => setQuery(event.target.value)} /><select aria-label={t("聊天搜索范围")} value={allProjects ? 'all' : 'project'} onChange={event => { setAllProjects(event.target.value === 'all'); setOffset(0); }}><option value="project" disabled={!projectId}>{t("当前项目")}</option><option value="all">{t("全部项目")}</option></select></div>
+    <div className="search-bar"><Search size={18} /><input aria-label={t("搜索聊天")} placeholder={t("搜索原始对话…")} value={query} onChange={event => setQuery(event.target.value)} /><select aria-label={t("聊天搜索范围")} value={scope} onChange={event => { setScope(event.target.value); setOffset(0); }}><option value="project" disabled={!projectId}>{t("当前项目")}</option><option value="all">{t("全部项目")}</option><option value="unassigned">{t("未归属项目的聊天")}</option></select></div>
     <div className="memory-pill-bar" role="tablist" aria-label={t("Agent 快捷筛选")}>
       <button type="button" role="tab" aria-selected={!agent} className={`memory-pill ${!agent ? 'active' : ''}`} onClick={() => { setAgent(''); setOffset(0); }}>{t("全部 Agent")}</button>
       {Object.entries(AGENTS).map(([key, label]) => <button key={key} type="button" role="tab" aria-selected={agent === key} className={`memory-pill ${agent === key ? 'active' : ''}`} onClick={() => { setAgent(key); setOffset(0); }}>{label}</button>)}
@@ -161,7 +169,7 @@ export function ConversationsPage({
         setQuery('');
         setAgent(''); setOffset(0);
       }}>{t("清除筛选")}</Button> : null}</div>
-    <ResourceState resource={resource}>{resource.data?.items?.length ? <div className="conversation-list group">{resource.data.items.map(item => <button className="conversation-row" key={item.id} onClick={() => setSelected(item.id)}><span className="list-icon"><MessageSquare size={20} /></span><div><h3>{item.title}</h3><p>{AGENTS[item.agent] || item.agent} · {formatTime(item.updated_at)}{allProjects ? ` · ${projects.find(project => project.id === item.project_id)?.name || t("项目待定")}` : ''}</p></div><Badge>{t(PROCESSING[item.processing_status] || item.processing_status || "状态未知")}</Badge><ChevronRight className="row-chevron" size={16} aria-hidden="true" /></button>)}</div> : <EmptyState title={query || agent ? t("没有找到匹配的聊天") : t("还没有采集到聊天")} body={query || agent ? t("清掉关键词或来源筛选，或者切到全部项目；还没定项目和已归档的记录也在里面。") : t("先接入 Agent 并确认能读哪些记录。这里只显示真实采集到的内容。")} />}</ResourceState>
+    <ResourceState resource={resource}>{resource.data?.items?.length ? <div className="conversation-list group">{resource.data.items.map(item => <button className="conversation-row" key={item.id} onClick={() => setSelected(item.id)}><span className="list-icon"><MessageSquare size={20} /></span><div><h3>{item.title}</h3><p>{AGENTS[item.agent] || item.agent} · {formatTime(item.updated_at)}{scope !== 'project' ? ` · ${projects.find(project => project.id === item.project_id)?.name || t("项目待定")}` : ''}</p></div><Badge>{t(PROCESSING[item.processing_status] || item.processing_status || "状态未知")}</Badge><ChevronRight className="row-chevron" size={16} aria-hidden="true" /></button>)}</div> : <EmptyState title={query || agent ? t("没有找到匹配的聊天") : t("还没有采集到聊天")} body={query || agent ? t("清掉关键词或来源筛选，或者切到全部项目；还没定项目和已归档的记录也在里面。") : t("先接入 Agent 并确认能读哪些记录。这里只显示真实采集到的内容。")} />}</ResourceState>
     <div className="management-pagination"><span>{t("共 {count} 条", { count: resource.data?.total ?? 0 })}</span><div className="toolbar-actions"><Button disabled={offset === 0 || resource.loading} onClick={() => setOffset(Math.max(0, offset - 50))}>{t("上一页")}</Button><Button disabled={resource.loading || offset + 50 >= (resource.data?.total ?? 0)} onClick={() => setOffset(offset + 50)}>{t("下一页")}</Button></div></div>
   </section>;
 }

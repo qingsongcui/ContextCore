@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from app.integrations.constants import COMMAND_HOOK_HOSTS, HOST_CONFIG_PATHS, MCP_STARTUP_TIMEOUT_SEC, MCP_TOOL_TIMEOUT_SEC
+from app.integrations.constants import COMMAND_HOOK_HOSTS, HOST_CONFIG_PATHS, LEGACY_HOST_SKILL_PATHS, MAX_CONNECTION_FILES, MCP_STARTUP_TIMEOUT_SEC, MCP_TOOL_TIMEOUT_SEC
 
 try:
     import tomllib  # Python 3.11+
@@ -644,17 +644,43 @@ def apply_host_integration(
                 # Reuse exact legacy-section ownership proof before replacement.
                 plan_recovery(host, resolved_home, components=["hooks"])
 
-    if "skill" in selected and skill_target.is_file():
-        if not existing_manifest:
-            raise ValueError(
-                f"Refusing to overwrite pre-existing unowned skill file at {skill_target}."
-            )
-        current_skill_hash = _sha256(skill_target.read_text(encoding="utf-8"))
-        if current_skill_hash != existing_manifest.get("skill_hash"):
-            raise ValueError(
-                f"Refusing to overwrite externally modified skill file at {skill_target}."
-            )
-
+    legacy_skill_to_remove: Path | None = None
+    if "skill" in selected:
+        manifest_skill_target = (
+            _assert_path_safe(Path(str(existing_manifest["skill_target"])), resolved_home)
+            if existing_manifest and existing_manifest.get("skill_target")
+            else None
+        )
+        allowed_legacy_skills = {
+            _resolve_host_path(pattern, resolved_home).resolve()
+            for pattern in LEGACY_HOST_SKILL_PATHS.get(host, ())
+        }
+        if manifest_skill_target and manifest_skill_target != skill_target.resolve():
+            if manifest_skill_target not in allowed_legacy_skills:
+                raise ValueError(
+                    f"Unexpected legacy skill_target '{manifest_skill_target}' in manifest for {host}."
+                )
+            if manifest_skill_target.is_file():
+                legacy_hash = _sha256(manifest_skill_target.read_text(encoding="utf-8"))
+                if legacy_hash != existing_manifest.get("skill_hash"):
+                    raise ValueError(
+                        f"Refusing to remove externally modified legacy skill file at {manifest_skill_target}."
+                    )
+                legacy_skill_to_remove = manifest_skill_target
+            if skill_target.is_file():
+                raise ValueError(
+                    f"Refusing to overwrite pre-existing unowned skill file at {skill_target}."
+                )
+        elif skill_target.is_file():
+            if not existing_manifest:
+                raise ValueError(
+                    f"Refusing to overwrite pre-existing unowned skill file at {skill_target}."
+                )
+            current_skill_hash = _sha256(skill_target.read_text(encoding="utf-8"))
+            if current_skill_hash != existing_manifest.get("skill_hash"):
+                raise ValueError(
+                    f"Refusing to overwrite externally modified skill file at {skill_target}."
+                )
     # Transactional rollback tracking: stores exact original bytes and file mode
     backups: list[_FileBackup] = []
 
@@ -682,6 +708,8 @@ def apply_host_integration(
     if needs_token: record_backup(token_path)
     for component, target in [("mcp", mcp_target), ("hooks", hooks_target), ("skill", skill_target)]:
         if component in selected: record_backup(target)
+    if legacy_skill_to_remove is not None:
+        record_backup(legacy_skill_to_remove)
     if runner_target is not None:
         record_backup(runner_target)
     record_backup(manifest_target)
@@ -811,10 +839,20 @@ def apply_host_integration(
                     write_target(hooks_target, updated_hooks, mode=hooks_mode)
                     details.append(f"Merged owned hook sections into {hooks_target}")
         if "skill" in selected:
-            # 6. Install Skill or Command
+            # 6. Install Skill or Command (and clean up verified owned legacy skill path if migrating)
             write_target(skill_target, bundle.skill_or_command["content"], mode=0o644)
             details.append(f"Installed skill/command to {skill_target}")
-
+            if legacy_skill_to_remove is not None:
+                if len(prepared_files) + 2 <= MAX_CONNECTION_FILES:
+                    prepared_files[str(legacy_skill_to_remove)] = None
+                if not prepare_only:
+                    legacy_skill_to_remove.unlink(missing_ok=True)
+                    if legacy_skill_to_remove.parent.name == "contextcore-handoff":
+                        try:
+                            legacy_skill_to_remove.parent.rmdir()
+                        except OSError:
+                            pass
+                details.append(f"Removed migrated legacy skill at {legacy_skill_to_remove}")
         # 7. Write Owner Manifest for ownership tracking
         manifest_data = {
             **(existing_manifest or {}),
@@ -939,54 +977,5 @@ def uninstall_host_integration(
     )
 
 
-def refresh_owned_skill_files(
-    home: Path | None = None,
-    host_ids: list[str] | tuple[str, ...] | None = None,
-) -> list[str]:
-    """Upgrade ContextCore-owned skill/command files in-place when unmodified on disk.
-
-    Only updates a host's skill/command file if:
-    1. A valid owner manifest exists for that host under ~/.contextcore/manifests/<host>.json.
-    2. The on-disk skill_target exists and its SHA-256 equals manifest['skill_hash']
-       (proving ContextCore ownership and zero external user modifications).
-    3. The latest packaged template differs from the on-disk file.
-    """
-    resolved_home = Path(home).resolve() if home else Path.home().resolve()
-    targets = [h for h in (host_ids or SUPPORTED_HOSTS) if h in SUPPORTED_HOSTS]
-    refreshed: list[str] = []
-    for agent_id in targets:
-        manifest = _load_manifest(agent_id, resolved_home)
-        if not manifest:
-            continue
-        is_valid, _ = _validate_manifest(agent_id, manifest, resolved_home)
-        if not is_valid or manifest.get("skill_installed") is False:
-            continue
-        recorded_hash = manifest.get("skill_hash")
-        skill_target_str = manifest.get("skill_target")
-        if not isinstance(recorded_hash, str) or not recorded_hash or not isinstance(skill_target_str, str):
-            continue
-        skill_target = Path(skill_target_str)
-        if not skill_target.is_file() or skill_target.is_symlink():
-            continue
-        try:
-            current_bytes = skill_target.read_bytes()
-        except OSError:
-            continue
-        if hashlib.sha256(current_bytes).hexdigest() != recorded_hash:
-            continue
-        rendered = render_skill_or_command(agent_id)  # type: ignore[arg-type]
-        new_bytes = rendered["content"].encode("utf-8")
-        new_hash = hashlib.sha256(new_bytes).hexdigest()
-        if new_hash == recorded_hash:
-            continue
-        try:
-            _atomic_write_file(skill_target, new_bytes, mode=0o644)
-            manifest["skill_hash"] = new_hash
-            manifest_bytes = (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-            _atomic_write_file(_manifest_path(agent_id, resolved_home), manifest_bytes, mode=0o600)
-            refreshed.append(str(skill_target))
-        except OSError:
-            continue
-    return refreshed
 
 

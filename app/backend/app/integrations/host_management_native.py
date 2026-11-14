@@ -36,7 +36,7 @@ NATIVE_HOSTS = {
                     "provider_unsupported_reason": "Antigravity Desktop documents plan-dependent models selected in the conversation model menu, not a custom API-provider/key or default-model configuration file API. Select models in Antigravity; its private account/profile caches are not rewritten or reused as provider credentials.",
                     "sources": ["https://antigravity.google/docs/skills", "https://antigravity.google/docs/rules", "https://antigravity.google/docs/models", "https://antigravity.google/docs/customization-discovery"]},
     "codex-desktop": {"name": "Codex Desktop", "mcp_path": ".codex/config.toml", "provider_path": ".codex/config.toml", "format": "toml",
-                      "skill_dir": ".agents/skills", "prompt_path": ".codex/AGENTS.md",
+                      "skill_dir": ".codex/skills", "prompt_path": ".codex/AGENTS.md",
                       "configuration_notice": "Writes shared Codex native files also used by Codex CLI. Desktop consumption, reload and model availability have not been verified. Review the shared-file impact; writing defaults is not switching a running Desktop conversation.",
                       "prompt_notice": "Writes user AGENTS.md for subsequent instruction discovery. AGENTS.override.md and non-default CODEX_HOME can supersede this file; Desktop consumption remains unverified.",
                       "sources": ["https://developers.openai.com/codex/config-basic/", "https://developers.openai.com/codex/config-reference/", "https://learn.chatgpt.com/docs/build-skills", "https://learn.chatgpt.com/docs/agent-configuration/agents-md"]},

@@ -308,7 +308,9 @@ def _conversation_filters(
     clauses = []
     params = []
 
-    if project_id:
+    if project_id == "__unassigned__":
+        clauses.append("project_id IS NULL")
+    elif project_id:
         clauses.append("project_id = ?")
         params.append(project_id)
     if agent:
@@ -328,8 +330,8 @@ def _conversation_filters(
     if query:
         escaped_query = escape_like(query.strip())
         q = f"%{escaped_query}%"
-        clauses.append("(title LIKE ? ESCAPE '\\' OR messages LIKE ? ESCAPE '\\')")
-        params.extend([q, q])
+        clauses.append("(title LIKE ? ESCAPE '\\' OR messages LIKE ? ESCAPE '\\' OR external_id LIKE ? ESCAPE '\\')")
+        params.extend([q, q, q])
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     return where, tuple(params)
 
@@ -369,7 +371,7 @@ def list_conversations(
 
 # Explicit metadata projection: never fetch/deserialize transcript or summary.
 _CONVERSATION_INDEX_COLUMNS = (
-    "id,external_id,agent,title,project_id,cwd,source_path,started_at,"
+    "id,external_id,agent,title,project_id,cwd,git_branch,git_head,source_path,started_at,"
     "updated_at,processing_status,created_at"
 )
 
@@ -600,6 +602,161 @@ def _build_conversation_message_offsets(conn, conversation_id: str, rowid: int) 
     return count
 
 
+def _recorded_git_checkout(cwd: str | None) -> tuple[str | None, str | None]:
+    """Branch name and commit recorded for this conversation's directory. Detached HEAD stores no branch."""
+    if not cwd or not str(cwd).strip():
+        return None, None
+    from app.services.project_service import read_git_checkout
+    checkout = read_git_checkout(str(cwd))
+    if not checkout:
+        return None, None
+    branch = None if checkout.get("detached") else checkout.get("branch")
+    head = checkout.get("head")
+    return (str(branch) if branch else None), (str(head) if head else None)
+
+
+def _ensure_relay_index(conn) -> None:
+    """Small derived metadata, never a second copy of the transcript."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS conversation_relay_index (
+            conversation_id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+            source_hash TEXT NOT NULL,
+            continuation_only INTEGER NOT NULL,
+            title_zh TEXT NOT NULL,
+            title_en TEXT NOT NULL,
+            brief_zh TEXT NOT NULL,
+            brief_en TEXT NOT NULL,
+            message_count INTEGER NOT NULL
+        )
+    """)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(conversation_relay_index)")}
+    if "has_human_turn" not in columns:
+        conn.execute("ALTER TABLE conversation_relay_index ADD COLUMN has_human_turn INTEGER")
+
+
+RELAY_INDEX_VERSION_PREFIX = "v4:"
+
+
+def _has_human_turn(messages: list[dict[str, Any]]) -> bool:
+    """True when a real user turn exists; assistant-only worker reports do not count."""
+    from app.services.handoff_service import _is_continuation_prompt
+
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        if str(msg.get("role") or "").lower() != "user":
+            continue
+        content = " ".join(str(msg.get("content") or "").split()).strip()
+        if not content or _is_continuation_prompt(content):
+            continue
+        if "<name>contextcore" in content or "$contextcore" in content or "contextcore-handoff/SKILL.md" in content:
+            continue
+        if content.startswith("Generate a title and a git branch name for a coding agent"):
+            continue
+        return True
+    return False
+
+
+def _versioned_relay_hash(source_hash: str | None) -> str:
+    return f"{RELAY_INDEX_VERSION_PREFIX}{source_hash or ''}"
+
+
+def _update_relay_index(conn, conversation_id: str, source_hash: str, conversation: dict[str, Any]) -> None:
+    from app.services.handoff_service import _clean_line, _is_continuation_only_session, _summarize_conversation_for_relay
+
+    _ensure_relay_index(conn)
+    versioned = _versioned_relay_hash(source_hash)
+    current = conn.execute(
+        "SELECT source_hash FROM conversation_relay_index WHERE conversation_id=?", (conversation_id,)
+    ).fetchone()
+    if current and current["source_hash"] == versioned:
+        return
+    zh = _summarize_conversation_for_relay(conversation, "zh", include_tools=False)
+    en = _summarize_conversation_for_relay(conversation, "en", include_tools=False)
+    msgs = conversation.get("messages")
+    msg_list = msgs if isinstance(msgs, list) else []
+    conn.execute("""
+        INSERT INTO conversation_relay_index
+            (conversation_id,source_hash,continuation_only,title_zh,title_en,brief_zh,brief_en,message_count,has_human_turn)
+        VALUES (?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(conversation_id) DO UPDATE SET
+            source_hash=excluded.source_hash,continuation_only=excluded.continuation_only,
+            title_zh=excluded.title_zh,title_en=excluded.title_en,
+            brief_zh=excluded.brief_zh,brief_en=excluded.brief_en,message_count=excluded.message_count,
+            has_human_turn=excluded.has_human_turn
+    """, (
+        conversation_id, versioned, int(_is_continuation_only_session(msg_list)),
+        _clean_line(zh["title"], 120), _clean_line(en["title"], 120),
+        _clean_line(zh["brief_summary"], 600), _clean_line(en["brief_summary"], 600),
+        len(msg_list), int(_has_human_turn(msg_list)),
+    ))
+
+
+def backfill_relay_index_batch(*, limit: int = 100, stop=None) -> int:
+    """Incrementally index legacy/upgraded conversations newest-first off the request path."""
+    bounded = max(1, min(int(limit), 500))
+    with db() as conn:
+        _ensure_relay_index(conn)
+        rows = conn.execute(
+            """
+            SELECT c.id, c.agent, c.title, c.cwd, c.messages, c.process_summary, c.content_hash
+            FROM conversations c
+            LEFT JOIN conversation_relay_index r
+              ON r.conversation_id = c.id
+             AND r.source_hash = (? || coalesce(c.content_hash, ''))
+            WHERE r.conversation_id IS NULL
+            ORDER BY c.updated_at DESC, c.id DESC
+            LIMIT ?
+            """,
+            (RELAY_INDEX_VERSION_PREFIX, bounded),
+        ).fetchall()
+    if not rows:
+        return 0
+    with db() as conn:
+        _ensure_relay_index(conn)
+        for row in rows:
+            if stop is not None and stop.is_set():
+                break
+            msgs = decode(row["messages"], [])
+            if not isinstance(msgs, list):
+                msgs = []
+            raw_title = (row["title"] or "").strip()
+            conv_payload = {
+                "id": row["id"],
+                "agent": row["agent"],
+                "title": raw_title,
+                "cwd": row["cwd"] or "",
+                "messages": msgs,
+                "process_summary": row["process_summary"] or "",
+            }
+            effective_title = raw_title
+            if (not raw_title or raw_title.lower() in {"untitled session", "untitled", "new chat"}) and msgs:
+                from app.services.handoff_service import _clean_line, _summarize_conversation_for_relay
+                derived = _clean_line(_summarize_conversation_for_relay(conv_payload, "zh", include_tools=False)["title"], 120)
+                if derived and derived not in {"未命名会话", "Untitled conversation"}:
+                    effective_title = derived
+                    conv_payload["title"] = effective_title
+            c_hash = row["content_hash"]
+            if not c_hash or effective_title != raw_title:
+                c_hash = compute_content_revision_hash(effective_title, msgs, row["process_summary"] or "", row["cwd"])
+                conn.execute(
+                    "UPDATE conversations SET title = ?, content_hash = ? WHERE id = ?",
+                    (effective_title, c_hash, row["id"]),
+                )
+            _update_relay_index(conn, row["id"], c_hash, conv_payload)
+        remaining = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM conversations c
+            LEFT JOIN conversation_relay_index r
+              ON r.conversation_id = c.id
+             AND r.source_hash = (? || coalesce(c.content_hash, ''))
+            WHERE r.conversation_id IS NULL
+            """,
+            (RELAY_INDEX_VERSION_PREFIX,),
+        ).fetchone()[0]
+    return int(remaining)
+
 def upsert_conversation(
     agent: str,
     title: str,
@@ -668,7 +825,7 @@ def upsert_conversation(
                 "SELECT * FROM conversations WHERE agent = ? AND external_id = ?",
                 (agent, external_id),
             ).fetchone()
-        if not existing and source_path and external_id:
+        if not existing and source_path and external_id and not is_shared_database_path(source_path):
             existing = conn.execute(
                 "SELECT * FROM conversations WHERE agent = ? AND source_path = ? AND (external_id IS NULL OR external_id = '')",
                 (agent, source_path),
@@ -681,6 +838,13 @@ def upsert_conversation(
 
         if existing:
             target_id = existing["id"]
+            # A legacy path-only import may acquire its native session ID later,
+            # even when the transcript is byte-for-byte unchanged.
+            if external_id and existing["external_id"] != external_id:
+                conn.execute(
+                    "UPDATE conversations SET external_id = ? WHERE id = ?",
+                    (external_id, target_id),
+                )
             existing_msgs = decode(existing["messages"], [])
             if incremental:
                 merged_msgs = _merge_messages(existing_msgs, messages)
@@ -709,17 +873,34 @@ def upsert_conversation(
                 if norm_updated and existing["updated_at"] != target_updated_at:
                     ts_updates.append("updated_at = ?")
                     ts_params.append(target_updated_at)
+                if not existing["git_branch"] and not existing["git_head"]:
+                    branch_name, head_sha = _recorded_git_checkout(cwd or existing["cwd"])
+                    if branch_name is not None or head_sha is not None:
+                        ts_updates.append("git_branch = ?")
+                        ts_params.append(branch_name)
+                        ts_updates.append("git_head = ?")
+                        ts_params.append(head_sha)
                 if ts_updates:
                     ts_params.append(target_id)
                     conn.execute(f"UPDATE conversations SET {', '.join(ts_updates)} WHERE id = ?", tuple(ts_params))
+                eff_pid = project_id if project_id is not None else existing["project_id"]
+                if eff_pid:
+                    from app.services import project_service
+                    project_service.touch_project_activity(conn, eff_pid, target_updated_at)
             else:
                 changed = True
+                branch_name, head_sha = _recorded_git_checkout(cwd)
+                if branch_name is None and head_sha is None and cwd == existing["cwd"]:
+                    branch_name = existing["git_branch"]
+                    head_sha = existing["git_head"]
                 serialized_messages, message_offsets = _serialize_messages_with_offsets(merged_msgs)
                 conn.execute(
                     """
                     UPDATE conversations SET
                         title = ?,
                         cwd = ?,
+                        git_branch = ?,
+                        git_head = ?,
                         source_path = ?,
                         messages = ?,
                         process_summary = ?,
@@ -734,6 +915,8 @@ def upsert_conversation(
                     (
                         clean_title,
                         cwd,
+                        branch_name,
+                        head_sha,
                         source_path,
                         serialized_messages,
                         clean_summary,
@@ -745,6 +928,10 @@ def upsert_conversation(
                     ),
                 )
                 _store_message_offsets(conn, target_id, message_offsets)
+                eff_pid = project_id if project_id is not None else existing["project_id"]
+                if eff_pid:
+                    from app.services import project_service
+                    project_service.touch_project_activity(conn, eff_pid, target_updated_at)
                 log_audit(actor=agent, action="conversation.update_sync", target=target_id, conn=conn)
                 from app.services import distillation_service
                 distillation_service.queue_distillation(target_id, _connection=conn)
@@ -754,15 +941,16 @@ def upsert_conversation(
             merged_msgs = _normalize_messages(messages)
             serialized_messages, message_offsets = _serialize_messages_with_offsets(merged_msgs)
             new_content_hash = compute_content_revision_hash(clean_title, merged_msgs, clean_summary, cwd)
+            branch_name, head_sha = _recorded_git_checkout(cwd)
             target_started_at = norm_started or now
             target_updated_at = norm_updated or now
             conn.execute(
                 """
                 INSERT INTO conversations (
-                    id, external_id, project_id, agent, title, cwd, source_path,
+                    id, external_id, project_id, agent, title, cwd, git_branch, git_head, source_path,
                     started_at, updated_at, messages, process_summary, processing_status,
                     processing_error, content_hash, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?)
                 """,
                 (
                     target_id,
@@ -771,6 +959,8 @@ def upsert_conversation(
                     agent,
                     clean_title,
                     cwd,
+                    branch_name,
+                    head_sha,
                     source_path,
                     target_started_at,
                     target_updated_at,
@@ -781,9 +971,15 @@ def upsert_conversation(
                 ),
             )
             _store_message_offsets(conn, target_id, message_offsets)
+            if project_id:
+                from app.services import project_service
+                project_service.touch_project_activity(conn, project_id, target_updated_at)
             log_audit(actor=agent, action="conversation.create", target=target_id, conn=conn)
             from app.services import distillation_service
             distillation_service.queue_distillation(target_id, _connection=conn)
+        _update_relay_index(conn, target_id, new_content_hash, {
+            "agent": agent, "title": clean_title, "messages": merged_msgs, "process_summary": clean_summary,
+        })
     res = get_conversation(target_id)
     res["_changed"] = changed
     return res
@@ -854,8 +1050,12 @@ def update_conversation(
         updated = conn.execute("SELECT * FROM conversations WHERE id=?", (conversation_id,)).fetchone()
         revision_hash = compute_content_revision_hash(updated['title'], decode(updated['messages'], []), updated['process_summary'], updated['cwd'])
         conn.execute("UPDATE conversations SET content_hash=? WHERE id=?", (revision_hash, conversation_id))
+        _update_relay_index(conn, conversation_id, revision_hash, row_to_dict(updated))
         if processing_jobs.source_fingerprint(row) != processing_jobs.source_fingerprint(conn.execute("SELECT * FROM conversations WHERE id=?", (conversation_id,)).fetchone()):
             distillation_service.queue_distillation(conversation_id, _connection=conn)
+        if updated["project_id"]:
+            from app.services import project_service
+            project_service.touch_project_activity(conn, updated["project_id"], now)
         log_audit(actor="user", action="conversation.update", target=conversation_id, conn=conn)
 
     # Outside transaction block
@@ -902,6 +1102,8 @@ def delete_conversation(conversation_id: str, actor: str = "user") -> dict[str, 
         )
 
         # Delete conversation (memories remain intact per D011 independent deletion)
+        _ensure_relay_index(conn)
+        conn.execute("DELETE FROM conversation_relay_index WHERE conversation_id = ?", (conversation_id,))
         conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
 
         log_audit(actor=actor, action="conversation.delete", target=conversation_id, conn=conn)

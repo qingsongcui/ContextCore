@@ -193,7 +193,7 @@ def _sqlite_snapshot(path,expected_identity):
             target=sqlite3.connect(':memory:')
             try:
                 source.enable_load_extension(False)
-                source.execute('PRAGMA query_only=ON');source.execute('PRAGMA trusted_schema=OFF')
+                source.execute('PRAGMA mmap_size=0');source.execute('PRAGMA query_only=ON');source.execute('PRAGMA trusted_schema=OFF')
                 if source.execute('PRAGMA page_count').fetchone()[0]*source.execute('PRAGMA page_size').fetchone()[0]>MAX_SOURCE_BYTES:
                     raise ConfigurationError('SQLite snapshot exceeds size limit',422)
                 deadline=time.monotonic()+5

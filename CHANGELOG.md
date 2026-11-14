@@ -4,6 +4,18 @@ All notable changes to ContextCore will be documented in this file.
 
 ## [Unreleased]
 
+- Preserve native session IDs in conversation APIs, search, and relay candidates; resolve bare native UUIDs without guessing when multiple sessions match.
+- Keep distinct same-title sessions and explicitly labeled unassigned sessions visible in newest-first, counted relay pages. Read indexed metadata for discovery instead of decoding all stored transcripts.
+- Refresh a selected authorized native source independently of unrelated tasks and history backlogs. Selection-only reads do not create or confirm handoffs; stale, unavailable, or changing sources are reported explicitly.
+- Pack long selected conversations against the serialized response budget, preserving the newest user request and timestamped latest-answer excerpts with explicit coverage. Keep protected constraints intact and defer execution confirmation until the payload fits.
+- Follow Antigravity's native transcript companions and committed dialogue positions, prioritize recently changed sources, and wake background reconciliation for authorized hidden/generated history directories.
+- Stop silently refreshing installed host skills during service startup or local configuration import. Explicit host installation, update, and model-management operations remain available.
+- Add dual-tier working memory (`working_tasks` + governed long-term `contents` with `outdated` lifecycle, supersession version guards, Gate-0 admission checks, and `saved`/`provided`/`cited` usage receipts), project merge task migration, and frozen numbered relay selection snapshots while preserving manually created projects across startup and repair.
+- Reject expired, missing, deleted, or other-consumer numbered relay selections instead of loading a different conversation. Exact native/internal IDs remain usable without a list.
+- Preserve complete safety rules and task restrictions in bootstrap responses; insufficient budgets fail closed without emitting a provided-memory receipt.
+- Require same-project source dialogue and a matching, relevant quote before promoting lessons. Agent promotions are labeled source-backed, not independently verified; conflict results do not complete tasks.
+- Page active, historical, and combined task lists with exact totals; deep links locate the correct page beyond 200 records, and shrinking lists recover their last valid page.
+
 ## [1.0.0-beta.1] - 2026-11-11
 
 ### Public Beta (`v1.0.0-beta.1` · macOS 14.0+ `arm64`)

@@ -48,12 +48,27 @@ class ProjectSplitRequest(BaseModel):
 
 
 # --- Content (Memories & Documents) ---
+def _default_usage_summary() -> dict[str, Any]:
+    return {
+        "state": "saved",
+        "provided_count": 0,
+        "cited_count": 0,
+        "last_provided_at": None,
+        "last_provided_agent": None,
+        "last_cited_at": None,
+        "last_cited_agent": None,
+        "last_cited_note": None,
+        "recent_events": [],
+    }
+
+
 class ContentSource(BaseModel):
     id: str | None = None
     kind: Literal["conversation", "document"]
     title: str = ""
     agent: str | None = None
     deleted: bool = False
+    quote: str | None = None
 
 
 class ContentVersion(BaseModel):
@@ -76,8 +91,16 @@ class Content(BaseModel):
     scope: Literal["global", "project"] = "project"
     source_count: int = 0
     agent: str | None = None
-    status: Literal["active", "historical"] = "active"
+    status: Literal["active", "outdated", "historical"] = "active"
     version: int = 1
+    applicability: dict[str, Any] = Field(default_factory=dict)
+    origin_authority: str = "manual"
+    superseded_by_id: str | None = None
+    outdated_at: str | None = None
+    outdated_reason: str | None = None
+    promoted_from_task_id: str | None = None
+    canonical_key: str | None = None
+    usage_summary: dict[str, Any] = Field(default_factory=_default_usage_summary)
     created_at: str
     updated_at: str
     sources: list[ContentSource] = []
@@ -100,6 +123,9 @@ class ContentCreate(BaseModel):
     quote: str | None = None
     related_ids: list[str] = []
     supersedes_id: str | None = None
+    applicability: dict[str, Any] | None = None
+    origin_authority: str | None = None
+    promoted_from_task_id: str | None = None
 
 
 class ContentUpdate(BaseModel):
@@ -110,9 +136,32 @@ class ContentUpdate(BaseModel):
     pinned: bool | None = None
     scope: Literal["global", "project"] | None = None
     agent: str | None = None
-    status: Literal["active", "historical"] | None = None
+    status: Literal["active", "outdated", "historical"] | None = None
     project_id: str | None = None
+    applicability: dict[str, Any] | None = None
+    origin_authority: str | None = None
+    outdated_reason: str | None = None
     expected_version: int = Field(ge=1)
+
+
+class ContentOutdatedRequest(BaseModel):
+    reason: str | None = None
+    actor: str | None = None
+    expected_version: int | None = Field(default=None, ge=1)
+
+
+class ContentCorrectRequest(BaseModel):
+    title: str | None = None
+    content: str = Field(min_length=1)
+    category: Literal["preference", "background", "decision", "task", "lesson", "knowledge"] | None = None
+    tags: list[str] | None = None
+    pinned: bool | None = None
+    applicability: dict[str, Any] | None = None
+    actor: str | None = None
+    quote: str | None = None
+    source_id: str | None = None
+    source_kind: Literal["conversation", "document"] | None = None
+    expected_version: int | None = Field(default=None, ge=1)
 
 
 class ContentPinRequest(BaseModel):
@@ -142,8 +191,106 @@ class ContentMergeRequest(BaseModel):
     ids: list[str]
     title: str = Field(min_length=1)
     content: str
-    project_id: str
+    project_id: str | None = None
+    category: Literal["preference", "background", "decision", "task", "lesson", "knowledge"] | None = None
     expected_versions: dict[str, Annotated[int, Field(ge=1, strict=True)]] | None = None
+
+
+# --- Short-Term Task-Bound Working Memory ---
+WorkingTaskStatus = Literal["active", "in_progress", "blocked", "paused", "completed", "cancelled"]
+WorkingTaskExecutionMode = Literal["discussion_only", "approved"]
+
+
+class WorkingTask(BaseModel):
+    id: str
+    project_id: str
+    title: str
+    status: WorkingTaskStatus = "active"
+    execution_mode: WorkingTaskExecutionMode = "approved"
+    must_not_execute: bool = False
+    goal: str = ""
+    completed_steps: list[dict[str, Any]] = Field(default_factory=list)
+    current_state: str = ""
+    temp_constraints: list[str] = Field(default_factory=list)
+    failed_attempts: list[dict[str, Any]] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
+    next_steps: list[str] = Field(default_factory=list)
+    cwd: str | None = None
+    git_branch: str | None = None
+    last_agent: str | None = None
+    source_conversation_id: str | None = None
+    legacy_content_id: str | None = None
+    version: int = 1
+    created_at: str
+    updated_at: str
+    completed_at: str | None = None
+    events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class WorkingTaskUpsert(BaseModel):
+    task_id: str | None = None
+    project_id: str | None = None
+    cwd: str | None = None
+    git_branch: str | None = None
+    title: str = Field(min_length=1)
+    status: WorkingTaskStatus | None = None
+    execution_mode: WorkingTaskExecutionMode | None = None
+    goal: str | None = None
+    completed_steps: list[dict[str, Any] | str] | None = None
+    add_completed_step: dict[str, Any] | str | None = None
+    current_state: str | None = None
+    temp_constraints: list[str] | None = None
+    add_temp_constraint: str | None = None
+    failed_attempts: list[dict[str, Any] | str] | None = None
+    add_failed_attempt: dict[str, Any] | str | None = None
+    blockers: list[str] | None = None
+    add_blocker: str | None = None
+    next_steps: list[str] | None = None
+    agent: str | None = None
+    last_agent: str | None = None
+    source_conversation_id: str | None = None
+    cited_memory_ids: list[str] | None = None
+    citation_note: str | None = None
+    continue_branch_task: bool = False
+    expected_version: int | None = Field(default=None, ge=1)
+
+
+class WorkingTaskPatch(BaseModel):
+    title: str | None = None
+    status: WorkingTaskStatus | None = None
+    execution_mode: WorkingTaskExecutionMode | None = None
+    goal: str | None = None
+    completed_steps: list[dict[str, Any] | str] | None = None
+    add_completed_step: dict[str, Any] | str | None = None
+    current_state: str | None = None
+    temp_constraints: list[str] | None = None
+    add_temp_constraint: str | None = None
+    failed_attempts: list[dict[str, Any] | str] | None = None
+    add_failed_attempt: dict[str, Any] | str | None = None
+    blockers: list[str] | None = None
+    add_blocker: str | None = None
+    next_steps: list[str] | None = None
+    cwd: str | None = None
+    git_branch: str | None = None
+    agent: str | None = None
+    last_agent: str | None = None
+    source_conversation_id: str | None = None
+    cited_memory_ids: list[str] | None = None
+    citation_note: str | None = None
+    summary: str | None = None
+    expected_version: int | None = Field(default=None, ge=1)
+
+
+class WorkingTaskPromoteRequest(BaseModel):
+    title: str = Field(min_length=1)
+    content: str = Field(min_length=1)
+    category: Literal["preference", "background", "decision", "lesson", "knowledge"] = "lesson"
+    applicability: dict[str, Any] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    pinned: bool = False
+    evidence_quote: str = Field(min_length=1)
+    actor: str = "user"
+    complete_task: bool = False
 
 
 # --- Conversations ---
@@ -156,9 +303,13 @@ class ChatMessage(BaseModel):
 
 class Conversation(BaseModel):
     id: str
+    external_id: str | None = None
     project_id: str | None = None
     agent: str
     title: str
+    cwd: str | None = None
+    git_branch: str | None = None
+    git_head: str | None = None
     source_path: str | None = None
     started_at: str
     updated_at: str
@@ -212,6 +363,10 @@ class ProposedContent(BaseModel):
     category: Literal["preference", "background", "decision", "task", "lesson", "knowledge"] = "knowledge"
     tags: list[str] = []
     quote: str | None = None
+    applicability: dict[str, Any] | None = None
+    origin_authority: str | None = None
+    pinned: bool = False
+    promoted_from_task_id: str | None = None
 
 
 class Conflict(BaseModel):

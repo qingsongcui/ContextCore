@@ -16,6 +16,7 @@ def create_project_endpoint(req: ProjectCreate):
         name=req.name,
         description=req.description,
         directories=req.directories,
+        manual=True,
     )
 
 

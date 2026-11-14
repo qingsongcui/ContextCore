@@ -110,6 +110,25 @@ def discover_hosts(*, home: Path | None = None, env: Mapping[str, str] | None = 
         override_name = "SENRELAY_" + host.upper().replace("-", "_") + "_ROOTS"
         if values.get(override_name):
             history = [Path(p).expanduser() for p in values[override_name].split(os.pathsep) if p and Path(p).expanduser().is_absolute()]
+        if host == "codex" and not values.get(override_name):
+            sqlite_pattern = re.compile(r"^(?:state|thread_history)_\d+\.sqlite$")
+            for root_dir in roots:
+                try:
+                    if any(p.is_symlink() for p in (root_dir, *root_dir.parents)) or not root_dir.is_dir():
+                        continue
+                    with os.scandir(root_dir) as it:
+                        sqlite_candidates = sorted(
+                            (
+                                Path(entry.path)
+                                for entry in it
+                                if sqlite_pattern.match(entry.name) and entry.is_file(follow_symlinks=False)
+                            ),
+                            key=lambda p: p.name,
+                        )
+                    if sqlite_candidates:
+                        history = list(dict.fromkeys([*history, *sqlite_candidates]))
+                except OSError:
+                    continue
         if host == "opencode":
             if values.get("XDG_CONFIG_HOME") and Path(values["XDG_CONFIG_HOME"]).is_absolute():
                 roots[0] = Path(values["XDG_CONFIG_HOME"]) / "opencode"

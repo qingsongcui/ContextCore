@@ -20,7 +20,7 @@ Success is assessed in order: successful handoff, correct memory, time saved (D0
 - Once confirmed or explicitly instructed during conversation relay, the target Agent follows `continuation.resume_from`, does not redo completed work, does not switch to unselected parallel tasks and excludes historical superseded decisions.
 - Current scope is **cross-Agent** switching. Same-Agent new-session recovery is not added by the unified-management goal (D006).
 - Quota exhaustion must not require a new summary from the unavailable predecessor (D007).
-- Lifecycle hooks only collect/report events. They must not inject memory, warnings or cards, rewrite input or synthesize chat messages without the user requesting context (D063, superseding the earlier automatic-injection behavior).
+- Lifecycle hooks only collect/report events. They must not inject memory, warnings or cards, rewrite input or synthesize chat messages without user authorization (D063, superseding the earlier hook auto-injection behavior). Under the dual-tier working-memory closed loop (D064), Agents that have ContextCore MCP tools or companion Skills installed may call `bootstrap_working_memory` on substantive project work while keeping hooks silent and strictly honoring `must_not_execute` (`discussion_only` tasks, unresolved task ambiguity, and unconfirmed handoffs never authorize code edits).
 
 **Current API vocabulary, not a replacement decision:** `handoff_service.py` exposes `goal`, `progress`, `decisions`, `evidence`, `blockers`, `next_steps`. Those field names alone do not prove D005's constraints and working-scene coverage. That semantic coverage and actual host continuation must be verified separately. Creating a card or confirming server state is not task execution.
 
@@ -166,6 +166,7 @@ These concise paraphrases preserve identifiers without publishing private interv
 | D061 | Unified local multi-Agent management and low-friction context experience. |
 | D062 | Approved full implementation, first-release optional semantics/relations. |
 | D063 | Explicit opt-in context; silent lifecycle hooks, no forced injection. |
+| D064 | Dual-tier memory (durable long-term `contents` + short-term `working_tasks` with `discussion_only` fail-closed gate, honest `saved`/`provided`/`cited` receipts, and MCP `bootstrap_working_memory` without hook prompt injection). |
 
 ## 9. Acceptance discipline
 

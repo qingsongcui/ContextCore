@@ -151,6 +151,39 @@ class ScannerStatusTests(unittest.TestCase):
         self.assertNotIn("never-return-or-persist-secret", output.getvalue())
         self.assertNotIn("ghp_" + "F" * 8, output.getvalue())
 
+    def test_public_audit_environment_strips_socks_all_proxy_preserving_http_proxy(self):
+        with patch.dict(
+            security.os.environ,
+            {
+                "ALL_PROXY": "socks5://127.0.0.1:7897",
+                "all_proxy": "socks5h://127.0.0.1:7897",
+                "HTTP_PROXY": "http://127.0.0.1:7897",
+                "HTTPS_PROXY": "http://127.0.0.1:7897",
+                "NO_PROXY": "localhost,127.0.0.1",
+                "PIP_EXTRA_INDEX_URL": "https://private.invalid/simple",
+                "UV_INDEX_URL": "https://private.invalid/simple",
+                "PIP_AUDIT_STRICT": "0",
+            },
+            clear=True,
+        ):
+            env = security.public_audit_environment()
+        self.assertNotIn("ALL_PROXY", env)
+        self.assertNotIn("all_proxy", env)
+        self.assertEqual(env["HTTP_PROXY"], "http://127.0.0.1:7897")
+        self.assertEqual(env["HTTPS_PROXY"], "http://127.0.0.1:7897")
+        self.assertEqual(env["NO_PROXY"], "localhost,127.0.0.1")
+        self.assertNotIn("PIP_EXTRA_INDEX_URL", env)
+        self.assertNotIn("UV_INDEX_URL", env)
+        self.assertNotIn("PIP_AUDIT_STRICT", env)
+
+        with patch.dict(
+            security.os.environ,
+            {"ALL_PROXY": "http://127.0.0.1:7897"},
+            clear=True,
+        ):
+            non_socks = security.public_audit_environment()
+        self.assertEqual(non_socks["ALL_PROXY"], "http://127.0.0.1:7897")
+
 
 class HygieneBehaviorTests(unittest.TestCase):
     def setUp(self):

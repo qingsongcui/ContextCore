@@ -33,7 +33,7 @@ from .base import (
     AgentAdapterError,
     bound_process_summary,
     deduplicate_roots,
-    validate_file_safety,
+    isolated_sqlite_snapshot,
     validate_path,
 )
 
@@ -678,227 +678,234 @@ def _find_cursor_databases(roots: list[str | Path]) -> list[Path]:
 def _parse_cursor_db(db_path: Path, roots: list[str | Path]) -> list[dict[str, Any]]:
     """Parse sessions from a validated Cursor state.vscdb or CLI store.db file."""
     resolved_path = validate_path(db_path, roots)
-    validate_file_safety(resolved_path, host="cursor")
-
-    try:
+    with isolated_sqlite_snapshot(resolved_path, host="cursor") as staged_path:
+        conn: sqlite3.Connection | None = None
         try:
-            conn = sqlite3.connect(f"file:{resolved_path}?mode=ro", uri=True)
-        except sqlite3.OperationalError:
-            conn = sqlite3.connect(f"file:{resolved_path}?immutable=1", uri=True)
-    except sqlite3.Error as exc:
-        raise AgentAdapterError(
-            host="cursor",
-            code="file_changed",
-            path=str(resolved_path),
-            detail=f"Cursor database was rewritten during open: {exc}",
-            retryable=True,
-        ) from exc
-    except Exception as exc:
-        raise AgentAdapterError(
-            host="cursor",
-            code="permission_denied",
-            path=str(resolved_path),
-            detail=f"Cannot open Cursor database in read-only mode: {exc}",
-        ) from exc
-
-    try:
-        conn.execute("PRAGMA query_only = ON")
-        conn.execute("BEGIN")
-        cur = conn.cursor()
-        cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = {row[0] for row in cur}
-
-        if "blobs" in tables and "meta" in tables:
-            return _parse_cursor_store_db(cur, resolved_path)
-
-        if "cursorDiskKV" not in tables and "composerHeaders" not in tables:
+            conn = sqlite3.connect(staged_path, timeout=2.0)
+            conn.execute("PRAGMA mmap_size = 0")
+            conn.execute("PRAGMA trusted_schema = OFF")
+            conn.execute("PRAGMA query_only = ON")
+        except sqlite3.Error as exc:
+            if conn is not None:
+                conn.close()
             raise AgentAdapterError(
                 host="cursor",
-                code="unsupported_format",
+                code="file_changed",
                 path=str(resolved_path),
-                detail="Cursor SQLite database lacks required tables (composerHeaders / cursorDiskKV / blobs+meta).",
-            )
+                detail=f"Cursor database was rewritten during open: {exc}",
+                retryable=True,
+            ) from exc
+        except Exception as exc:
+            if conn is not None:
+                conn.close()
+            raise AgentAdapterError(
+                host="cursor",
+                code="permission_denied",
+                path=str(resolved_path),
+                detail=f"Cannot open Cursor database in read-only mode: {exc}",
+            ) from exc
 
-        # 1. Load composer metadata from composerHeaders if present
-        meta_by_id: dict[str, dict[str, Any]] = {}
-        if "composerHeaders" in tables:
-            try:
-                cur.execute("SELECT composerId, value, isSubagent FROM composerHeaders")
-                for cid, val, is_sub in cur:
-                    if is_sub:
-                        meta_by_id[cid] = {"is_subagent": True}
-                        del val
-                        continue
-                    parsed_val: dict[str, Any] = {}
-                    if val:
-                        try:
-                            parsed_val = json.loads(val)
-                        except json.JSONDecodeError:
-                            parsed_val = {}
+        try:
+            return _parse_cursor_db_conn(conn, resolved_path)
+        except AgentAdapterError:
+            raise
+        except sqlite3.DatabaseError as exc:
+            raise AgentAdapterError(
+                host="cursor",
+                code="file_changed",
+                path=str(resolved_path),
+                detail=f"Cursor database was rewritten during read: {exc}",
+                retryable=True,
+            ) from exc
+        finally:
+            conn.close()
 
-                    cwd = ""
-                    ws = parsed_val.get("workspaceIdentifier")
-                    if isinstance(ws, dict):
-                        uri = ws.get("uri")
-                        if isinstance(uri, dict):
-                            cwd = str(uri.get("fsPath") or "")
 
-                    title = str(parsed_val.get("name") or "").strip()
-                    created_at = parsed_val.get("createdAt") or 0
-                    last_updated = parsed_val.get("lastUpdatedAt") or 0
+def _parse_cursor_db_conn(conn: sqlite3.Connection, resolved_path: Path) -> list[dict[str, Any]]:
+    conn.execute("BEGIN")
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = {row[0] for row in cur}
 
-                    meta_by_id[cid] = {
-                        "is_subagent": False,
-                        "title": title,
-                        "cwd": cwd,
-                        "created_at_ms": created_at,
-                        "last_updated_ms": last_updated,
-                    }
-                    del parsed_val, val
-            except sqlite3.OperationalError:
-                pass
+    if "blobs" in tables and "meta" in tables:
+        return _parse_cursor_store_db(cur, resolved_path)
 
-        # 2. Enumerate composers from bubble keys in cursorDiskKV
-        sessions: list[dict[str, Any]] = []
+    if "cursorDiskKV" not in tables and "composerHeaders" not in tables:
+        raise AgentAdapterError(
+            host="cursor",
+            code="unsupported_format",
+            path=str(resolved_path),
+            detail="Cursor SQLite database lacks required tables (composerHeaders / cursorDiskKV / blobs+meta).",
+        )
 
-        if "cursorDiskKV" in tables:
+    # 1. Load composer metadata from composerHeaders if present
+    meta_by_id: dict[str, dict[str, Any]] = {}
+    if "composerHeaders" in tables:
+        try:
+            cur.execute("SELECT composerId, value, isSubagent FROM composerHeaders")
+            for cid, val, is_sub in cur:
+                if is_sub:
+                    meta_by_id[cid] = {"is_subagent": True}
+                    del val
+                    continue
+                parsed_val: dict[str, Any] = {}
+                if val:
+                    try:
+                        parsed_val = json.loads(val)
+                    except json.JSONDecodeError:
+                        parsed_val = {}
+
+                cwd = ""
+                ws = parsed_val.get("workspaceIdentifier")
+                if isinstance(ws, dict):
+                    uri = ws.get("uri")
+                    if isinstance(uri, dict):
+                        cwd = str(uri.get("fsPath") or "")
+
+                title = str(parsed_val.get("name") or "").strip()
+                created_at = parsed_val.get("createdAt") or 0
+                last_updated = parsed_val.get("lastUpdatedAt") or 0
+
+                meta_by_id[cid] = {
+                    "is_subagent": False,
+                    "title": title,
+                    "cwd": cwd,
+                    "created_at_ms": created_at,
+                    "last_updated_ms": last_updated,
+                }
+                del parsed_val, val
+        except sqlite3.OperationalError:
+            pass
+
+    # 2. Enumerate composers from bubble keys in cursorDiskKV
+    sessions: list[dict[str, Any]] = []
+
+    if "cursorDiskKV" in tables:
+        cur.execute(
+            "SELECT key FROM cursorDiskKV WHERE key >= ? AND key < ?",
+            (BUBBLE_PREFIX, BUBBLE_RANGE_END),
+        )
+        composer_ids: list[str] = []
+        seen_composers: set[str] = set()
+        for (k,) in cur:
+            parts = k.split(":")
+            if len(parts) < 3:
+                continue
+            cid = parts[1]
+            if cid in seen_composers or meta_by_id.get(cid, {}).get("is_subagent"):
+                continue
+            seen_composers.add(cid)
+            composer_ids.append(cid)
+
+        for cid in composer_ids:
+            prefix = f"{BUBBLE_PREFIX}{cid}:"
             cur.execute(
-                "SELECT key FROM cursorDiskKV WHERE key >= ? AND key < ?",
-                (BUBBLE_PREFIX, BUBBLE_RANGE_END),
+                "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ?",
+                (prefix, f"{BUBBLE_PREFIX}{cid};"),
             )
-            composer_ids: list[str] = []
-            seen_composers: set[str] = set()
-            for (k,) in cur:
+            bubbles: list[tuple[str, dict[str, Any]]] = []
+            for k, raw_v in cur:
                 parts = k.split(":")
                 if len(parts) < 3:
                     continue
-                cid = parts[1]
-                if cid in seen_composers or meta_by_id.get(cid, {}).get("is_subagent"):
+                bid = parts[2]
+                if raw_v is None:
                     continue
-                seen_composers.add(cid)
-                composer_ids.append(cid)
-
-            for cid in composer_ids:
-                prefix = f"{BUBBLE_PREFIX}{cid}:"
-                cur.execute(
-                    "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ?",
-                    (prefix, f"{BUBBLE_PREFIX}{cid};"),
-                )
-                bubbles: list[tuple[str, dict[str, Any]]] = []
-                for k, raw_v in cur:
-                    parts = k.split(":")
-                    if len(parts) < 3:
-                        continue
-                    bid = parts[2]
-                    if raw_v is None:
-                        continue
-                    if isinstance(raw_v, bytes):
-                        raw_v = raw_v.decode("utf-8", errors="replace")
-                    try:
-                        bubble_data = json.loads(raw_v)
-                    except json.JSONDecodeError:
-                        continue
-                    if not isinstance(bubble_data, dict):
-                        continue
-                    bubble_type = bubble_data.get("type")
-                    capability = bubble_data.get("capabilityType") or bubble_type
-                    compact = {
-                        "type": bubble_type if isinstance(bubble_type, (int, str, bool)) else None,
-                        "text": _extract_bubble_text(bubble_data) if bubble_type in (1, 2) else "",
-                        "createdAt": str(bubble_data.get("createdAt") or ""),
-                        "capabilityType": str(capability)[:MAX_SUMMARY_LENGTH] if capability else None,
-                    }
-                    bubbles.append((bid, compact))
-                    del bubble_data, raw_v
-
-                header = meta_by_id.get(cid, {})
-                messages: list[dict[str, Any]] = []
-                summary_items: list[str] = []
-                summary_omitted = 0
-                first_user_text = ""
-                started_at = ""
-                updated_at = ""
-
-                def _bubble_sort_key(item: tuple[str, dict[str, Any]]) -> str:
-                    return str(item[1].get("createdAt") or "")
-
-                sorted_bubbles = sorted(bubbles, key=_bubble_sort_key)
-
-                for bid, b in sorted_bubbles:
-                    b_type = b.get("type")
-                    text = _extract_bubble_text(b)
-                    ts = str(b.get("createdAt") or "")
-                    if ts:
-                        if not started_at:
-                            started_at = ts
-                        updated_at = ts
-
-                    if b_type == 1 and text:
-                        if not first_user_text:
-                            first_user_text = text
-                        messages.append({
-                            "external_id": f"cursor:{cid}:{bid}",
-                            "role": "user",
-                            "content": text,
-                            "timestamp": ts,
-                        })
-                    elif b_type == 2 and text:
-                        messages.append({
-                            "external_id": f"cursor:{cid}:{bid}",
-                            "role": "assistant",
-                            "content": text,
-                            "timestamp": ts,
-                        })
-                    else:
-                        cap = b.get("capabilityType") or b.get("type")
-                        if cap:
-                            if len(summary_items) < 50:
-                                summary_items.append(f"- step: {cap}")
-                            else:
-                                summary_omitted += 1
-
-                if not messages:
+                if isinstance(raw_v, bytes):
+                    raw_v = raw_v.decode("utf-8", errors="replace")
+                try:
+                    bubble_data = json.loads(raw_v)
+                except json.JSONDecodeError:
                     continue
+                if not isinstance(bubble_data, dict):
+                    continue
+                bubble_type = bubble_data.get("type")
+                capability = bubble_data.get("capabilityType") or bubble_type
+                compact = {
+                    "type": bubble_type if isinstance(bubble_type, (int, str, bool)) else None,
+                    "text": _extract_bubble_text(bubble_data) if bubble_type in (1, 2) else "",
+                    "createdAt": str(bubble_data.get("createdAt") or ""),
+                    "capabilityType": str(capability)[:MAX_SUMMARY_LENGTH] if capability else None,
+                }
+                bubbles.append((bid, compact))
+                del bubble_data, raw_v
 
-                session_title = header.get("title") or (first_user_text.splitlines()[0][:120] if first_user_text else cid)
-                if not session_title:
-                    session_title = cid
+            header = meta_by_id.get(cid, {})
+            messages: list[dict[str, Any]] = []
+            summary_items: list[str] = []
+            summary_omitted = 0
+            first_user_text = ""
+            started_at = ""
+            updated_at = ""
 
-                sessions.append({
-                    "external_id": f"cursor:{cid}",
-                    "title": session_title,
-                    "cwd": header.get("cwd", ""),
-                    "started_at": started_at,
-                    "updated_at": updated_at or started_at,
-                    "messages": messages,
-                    "process_summary": bound_process_summary(
-                        "\n".join(summary_items[:50]),
-                        truncated=summary_omitted > 0,
-                    ),
-                    "source_path": str(resolved_path),
-                })
+            def _bubble_sort_key(item: tuple[str, dict[str, Any]]) -> str:
+                return str(item[1].get("createdAt") or "")
 
-        if not sessions:
-            raise AgentAdapterError(
-                host="cursor",
-                code="unsupported_format",
-                path=str(resolved_path),
-                detail="Cursor database has no extractable user or assistant dialogues.",
-            )
+            sorted_bubbles = sorted(bubbles, key=_bubble_sort_key)
 
-        return sessions
-    except AgentAdapterError:
-        raise
-    except sqlite3.DatabaseError as exc:
+            for bid, b in sorted_bubbles:
+                b_type = b.get("type")
+                text = _extract_bubble_text(b)
+                ts = str(b.get("createdAt") or "")
+                if ts:
+                    if not started_at:
+                        started_at = ts
+                    updated_at = ts
+
+                if b_type == 1 and text:
+                    if not first_user_text:
+                        first_user_text = text
+                    messages.append({
+                        "external_id": f"cursor:{cid}:{bid}",
+                        "role": "user",
+                        "content": text,
+                        "timestamp": ts,
+                    })
+                elif b_type == 2 and text:
+                    messages.append({
+                        "external_id": f"cursor:{cid}:{bid}",
+                        "role": "assistant",
+                        "content": text,
+                        "timestamp": ts,
+                    })
+                else:
+                    cap = b.get("capabilityType") or b.get("type")
+                    if cap:
+                        if len(summary_items) < 50:
+                            summary_items.append(f"- step: {cap}")
+                        else:
+                            summary_omitted += 1
+
+            if not messages:
+                continue
+
+            session_title = header.get("title") or (first_user_text.splitlines()[0][:120] if first_user_text else cid)
+            if not session_title:
+                session_title = cid
+
+            sessions.append({
+                "external_id": f"cursor:{cid}",
+                "title": session_title,
+                "cwd": header.get("cwd", ""),
+                "started_at": started_at,
+                "updated_at": updated_at or started_at,
+                "messages": messages,
+                "process_summary": bound_process_summary(
+                    "\n".join(summary_items[:50]),
+                    truncated=summary_omitted > 0,
+                ),
+                "source_path": str(resolved_path),
+            })
+
+    if not sessions:
         raise AgentAdapterError(
             host="cursor",
-            code="file_changed",
+            code="unsupported_format",
             path=str(resolved_path),
-            detail=f"Cursor database was rewritten during read: {exc}",
-            retryable=True,
-        ) from exc
-    finally:
-        conn.close()
+            detail="Cursor database has no extractable user or assistant dialogues.",
+        )
+
+    return sessions
 
 
 def read_cursor_sessions(roots: list[str | Path], *, source_paths: list[str] | None = None) -> list[dict[str, Any]]:

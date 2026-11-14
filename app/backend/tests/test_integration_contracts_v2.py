@@ -61,6 +61,57 @@ def test_compaction_advances_context_epoch_but_native_replay_is_stable(isolated)
     assert epoch_for_record("claude-code", {"event": "UserPromptSubmit", "session_id": "synthetic"}) == (consumer, after)
 
 
+def test_relay_request_wakes_existing_worker_and_unregisters_on_shutdown(isolated, monkeypatch):
+    import asyncio
+    from app.services import history_watcher
+
+    async def scenario():
+        entered = asyncio.Event()
+        wakeup = asyncio.Event()
+        async def idle_watch(event):
+            entered.set()
+            await asyncio.Future()
+        monkeypatch.setattr(history_watcher, "_watch_authorized_histories", idle_watch)
+        watcher = asyncio.create_task(history_watcher.watch_authorized_histories(wakeup))
+        await entered.wait()
+        try:
+            assert await asyncio.to_thread(history_watcher.request_history_reconcile) is True
+            await asyncio.wait_for(wakeup.wait(), 1)
+        finally:
+            watcher.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await watcher
+        assert history_watcher.request_history_reconcile() is False
+    asyncio.run(scenario())
+
+
+def test_new_authorized_root_wakes_reconcile_without_filesystem_write(isolated):
+    import asyncio
+    from app.database import db, encode
+    from app.services import history_watcher
+    first = isolated / "first-history"
+    second = isolated / "second-history"
+    first.mkdir()
+    second.mkdir()
+    with db() as conn:
+        conn.execute("UPDATE connections SET enabled=1,paused=0,paths=? WHERE id='antigravity'", (encode([str(first)]),))
+
+    async def scenario():
+        wakeup = asyncio.Event()
+        watcher = asyncio.create_task(history_watcher.watch_authorized_histories(wakeup))
+        try:
+            await asyncio.wait_for(wakeup.wait(), 2)
+            wakeup.clear()
+            with db() as conn:
+                conn.execute("UPDATE connections SET paths=? WHERE id='antigravity'", (encode([str(second)]),))
+            await asyncio.wait_for(wakeup.wait(), 5)
+        finally:
+            watcher.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await watcher
+    asyncio.run(scenario())
+
+
 def test_authorized_filesystem_change_wakes_reconcile(isolated):
     import asyncio
     from app.database import db, encode
@@ -70,13 +121,15 @@ def test_authorized_filesystem_change_wakes_reconcile(isolated):
     with db() as conn:
         conn.execute("UPDATE connections SET enabled=1,paths=? WHERE id='codex'", (encode([str(root)]),))
     assert authorized_watch_roots() == (str(root.resolve()),)
+    native = root / "brain" / "session" / ".system_generated" / "logs" / "transcript_full.jsonl"
+    native.parent.mkdir(parents=True)
 
     async def exercise():
         event = asyncio.Event()
         watcher = asyncio.create_task(watch_authorized_histories(event))
         try:
             for number in range(25):
-                (root / "synthetic.jsonl").write_text('{"synthetic":' + str(number) + '}\n')
+                native.write_text('{"type":"USER_INPUT","content":"synthetic","step_index":' + str(number) + '}\n')
                 try:
                     await asyncio.wait_for(event.wait(), .2)
                     break
@@ -84,6 +137,10 @@ def test_authorized_filesystem_change_wakes_reconcile(isolated):
                     pass
             else:
                 raise AssertionError("Authorized filesystem events did not wake reconciliation")
+            event.clear()
+            with native.open("a") as handle:
+                handle.write('{"type":"PLANNER_RESPONSE","content":"Just finished"}\n')
+            await asyncio.wait_for(event.wait(), 3)
         finally:
             watcher.cancel()
             try:

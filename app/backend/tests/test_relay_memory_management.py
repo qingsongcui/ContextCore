@@ -76,7 +76,7 @@ class TestCrossAgentProjectRelay:
         assert len(discovery["candidates"]) == 2
         alpha_cand = next(c for c in discovery["candidates"] if c["project_id"] == proj_alpha["id"])
         assert alpha_cand["conversation_count"] == 1
-        assert alpha_cand["memory_count"] == 2
+        assert alpha_cand["memory_count"] == 1
         assert alpha_cand["latest_conversation_title"] == "Stripe webhook debugging"
         assert "Stripe webhook" in alpha_cand["latest_conversation_summary"]
         assert "1." in discovery["question_prompt"]
@@ -1290,7 +1290,7 @@ class TestManagementFeatureParity:
         assert str(ag_desktop.resolve()) in [str(Path(p).expanduser().resolve()) for p in ag_conn["paths"]]
         assert str(ag_ide.resolve()) in [str(Path(p).expanduser().resolve()) for p in ag_conn["paths"]]
 
-        # 10. Codex app-server fallback during relay sync when no local rollout JSONL files exist
+        # 10. Listing relay history requests background refresh; it never starts Codex.
         import json
         codex_dir = tmp_path / "codex-empty-rollouts"
         codex_dir.mkdir(parents=True, exist_ok=True)
@@ -1327,9 +1327,9 @@ class TestManagementFeatureParity:
 
         monkeypatch.setattr("app.transport.fetch_codex_sessions_sync", fake_app_server)
         sync_res = handoff_service.sync_recent_agent_chats_for_relay()
-        assert app_server_calls
-        assert any(s.get("agent_id") == "codex" for s in sync_res)
-        assert any(c.get("external_id") == "codex:app-srv-1" for c in conversation_service.list_conversations())
+        assert not app_server_calls
+        assert any(s.get("agent") == "codex" and s.get("status") == "pending" for s in sync_res)
+        assert not any(c.get("external_id") == "codex:app-srv-1" for c in conversation_service.list_conversations())
 
 
 

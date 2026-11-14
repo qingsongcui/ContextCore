@@ -322,12 +322,6 @@ def _serve_reserved(args: argparse.Namespace, resolved_dir: Path,
             print("Error: Explicit frontend distribution is unavailable", file=sys.stderr)
             return 1
 
-    try:
-        from app.integrations.installer import refresh_owned_skill_files
-        refresh_owned_skill_files()
-    except Exception:
-        pass
-
     import uvicorn
 
     server_config = uvicorn.Config(

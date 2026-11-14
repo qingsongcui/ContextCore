@@ -317,7 +317,7 @@ def test_codex_xml_title_cleaning_and_continuation_session_filtering(tmp_path, m
         messages=[
             {"role": "user", "content": "<environment_context>\n  <cwd>/Volumes/BIWIN_DEV/漫剧</cwd>\n</environment_context>"},
             {"role": "user", "content": '<external_codex_apps_open_page>{"page_id":null}</external_codex_apps_open_page>'},
-            {"role": "user", "content": "[$contextcore-handoff](/Users/qiaozhi/.agents/skills/contextcore-handoff/SKILL.md)"},
+            {"role": "user", "content": "[$contextcore-handoff](/Users/tester/.agents/skills/contextcore-handoff/SKILL.md)"},
             {"role": "user", "content": "<skill>\n<name>contextcore-handoff</name>\n</skill>"},
             {
                 "role": "assistant",
@@ -361,7 +361,7 @@ def test_one_click_connect_recovers_owned_token_and_refreshes_skill_asset(tmp_pa
     assert body1["status"] == "connected"
 
     # Simulate legacy SKILL.md owned by manifest + stale skill asset in ManagementService
-    skill_path = tmp_path / ".agents" / "skills" / "contextcore-handoff" / "SKILL.md"
+    skill_path = tmp_path / ".codex" / "skills" / "contextcore" / "SKILL.md"
     manifest_path = tmp_path / ".contextcore" / "manifests" / "codex.json"
     old_skill = b"# Legacy Skill\n1. Call assemble_context\n"
     skill_path.write_bytes(old_skill)
@@ -374,7 +374,7 @@ def test_one_click_connect_recovers_owned_token_and_refreshes_skill_asset(tmp_pa
         "asset",
         {
             "kind": "skill",
-            "name": "contextcore-handoff",
+            "name": "contextcore",
             "install_mode": "copy",
             "files": {"SKILL.md": old_skill.decode("utf-8")},
             "agent_ids": ["codex"],
@@ -440,13 +440,13 @@ def test_discover_relay_conversations_scopes_to_project_and_cleans_titles(tmp_pa
             {"role": "assistant", "content": "已梳理项目结构。"},
             {
                 "role": "user",
-                "content": "# Files mentioned by the user:\n## 闲鱼自动回复方案.docx: /Users/qiaozhi/Desktop/yu/闲鱼自动回复方案.docx\n\n## My request for Codex:\n把这里面的闲鱼和淘宝客服的都给他做完\n",
+                "content": "# Files mentioned by the user:\n## 闲鱼自动回复方案.docx: /Users/tester/Desktop/yu/闲鱼自动回复方案.docx\n\n## My request for Codex:\n把这里面的闲鱼和淘宝客服的都给他做完\n",
             },
             {"role": "assistant", "content": "好的，开始实现闲鱼与淘宝客服处理。"},
         ],
     )
 
-    # 3. Duplicate yu conversation (same agent, project, title, goal)
+    # 3. A distinct native session with the same title/goal must remain discoverable.
     yu_conv_dup = conversation_service.upsert_conversation(
         agent="codex",
         title="把这里面的闲鱼和淘宝客服的都给他做完",
@@ -470,7 +470,7 @@ def test_discover_relay_conversations_scopes_to_project_and_cleans_titles(tmp_pa
         source_path=str(tmp_path / "yu-trigger.jsonl"),
         messages=[
             {"role": "user", "content": "<environment_context>\n  <cwd>" + str(yu_dir) + "</cwd>\n</environment_context>"},
-            {"role": "user", "content": "[$contextcore-handoff](/Users/qiaozhi/.agents/skills/contextcore-handoff/SKILL.md)"},
+            {"role": "user", "content": "[$contextcore-handoff](/Users/tester/.agents/skills/contextcore-handoff/SKILL.md)"},
             {"role": "assistant", "content": "已收到 contextcore-handoff 技能。"},
         ],
     )
@@ -482,7 +482,7 @@ def test_discover_relay_conversations_scopes_to_project_and_cleans_titles(tmp_pa
     cand_ids = [c["id"] for c in disc_auto["candidates"]]
     assert other_conv["id"] not in cand_ids
     assert yu_trigger["id"] not in cand_ids
-    assert len(disc_auto["candidates"]) == 1
+    assert set(cand_ids) == {yu_conv_1["id"], yu_conv_dup["id"]}
     assert disc_auto["candidates"][0]["title"] == "把这里面的闲鱼和淘宝客服的都给他做完"
     assert "当前项目【yu】" in disc_auto["question_prompt"]
 
@@ -497,7 +497,7 @@ def test_discover_relay_conversations_scopes_to_project_and_cleans_titles(tmp_pa
         language="zh",
     )
     assert disc_cwd["scoped_project_id"] == yu_proj["id"]
-    assert len(disc_cwd["candidates"]) == 1
+    assert {c["id"] for c in disc_cwd["candidates"]} == {yu_conv_1["id"], yu_conv_dup["id"]}
     assert disc_cwd["candidates"][0]["project_name"] == "yu"
 
     # Continuation-only sessions in yu must not fall back to 漫剧.

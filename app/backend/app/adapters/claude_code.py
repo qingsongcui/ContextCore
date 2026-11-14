@@ -144,7 +144,17 @@ def _leaf_chain(entries: list[dict[str, Any]], stem: str) -> list[dict[str, Any]
 
 
 def _parse_file(path: Path, roots: list[str | Path]) -> dict[str, Any] | None:
-    validate_file_safety(path, roots)
+    try:
+        resolved_path = validate_path(path, roots)
+    except AgentAdapterError as exc:
+        raise AgentAdapterError(
+            host="claude-code",
+            code=exc.code,
+            path=exc.path or str(path),
+            detail=exc.detail,
+            retryable=exc.retryable,
+        ) from exc
+    validate_file_safety(resolved_path, host="claude-code")
     def identity(stat):
         return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
 

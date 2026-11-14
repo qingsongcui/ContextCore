@@ -48,10 +48,12 @@ def list_relay_conversations_endpoint(
     language: Literal['zh', 'en'] = 'zh',
     cwd: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
 ):
     return handoff_service.discover_relay_conversations(
         consumer=consumer,
         limit=limit,
+        offset=offset,
         sync_first=sync_first,
         language=language,
         cwd=cwd,
@@ -71,6 +73,8 @@ def relay_conversation_get_endpoint(
     query: str | None = Query(default=None),
     cwd: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
 ):
     return handoff_service.relay_conversation(
         conversation_id=conversation_id or selection,
@@ -81,6 +85,8 @@ def relay_conversation_get_endpoint(
         query=query,
         cwd=cwd,
         project_id=project_id,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -95,6 +101,8 @@ def relay_conversation_endpoint(payload: dict[str, Any] = Body(default={})):
         query=payload.get("query"),
         cwd=payload.get("cwd"),
         project_id=payload.get("project_id"),
+        limit=payload.get("limit", 25),
+        offset=payload.get("offset", 0),
     )
 
 
@@ -103,13 +111,13 @@ def relay_project_endpoint(payload: dict[str, Any] = Body(default={})):
     if "auto_confirm" in payload:
         raise HTTPException(status_code=422, detail="Relay cannot confirm a handoff; use target-Agent confirmation after user readback.")
     return handoff_service.relay_project(
-        project_id=payload.get("project_id"),
+        project_id=payload.get("project_id") or payload.get("selection"),
         consumer=payload.get("consumer") or payload.get("target_agent"),
         context_mode=payload.get("context_mode", "compressed"),
         task_id=payload.get("task_id"),
         conversation_id=payload.get("conversation_id"),
         query=payload.get("query"),
-        max_tokens=payload.get("max_tokens", 4000),
+        max_tokens=payload.get("max_tokens", 32000),
         sync_first=payload.get("sync_first", True),
         language=payload.get('language', 'zh'),
         handoff_id=payload.get('handoff_id'),

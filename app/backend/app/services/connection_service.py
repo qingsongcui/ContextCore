@@ -88,7 +88,7 @@ def _capability_detail(agent_id: str, name: str, fallback: str) -> str:
         ("omp", "compute"): "使用 --no-tools 等限制调用已登录 OMP，解析最终 JSONL 消息；临时配置禁止自动重试和备用模型切换，失败会明确显示。",
         ("cursor", "history"): "只读解析 state.vscdb 的 composerHeaders 与 cursorDiskKV 消息，已在本机历史验证；格式升级可能需要适配。",
         ("cursor", "capture"): "支持通过本地 SQLite state.vscdb 增量同步新对话。官方 hook 的实际触发与消费尚未真机验证。",
-        ("cursor", "memory_read"): "需要 /contextcore-handoff 或 MCP 读取记忆。提交前不能自动附带上下文。",
+        ("cursor", "memory_read"): "需要 /contextcore 或 MCP 读取记忆。提交前不能自动附带上下文。",
         ("cursor", "memory_write"): "授权后可通过 MCP 写入共享记忆，但不能保证每次提问前自动读到。",
         ("cursor", "handoff"): "需要显式技能或“接着做”。提交前不能自动附带接棒卡。",
         ("cursor", "compute"): "官方命令缺少可证明的无工具隔离，当前禁止用它提炼记忆。",
@@ -100,9 +100,9 @@ def _capability_detail(agent_id: str, name: str, fallback: str) -> str:
         ("antigravity", "compute"): "官方命令缺少可证明的无工具隔离，当前禁止用它提炼记忆。",
         ("claude-code", "history"): "只读解析 ~/.claude/projects 下的会话记录；只沿最后一条有效分支还原，子代理与内部标记不混进对话。",
         ("claude-code", "capture"): "提交前提示能实时采到你的提问；助手的回复要等会话记录同步后才完整。",
-        ("claude-code", "memory_read"): "需要 /contextcore-handoff 或 MCP 读取记忆。Hook 不会自动灌入（MCP 协议已真机验证）。",
+        ("claude-code", "memory_read"): "需要 /contextcore 或 MCP 读取记忆。Hook 不会自动灌入（MCP 协议已真机验证）。",
         ("claude-code", "memory_write"): "授权后可通过 MCP 写入共享记忆。这不是历史会话重建。",
-        ("claude-code", "handoff"): "可在提交前识别接棒意图，也可用 /contextcore-handoff 显式触发。",
+        ("claude-code", "handoff"): "可在提交前识别接棒意图，也可用 /contextcore 显式触发。",
         ("claude-code", "compute"): "官方命令缺少可证明的无工具隔离，当前禁止用它提炼记忆。",
         ("opencode", "history"): "只读解析本机会话数据库；子代理会话不算独立对话，旧版文件存储仅作回落。",
         ("opencode", "capture"): "插件能实时采到每次提问；助手正文要等数据库同步后才完整。",
@@ -369,7 +369,22 @@ def discover_connections(*, home: Path | None = None, env: dict[str, str] | None
 
 
 SOURCE_GLOBS: dict[str, tuple[str, ...]] = {
-    "codex": ("**/rollout*.jsonl", "**/session_index.jsonl"),
+    "codex": (
+        "**/rollout*.jsonl",
+        "**/session_index.jsonl",
+        "state_*.sqlite",
+        "state_*.sqlite-wal",
+        "state_*.sqlite-shm",
+        "thread_history_*.sqlite",
+        "thread_history_*.sqlite-wal",
+        "thread_history_*.sqlite-shm",
+        "**/state_*.sqlite",
+        "**/state_*.sqlite-wal",
+        "**/state_*.sqlite-shm",
+        "**/thread_history_*.sqlite",
+        "**/thread_history_*.sqlite-wal",
+        "**/thread_history_*.sqlite-shm",
+    ),
     "omp": ("**/*.jsonl",),
     "cursor": ("**/*.vscdb", "**/state.vscdb-wal", "**/state.vscdb-shm", "**/store.db", "**/store.db-wal", "**/store.db-shm"),
     "antigravity": ("**/transcript*.jsonl",),
@@ -405,10 +420,13 @@ def _glob_pattern_regex(pattern: str) -> re.Pattern[str]:
     return re.compile("^" + prefix + "".join(pieces) + "$")
 
 
-def _iter_directory_files(root: Path, patterns: tuple[str, ...]):
-    """Walk one directory with O(depth) memory and yield matching regular files."""
+def _iter_directory_files(root: str | Path, patterns: tuple[str, ...]):
+    """Walk one directory with O(depth) memory and yield matching regular file paths as strings."""
+    from app.adapters.base import raw_path_str
+
+    root_str = raw_path_str(root)
     matchers = tuple(_glob_pattern_regex(pattern) for pattern in patterns)
-    stack = [os.scandir(root)]
+    stack = [os.scandir(root_str)]
     try:
         while stack:
             try:
@@ -425,10 +443,9 @@ def _iter_directory_files(root: Path, patterns: tuple[str, ...]):
                     continue
                 if not entry.is_file(follow_symlinks=True):
                     continue
-                candidate = Path(entry.path)
-                relative = candidate.relative_to(root).as_posix()
+                relative = os.path.relpath(entry.path, root_str).replace("\\", "/")
                 if any(pattern.fullmatch(relative) for pattern in matchers):
-                    yield candidate
+                    yield entry.path
             except OSError:
                 continue
     finally:
@@ -437,20 +454,26 @@ def _iter_directory_files(root: Path, patterns: tuple[str, ...]):
 
 
 def _iter_source_files(connection_id: str, paths: list[str]):
-    """Yield discovered files without retaining a duplicate full-tree inventory."""
-    from app.adapters.base import deduplicate_roots
+    """Yield discovered file paths as strings without retaining a duplicate full-tree inventory."""
+    from app.adapters.base import deduplicate_roots, raw_path_str
 
     patterns = SOURCE_GLOBS.get(connection_id, ("**/*",))
-    for root in deduplicate_roots([Path(raw).expanduser() for raw in paths]):
+    for root in deduplicate_roots([os.path.expanduser(raw_path_str(raw)) for raw in paths]):
+        root_str = raw_path_str(root)
         try:
-            if connection_id == "claude-code" and root.is_dir() and root.name == ".claude" and (root / "projects").is_dir():
-                root = root / "projects"
-            if root.is_file():
-                yield root
+            if (
+                connection_id == "claude-code"
+                and os.path.isdir(root_str)
+                and os.path.basename(root_str.rstrip("/\\")) == ".claude"
+                and os.path.isdir(os.path.join(root_str, "projects"))
+            ):
+                root_str = os.path.join(root_str, "projects")
+            if os.path.isfile(root_str):
+                yield root_str
                 continue
-            if not root.is_dir():
+            if not os.path.isdir(root_str):
                 continue
-            yield from _iter_directory_files(root, patterns)
+            yield from _iter_directory_files(root_str, patterns)
         except OSError:
             continue
 
@@ -459,15 +482,15 @@ def _source_fingerprint(connection_id: str, paths: list[str], *, budget=None) ->
     """Cheap stat-only fingerprint. Avoids parsing unchanged host histories every cycle."""
     digest = hashlib.sha256()
     found = False
-    for path in _iter_source_files(connection_id, paths):
+    for path_str in _iter_source_files(connection_id, paths):
         if budget:
             budget.checkpoint()
         try:
-            stat = path.stat()
+            stat = os.stat(path_str)
         except OSError:
             continue
         found = True
-        digest.update(str(path).encode("utf-8"))
+        digest.update(path_str.encode("utf-8"))
         digest.update(b"\0")
         digest.update(str(stat.st_mtime_ns).encode("ascii"))
         digest.update(b"\0")
@@ -491,14 +514,15 @@ def ensure_source_cursor_schema(conn=None) -> None:
     )""")
 
 
-def _snapshot_source(host: str, path: Path, roots: list[str], previous: dict[str, Any] | None = None, *, budget=None) -> dict[str, Any]:
-    from app.adapters.base import MAX_LINE_LENGTH, validate_file_safety, validate_path
-    canonical = validate_path(path, roots)
-    if canonical.is_dir():
+def _snapshot_source(host: str, path: str | Path, roots: list[str], previous: dict[str, Any] | None = None, *, budget=None) -> dict[str, Any]:
+    from app.adapters.base import MAX_LINE_LENGTH, validate_file_safety, validate_path_str
+
+    canonical = validate_path_str(path, roots)
+    if os.path.isdir(canonical):
         if host != "opencode":
             from app.adapters import AgentAdapterError
-            raise AgentAdapterError(host=host, code="unsupported_format", path=str(canonical), detail="Directory snapshots are supported only for OpenCode legacy storage.")
-        before = canonical.stat()
+            raise AgentAdapterError(host=host, code="unsupported_format", path=canonical, detail="Directory snapshots are supported only for OpenCode legacy storage.")
+        before = os.stat(canonical)
         identity = [before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns]
         digest = hashlib.sha256()
         # Legacy OpenCode contains session, message and part JSON. Hash each
@@ -506,43 +530,46 @@ def _snapshot_source(host: str, path: Path, roots: list[str], previous: dict[str
         for candidate in _iter_directory_files(canonical, ("**/*.json",)):
             if budget:
                 budget.checkpoint()
-            safe_path = validate_path(candidate, [canonical])
-            stat = safe_path.stat()
-            digest.update(safe_path.relative_to(canonical).as_posix().encode("utf-8"))
+            safe_path = validate_path_str(candidate, [canonical])
+            stat = os.stat(safe_path)
+            rel = os.path.relpath(safe_path, canonical).replace("\\", "/")
+            digest.update(rel.encode("utf-8"))
             digest.update(b"\0")
             digest.update(encode([stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns]).encode("ascii"))
             digest.update(b"\n")
-        after = canonical.stat()
+        after = os.stat(canonical)
         if identity != [after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns]:
             from app.adapters import AgentAdapterError
-            raise AgentAdapterError(host=host, code="file_changed", path=str(canonical), detail="Legacy storage changed while indexing", retryable=True)
-        return {"source_path": str(canonical), "fingerprint": digest.hexdigest(),
+            raise AgentAdapterError(host=host, code="file_changed", path=canonical, detail="Legacy storage changed while indexing", retryable=True)
+        return {"source_path": canonical, "fingerprint": digest.hexdigest(),
                 "file_identity": encode(identity[:2]), "complete_offset": 0}
     validate_file_safety(canonical, host=host)
-    st = canonical.stat()
+    st = os.stat(canonical)
     identity = [st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns]
     state = [identity]
+    ext = os.path.splitext(canonical)[1]
     # WAL is part of the database's state. Never use immutable=1 to hide live WAL.
-    if canonical.suffix in {".db", ".sqlite", ".vscdb"}:
-        wal = Path(str(canonical) + "-wal")
-        if wal.is_symlink() or Path(str(canonical) + "-shm").is_symlink():
+    if ext in {".db", ".sqlite", ".vscdb"}:
+        wal = canonical + "-wal"
+        shm = canonical + "-shm"
+        if os.path.islink(wal) or os.path.islink(shm):
             from app.adapters import AgentAdapterError
-            raise AgentAdapterError(host=host, code="symlink_escape", path=str(wal), detail="SQLite sidecar symlink is not a granted snapshot")
-        if wal.exists():
+            raise AgentAdapterError(host=host, code="symlink_escape", path=wal, detail="SQLite sidecar symlink is not a granted snapshot")
+        if os.path.exists(wal):
             # Exact SQLite-file grants include its named WAL sidecar, never the
             # rest of the parent directory. Symlink sidecars were refused above.
-            validate_path(wal, [str(canonical.parent)])
-            w = wal.stat()
+            validate_path_str(wal, [os.path.dirname(canonical)])
+            w = os.stat(wal)
             state.append([w.st_dev, w.st_ino, w.st_size, w.st_mtime_ns, w.st_ctime_ns])
     fingerprint = hashlib.sha256(encode(state).encode()).hexdigest()
     offset = st.st_size
-    if previous and previous.get("fingerprint") == fingerprint:
+    if previous and previous.get("fingerprint") == fingerprint and previous.get("status") != "error":
         offset = int(previous["complete_offset"])
-    elif canonical.suffix == ".jsonl" and st.st_size:
+    elif ext == ".jsonl" and st.st_size:
         # Usually the final byte is a newline. Never read an 8 MiB suffix from
         # every unchanged source on every lifecycle tick.
         offset = 0
-        with canonical.open("rb") as handle:
+        with open(canonical, "rb") as handle:
             end = st.st_size
             scanned = 0
             while end > 0 and scanned <= MAX_LINE_LENGTH:
@@ -555,8 +582,9 @@ def _snapshot_source(host: str, path: Path, roots: list[str], previous: dict[str
                     break
                 scanned += end - start
                 end = start
-    return {"source_path": str(canonical), "fingerprint": fingerprint,
-            "file_identity": encode(identity[:2]), "complete_offset": offset}
+    return {"source_path": canonical, "fingerprint": fingerprint,
+            "file_identity": encode(identity[:2]), "complete_offset": offset,
+            "modified_ns": st.st_mtime_ns}
 
 
 _TERMINAL_SOURCE_ERRORS = frozenset({
@@ -681,12 +709,12 @@ def _opencode_source_plan(roots: list[str], force: bool, *, budget=None, skip_so
     return selected, snapshots, [], pending
 
 
-def _source_plan(host: str, roots: list[str], force: bool, *, budget=None, skip_sources: set[str] | None = None, skip_failures_since: str | None = None) -> tuple[list[str], dict[str, dict[str, Any]], list[dict[str, Any]], int]:
+def _source_plan(host: str, roots: list[str], force: bool, *, budget=None, skip_sources: set[str] | None = None, skip_failures_since: str | None = None, source_paths: list[str] | None = None) -> tuple[list[str], dict[str, dict[str, Any]], list[dict[str, Any]], int]:
     from app.adapters import AgentAdapterError
     from app.adapters.base import deduplicate_roots
     if not deduplicate_roots(roots):
         raise AgentAdapterError(host=host, code="root_not_granted", detail="None of the configured history roots exist or are authorized.")
-    if host == "opencode":
+    if host == "opencode" and source_paths is None:
         return _opencode_source_plan(roots, force, budget=budget, skip_sources=skip_sources,
                                      skip_failures_since=skip_failures_since)
     snapshots: dict[str, dict[str, Any]] = {}
@@ -714,18 +742,20 @@ def _source_plan(host: str, roots: list[str], force: bool, *, budget=None, skip_
         ensure_source_cursor_schema(conn)
         conn.commit()
         pending_commit_count = 0
-        for source in _iter_source_files(host, roots):
+        for source in (_iter_source_files(host, roots) if source_paths is None else source_paths):
             if budget:
                 budget.checkpoint()
-            if source.name.endswith(("-wal", "-shm")):
+            if os.path.basename(source).endswith(("-wal", "-shm")):
                 continue
+            old = None
+            canonical = ""
             try:
-                canonical = str(source.resolve())
+                canonical = os.path.realpath(source)
                 old_row = conn.execute("SELECT * FROM source_sync_cursors WHERE host = ? AND source_path = ?", (host, canonical)).fetchone()
                 old = dict(old_row) if old_row else None
                 snapshot = _snapshot_source(host, source, roots, old)
             except (AgentAdapterError, OSError) as exc:
-                failures.append({"path": str(source), "code": getattr(exc, "code", "permission_denied"), "detail": str(exc)})
+                failures.append({"path": source, "code": getattr(exc, "code", "permission_denied"), "detail": str(exc)})
                 if old and old.get("status") == "pending":
                     _write_source_cursor(conn, host, {"source_path": canonical}, error=f"{getattr(exc, 'code', 'permission_denied')}: {str(exc)}")
                     pending_commit_count += 1
@@ -735,8 +765,9 @@ def _source_plan(host: str, roots: list[str], force: bool, *, budget=None, skip_
                 first_source_snapshot = snapshot
             if path in skipped:
                 continue
-            changed = _source_changed(old, snapshot, force, skip_failures_since=skip_failures_since)
-            if host == "codex" and Path(path).name == "session_index.jsonl":
+            retry_target = source_paths is not None and old is not None and old.get("status") == "error"
+            changed = _source_changed(old, snapshot, force or retry_target, skip_failures_since=skip_failures_since)
+            if host == "codex" and os.path.basename(path) == "session_index.jsonl":
                 index_snapshots[path] = snapshot
                 index_changed = index_changed or changed
                 if budget and changed:
@@ -766,19 +797,22 @@ def _source_plan(host: str, roots: list[str], force: bool, *, budget=None, skip_
                     pending_commit_count = 0
             if not budget:
                 changed_paths.append(path)
-            key = (bool(old and old.get("status") == "error"), str(old.get("updated_at") or "") if old else "", path)
+            # Native modification time, not last import time or lexical UUID,
+            # decides which new/changed session gets the next bounded batch.
+            key = (bool(old and old.get("status") == "error"),
+                   -int(snapshot.get("modified_ns", 0)), path)
             if budget and host == "opencode":
-                if Path(path).name == "opencode.db":
+                if os.path.basename(path) == "opencode.db":
                     opencode_db_changed += 1
                     add_candidate(key, path, snapshot)
-                elif Path(path).suffix == ".json":
+                elif os.path.splitext(path)[1] == ".json":
                     opencode_legacy_changed = True
                 continue
             if not budget:
                 snapshots[path] = snapshot
                 continue
             if host == "antigravity":
-                parent = str(Path(path).parent)
+                parent = os.path.dirname(path)
                 current = antigravity_groups.get(parent)
                 if current is None or key < current[0]:
                     antigravity_groups[parent] = (key, path)
@@ -794,8 +828,8 @@ def _source_plan(host: str, roots: list[str], force: bool, *, budget=None, skip_
             snapshots.update(index_snapshots)
             selected = list(snapshots)
         elif host == "antigravity":
-            parents = {str(Path(path).parent) for path in changed_paths}
-            selected = [path for path in snapshots if str(Path(path).parent) in parents]
+            parents = {os.path.dirname(path) for path in changed_paths}
+            selected = [path for path in snapshots if os.path.dirname(path) in parents]
         elif host == "opencode" and changed_paths:
             selected = list(snapshots)
         else:
@@ -814,18 +848,18 @@ def _source_plan(host: str, roots: list[str], force: bool, *, budget=None, skip_
                 snapshots = {}
                 for source in _iter_source_files(host, roots):
                     budget.checkpoint()
-                    if source.suffix != ".json":
+                    if os.path.splitext(source)[1] != ".json":
                         continue
                     try:
-                        old = _cursor_for_source(host, str(source.resolve()))
+                        old = _cursor_for_source(host, os.path.realpath(source))
                         snapshot = _snapshot_source(host, source, roots, old)
                         snapshots[snapshot["source_path"]] = snapshot
                     except (AgentAdapterError, OSError) as exc:
-                        failures.append({"path": str(source), "code": getattr(exc, "code", "permission_denied"), "detail": str(exc)})
+                        failures.append({"path": source, "code": getattr(exc, "code", "permission_denied"), "detail": str(exc)})
                 # Retain selected independent databases alongside the legacy group.
-                snapshots.update({path: snap for _, path, snap in candidates if Path(path).name == "opencode.db"})
+                snapshots.update({path: snap for _, path, snap in candidates if os.path.basename(path) == "opencode.db"})
             selected = list(snapshots)
-            pending_sources = max(0, opencode_db_changed - sum(1 for path in snapshots if Path(path).name == "opencode.db"))
+            pending_sources = max(0, opencode_db_changed - sum(1 for path in snapshots if os.path.basename(path) == "opencode.db"))
             return selected, snapshots, failures, pending_sources
         if first_source_snapshot is not None:
             # Retain one metadata row to let sync_connection distinguish an
@@ -838,43 +872,56 @@ def _source_plan(host: str, roots: list[str], force: bool, *, budget=None, skip_
         # Grouped transcripts are atomic. Expand only the selected session
         # directories, so planner memory stays proportional to the batch.
         for parent, (_, representative) in antigravity_groups.items():
-            directory = Path(parent)
-            candidates_in_group = ([Path(representative)] if len(roots) == 1 and Path(roots[0]).is_file()
-                                   else directory.glob("transcript*.jsonl"))
+            if len(roots) == 1 and os.path.isfile(os.path.expanduser(str(roots[0]))):
+                candidates_in_group = [representative]
+            else:
+                try:
+                    with os.scandir(parent) as it:
+                        candidates_in_group = [
+                            entry.path for entry in it
+                            if entry.name.startswith("transcript") and entry.name.endswith(".jsonl")
+                        ]
+                except OSError:
+                    candidates_in_group = []
             for source in candidates_in_group:
-                if not source.is_file():
+                if not os.path.isfile(source):
                     continue
                 budget.checkpoint()
+                canonical = ""
                 try:
-                    canonical = str(source.resolve())
+                    canonical = os.path.realpath(source)
                     with db() as conn:
                         old_row = conn.execute("SELECT * FROM source_sync_cursors WHERE host = ? AND source_path = ?", (host, canonical)).fetchone()
                     old = dict(old_row) if old_row else None
                     snapshot = _snapshot_source(host, source, roots, old)
                     snapshots[snapshot["source_path"]] = snapshot
                 except (AgentAdapterError, OSError) as exc:
-                    failures.append({"path": str(source), "code": getattr(exc, "code", "permission_denied"), "detail": str(exc)})
+                    failures.append({"path": source, "code": getattr(exc, "code", "permission_denied"), "detail": str(exc)})
                     with db() as conn:
                         _write_source_cursor(conn, host, {"source_path": canonical}, error=f"{getattr(exc, 'code', 'permission_denied')}: {str(exc)}")
         selected = list(snapshots)
+        if source_paths is not None:
+            if not selected and first_source_snapshot is not None:
+                snapshots[first_source_snapshot["source_path"]] = first_source_snapshot
+            return selected, snapshots, failures, 0
         # Count durable pending directories in path order, so sibling transcripts
         # collapse to one group without building a set proportional to the tree.
-        from app.adapters.base import validate_path
+        from app.adapters.base import validate_path_str
         total_pending_groups = 0
         previous_parent = None
-        failed_path_set = {str(Path(f["path"]).resolve()) for f in failures if f.get("path")}
+        failed_path_set = {os.path.realpath(f["path"]) for f in failures if f.get("path")}
         with db() as conn:
             rows = conn.execute("SELECT source_path FROM source_sync_cursors WHERE host=? AND status='pending' ORDER BY source_path", (host,))
             for (pending_path,) in rows:
                 if pending_path in failed_path_set:
                     continue
                 try:
-                    authorized = validate_path(pending_path, roots)
+                    authorized = validate_path_str(pending_path, roots)
                 except AgentAdapterError:
                     continue
-                if not authorized.is_file():
+                if not os.path.isfile(authorized):
                     continue
-                parent = str(authorized.parent)
+                parent = os.path.dirname(authorized)
                 if parent != previous_parent:
                     total_pending_groups += 1
                     previous_parent = parent
@@ -1002,8 +1049,175 @@ def sync_connection(connection_id: str, force: bool = True, *, allow_execution: 
         return result
 
 
+def sync_recent_connections_for_relay() -> list[dict[str, Any]]:
+    """Request newest background batches; listing never waits for native parsing."""
+    from app.services.history_watcher import request_history_reconcile
+
+    with db() as conn:
+        hosts = [row[0] for row in conn.execute(
+            "SELECT id FROM connections WHERE enabled=1 AND paused=0 ORDER BY id")]
+    if not hosts:
+        return []
+    requested = request_history_reconcile()
+    reason = "background_refresh_requested" if requested else "background_refresh_unavailable"
+    return [{"agent": host, "status": "pending", "reason": reason,
+             "processed_sources": 0} for host in hosts]
+
+
+def sync_conversation_for_relay(identifier: str, *, agent: str | None = None,
+                                source_path: str | None = None) -> list[dict[str, Any]]:
+    """Refresh a selected native source without draining any host's history backlog.
+
+    Unknown IDs are probed only at Antigravity's native session locations. Other
+    hosts need an already indexed source path; absence never grants a wider scan.
+    """
+    from app.adapters import AgentAdapterError
+    from app.adapters.base import validate_path_str
+    from app.adapters.antigravity import _conversation_external_id, _extract_session_id
+    from app.services.sync_budget import SyncBudget
+
+    identifier = str(identifier).strip()
+    if agent is None and identifier.startswith("antigravity:"):
+        agent = "antigravity"
+    connections = [item for item in list_connections()
+                   if item["id"] == (agent or "antigravity")]
+    results: list[dict[str, Any]] = []
+    for connection in connections:
+        host = connection["id"]
+        status = {"agent": host}
+        if not connection.get("enabled") or connection.get("paused"):
+            results.append({**status, "status": "skipped", "reason": "connection_inactive"})
+            continue
+        roots = connection.get("paths", [])
+        expected_external_id = None
+        if source_path:
+            with db() as conn:
+                target_row = conn.execute(
+                    "SELECT external_id FROM conversations WHERE agent=? AND (id=? OR external_id=?) LIMIT 1",
+                    (host, identifier, identifier),
+                ).fetchone()
+            expected_external_id = (target_row["external_id"] if target_row
+                                    else identifier if identifier.startswith(host + ":") else f"{host}:{identifier}")
+            if not expected_external_id:
+                results.append({**status, "status": "skipped", "reason": "target_identity_unavailable"})
+                continue
+        candidates: list[str] = []
+        if source_path:
+            physical = source_path.rsplit("#", 1)[0] if host == "opencode" else source_path
+            try:
+                path = validate_path_str(physical, roots)
+                if not os.path.isfile(path) or (host == "opencode" and os.path.basename(path) != "opencode.db"):
+                    results.append({**status, "status": "skipped", "reason": "targeted_source_unavailable"})
+                    continue
+                candidates.append(path)
+            except (AgentAdapterError, OSError) as exc:
+                results.append({**status, "status": "error", "reason": getattr(exc, "code", "source_unavailable")})
+                continue
+        elif host == "antigravity":
+            session_id = identifier.rsplit(":", 1)[-1]
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,199}", session_id):
+                results.append({**status, "status": "skipped", "reason": "native_session_not_found"})
+                continue
+            for raw_root in roots:
+                root = Path(raw_root).expanduser()
+                if root.is_file():
+                    possible = [root]
+                else:
+                    # Fixed native layouts, not recursive globbing over old sessions.
+                    bases = [root / session_id, root / "brain" / session_id]
+                    bases.extend(root / surface / "brain" / session_id
+                                 for surface in ("antigravity", "antigravity-cli", "antigravity-ide"))
+                    if root.name == session_id:
+                        bases.append(root)
+                    directories = [directory for base in bases
+                                   for directory in (base, base / "logs", base / ".system_generated" / "logs")]
+                    if root.name == "logs" and _extract_session_id(root / "transcript.jsonl") == session_id:
+                        directories.append(root)
+                    possible = []
+                    for directory in directories:
+                        if not directory.is_dir():
+                            continue
+                        try:
+                            safe_directory = validate_path_str(directory, roots)
+                            with os.scandir(safe_directory) as entries:
+                                possible.extend(Path(entry.path) for entry in entries
+                                                if entry.name.startswith("transcript") and entry.name.endswith(".jsonl"))
+                        except (AgentAdapterError, OSError):
+                            continue
+                for candidate in possible:
+                    if _extract_session_id(candidate) != session_id:
+                        continue
+                    if identifier.startswith("antigravity:") and _conversation_external_id(candidate, session_id) != identifier:
+                        continue
+                    try:
+                        path = validate_path_str(candidate, roots)
+                        if os.path.isfile(path) and path not in candidates:
+                            candidates.append(path)
+                    except (AgentAdapterError, OSError):
+                        continue
+        if host == "antigravity" and source_path and candidates:
+            # The indexed companion can be unchanged while its native sibling
+            # receives the final response. Observe the whole authorized group.
+            try:
+                parent = validate_path_str(os.path.dirname(candidates[0]), roots)
+                with os.scandir(parent) as entries:
+                    for entry in entries:
+                        if not entry.name.startswith("transcript") or not entry.name.endswith(".jsonl"):
+                            continue
+                        try:
+                            path = validate_path_str(entry.path, roots)
+                            if os.path.isfile(path) and path not in candidates:
+                                candidates.append(path)
+                        except (AgentAdapterError, OSError):
+                            continue
+            except (AgentAdapterError, OSError):
+                pass  # Exact-file grants never authorize companion discovery.
+        if not candidates:
+            results.append({**status, "status": "skipped", "reason": "native_session_not_found"})
+            continue
+        with _sync_locks_guard:
+            lock = _sync_locks.setdefault(host, threading.Lock())
+        # A whole-host foreground reconciliation may already own this lock.
+        # Relay must report pending freshness rather than wait behind that backlog.
+        if not lock.acquire(blocking=False):
+            results.append({**status, "status": "skipped", "reason": "sync_in_progress"})
+            continue
+        try:
+            control = SyncBudget(threading.Event(), duty_cycle=1.0)
+            control.max_sources = len(candidates)
+            # A ready file cursor proves only the source was read, not that this
+            # particular identity still exists in a rotated file/shared database.
+            result = _sync_connection_impl(host, bool(expected_external_id), allow_execution=False,
+                                           budget=control, source_paths=candidates,
+                                           expected_external_id=expected_external_id)
+            source_error = result.get("source_error", result.get("error"))
+            result_status = "partial" if source_error else (result.get("status") or "ok")
+            reason = result.get("reason")
+            if result.get("advanced_sources"):
+                # A consistent snapshot was imported, but the source kept growing
+                # during the read: never report this selection as fully fresh.
+                result_status = "partial"
+                reason = reason or "source_changed_during_read"
+            if expected_external_id and not result.get("target_observed") and result_status not in {"error", "waiting"}:
+                result_status = "partial"
+                reason = "target_not_observed"
+            results.append({**status, "status": result_status, "reason": reason,
+                            "processed_sources": result.get("processed_sources", 0),
+                            "pending_sources": result.get("pending_sources", 0),
+                            "error": source_error,
+                            "connection_error": result.get("error"),
+                            "target_observed": result.get("target_observed")})
+        except HTTPException as exc:
+            results.append({**status, "status": "error", "reason": str(exc.detail)})
+        finally:
+            lock.release()
+    return results
+
+
 def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: bool, budget=None,
-                          skip_sources: set[str] | None = None, skip_failures_since: str | None = None) -> dict[str, Any]:
+                          skip_sources: set[str] | None = None, skip_failures_since: str | None = None,
+                          source_paths: list[str] | None = None,
+                          expected_external_id: str | None = None) -> dict[str, Any]:
     from app.adapters import AgentAdapterError, PartialHistoryError, read_sessions
     from app.services import conversation_service, project_service
 
@@ -1015,10 +1229,11 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
     roots = conn_data.get("paths", [])
     connection_revision = conn_data.get("updated_at")
     now = now_iso()
+    target_observed = False
     try:
         selected, snapshots, partial_failures, pending_sources = _source_plan(
             connection_id, roots, force, budget=budget, skip_sources=skip_sources,
-            skip_failures_since=skip_failures_since)
+            skip_failures_since=skip_failures_since, source_paths=source_paths)
     except AgentAdapterError as exc:
         message = f"{exc.code}: {exc.detail}"
         with db() as conn:
@@ -1109,10 +1324,16 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
                          (now, note, now, connection_id))
             log_audit(actor="user", action="connection.sync", target=connection_id, result=result, conn=conn)
         updated = get_connection(connection_id)
-        return {**updated, "status": "skipped", "connection": updated, "reason": "source_unchanged"}
+        return {**updated, "status": "skipped", "connection": updated, "reason": "source_unchanged",
+                **({"source_error": None} if source_paths is not None else {})}
     usage_failures = []
     usage_failed_paths = set()
     unstable: set[str] = set()
+    # A live SQLite source whose WAL advanced during the read is not a failed
+    # source: the consistent snapshot stays importable and the unread tail is
+    # left for the next incremental pass. Tracked apart from partial_failures so
+    # the host receipt stays honest ("ok") without certifying the newer data.
+    advanced_sqlite_paths: set[str] = set()
 
     def ensure_sync_authority() -> None:
         current = get_connection(connection_id)
@@ -1127,8 +1348,8 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
         if not selected:
             return
         from app.adapters.opencode import iter_opencode_sessions
-        database_paths = [path for path in selected if Path(path).name == "opencode.db"]
-        legacy_paths = [path for path in selected if Path(path).is_dir() or Path(path).suffix == ".json"]
+        database_paths = [path for path in selected if os.path.basename(path) == "opencode.db"]
+        legacy_paths = [path for path in selected if os.path.isdir(path) or os.path.splitext(path)[1] == ".json"]
         groups = [[path] for path in database_paths]
         if legacy_paths:
             groups.append(legacy_paths)
@@ -1154,7 +1375,13 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
                     if before is None:
                         continue
                     try:
-                        if _snapshot_source(connection_id, Path(path), roots, before, budget=budget)["fingerprint"] != before["fingerprint"]:
+                        current_snap = _snapshot_source(connection_id, path, roots, before, budget=budget)
+                        if current_snap["fingerprint"] != before["fingerprint"]:
+                            if (os.path.splitext(path)[1] in {".db", ".sqlite", ".vscdb"}
+                                    and before.get("file_identity")
+                                    and before["file_identity"] == current_snap.get("file_identity")):
+                                advanced_sqlite_paths.add(path)
+                                continue
                             raise OSError("Source changed during sync")
                     except (OSError, AgentAdapterError) as exc:
                         changed = True
@@ -1177,29 +1404,98 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
         session_titles = None
         if connection_id == "codex" and selected:
             from app.adapters import codex
-            wanted = {
-                session_id for path in selected
-                if Path(path).name != "session_index.jsonl"
-                if (session_id := codex._rollout_session_id(Path(path), roots))
-            }
+            wanted: set[str] = set()
+            for path in selected:
+                if os.path.basename(path) == "session_index.jsonl" or not path.endswith(".jsonl"):
+                    continue
+                try:
+                    sid = codex._rollout_session_id(Path(path), roots)
+                    if sid:
+                        wanted.add(sid)
+                except AgentAdapterError:
+                    continue
             # One bounded, batch-level title projection avoids rescanning and
             # retaining the whole session index once per rollout.
-            session_titles = codex._load_session_titles(roots, wanted)
+            session_titles = codex._load_session_titles(roots, wanted) if wanted else None
         if connection_id == "opencode" or not selected:
             groups = [selected]
         elif connection_id == "antigravity":
             grouped_paths = {}
             for path in selected:
-                grouped_paths.setdefault(str(Path(path).parent), []).append(path)
+                grouped_paths.setdefault(os.path.dirname(path), []).append(path)
             groups = list(grouped_paths.values())
+        elif connection_id == "codex":
+            indexes = [path for path in selected if os.path.basename(path) == "session_index.jsonl"]
+            sqlite_by_dir: dict[str, list[str]] = {}
+            jsonl_paths: list[str] = []
+            for path in selected:
+                if path in indexes:
+                    continue
+                if path.endswith(".sqlite"):
+                    sqlite_by_dir.setdefault(os.path.dirname(path), []).append(path)
+                else:
+                    jsonl_paths.append(path)
+            groups = [
+                *([*paths, *indexes] for paths in sqlite_by_dir.values()),
+                *([path, *indexes] for path in jsonl_paths),
+            ]
         else:
-            indexes = [path for path in selected if Path(path).name == "session_index.jsonl"]
+            indexes = [path for path in selected if os.path.basename(path) == "session_index.jsonl"]
             groups = [[path, *indexes] for path in selected if path not in indexes]
         for group in groups:
             budget.checkpoint()
             # The pre-import recheck can already see a moved snapshot. Parsing it
             # would only produce a result the import loop is required to drop.
             if any(path in unstable for path in group):
+                continue
+            is_codex_sqlite_group = (
+                connection_id == "codex"
+                and any(p.endswith(".sqlite") for p in group)
+                and not any(p.endswith(".jsonl") and os.path.basename(p) != "session_index.jsonl" for p in group)
+                and getattr(read_sessions, "__module__", "") == "app.adapters"
+            )
+            if is_codex_sqlite_group:
+                from app.adapters.codex import iter_codex_sqlite_sessions
+                spool = tempfile.SpooledTemporaryFile(max_size=64 * 1024, mode="w+t", encoding="utf-8")
+                try:
+                    try:
+                        for session in iter_codex_sqlite_sessions(roots, source_paths=group, session_titles=session_titles):
+                            budget.checkpoint()
+                            ensure_sync_authority()
+                            spool.write(json_module.dumps(session, ensure_ascii=False))
+                            spool.write("\n")
+                    except AgentAdapterError as exc:
+                        failed = os.path.realpath(exc.path) if exc.path else None
+                        affected = [failed] if failed in group else [p for p in group if p.endswith(".sqlite")] or group
+                        partial_failures.extend({"path": path, "code": exc.code, "detail": exc.detail} for path in affected)
+                        continue
+                    changed = False
+                    for path in group:
+                        before = snapshots.get(path)
+                        if before is None:
+                            continue
+                        try:
+                            current_snap = _snapshot_source(connection_id, path, roots, before, budget=budget)
+                            if current_snap["fingerprint"] != before["fingerprint"]:
+                                if os.path.splitext(path)[1] in {".db", ".sqlite", ".vscdb"}:
+                                    before_id = before.get("file_identity")
+                                    current_id = current_snap.get("file_identity")
+                                    if before_id and current_id and before_id == current_id:
+                                        advanced_sqlite_paths.add(path)
+                                        continue
+                                raise OSError("Source changed during sync")
+                        except (OSError, AgentAdapterError):
+                            changed = True
+                    if changed:
+                        partial_failures.extend({"path": path, "code": "file_changed"} for path in group)
+                    else:
+                        spool.seek(0)
+                        for line in spool:
+                            budget.checkpoint()
+                            ensure_sync_authority()
+                            yield json_module.loads(line)
+                finally:
+                    spool.close()
                 continue
             try:
                 batch = read_sessions(connection_id, roots, source_paths=group if snapshots else None,
@@ -1213,8 +1509,8 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
                 else:
                     if not group:
                         raise
-                    failed = str(Path(exc.path).resolve()) if exc.path else None
-                    affected = [failed] if failed in group else [path for path in group if Path(path).name != "session_index.jsonl"] or group
+                    failed = os.path.realpath(exc.path) if exc.path else None
+                    affected = [failed] if failed in group else [path for path in group if os.path.basename(path) != "session_index.jsonl"] or group
                     partial_failures.extend({"path": path, "code": exc.code, "detail": exc.detail} for path in affected)
                     continue
             changed = False
@@ -1223,7 +1519,14 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
                 if before is None:
                     continue
                 try:
-                    if _snapshot_source(connection_id, Path(path), roots, before)["fingerprint"] != before["fingerprint"]:
+                    current_snap = _snapshot_source(connection_id, path, roots, before, budget=budget)
+                    if current_snap["fingerprint"] != before["fingerprint"]:
+                        if os.path.splitext(path)[1] in {".db", ".sqlite", ".vscdb"}:
+                            before_id = before.get("file_identity")
+                            current_id = current_snap.get("file_identity")
+                            if before_id and current_id and before_id == current_id:
+                                advanced_sqlite_paths.add(path)
+                                continue
                         raise OSError("Source changed during sync")
                 except (OSError, AgentAdapterError):
                     changed = True
@@ -1290,38 +1593,45 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
                 sessions = iter(())
             else:
                 raise
-        failed_paths = {str(Path(f["path"]).resolve()) for f in partial_failures if f.get("path")}
-        # Recheck BEFORE importing: an adapter must not commit a moving snapshot.
+        failed_paths = {os.path.realpath(f["path"]) for f in partial_failures if f.get("path")}
+        # Changed text/replaced files are unsafe; same-file SQLite snapshots stay
+        # usable but never certify newer WAL content as already imported.
         for path, before in snapshots.items():
             if path in unstable:
                 continue
-            canonical_p = Path(path)
             try:
-                current_snap = _snapshot_source(connection_id, canonical_p, roots, before, budget=budget)
+                current_snap = _snapshot_source(connection_id, path, roots, before, budget=budget)
                 if current_snap["fingerprint"] != before["fingerprint"]:
-                    # For SQLite databases (.db, .sqlite, .vscdb), SQLite's read transaction
-                    # gives snapshot isolation. If the main DB file identity is stable, WAL growth/activity
-                    # during or after read is normal concurrent behavior. We keep the valid consistent snapshot
-                    # and record the updated fingerprint.
-                    if canonical_p.suffix in {".db", ".sqlite", ".vscdb"}:
+                    # Keep SQLite's consistent read, but retain the original
+                    # fingerprint so the newer WAL is retried on the next pass.
+                    # Only the relay receipt reports it as not-yet-fresh; the
+                    # host receipt stays "ok" because nothing failed to read.
+                    if os.path.splitext(path)[1] in {".db", ".sqlite", ".vscdb"}:
                         before_id = before.get("file_identity")
                         current_id = current_snap.get("file_identity")
                         if before_id and current_id and before_id == current_id:
-                            snapshots[path] = current_snap
+                            advanced_sqlite_paths.add(path)
                             continue
                     raise OSError("Source changed during sync")
             except (OSError, AgentAdapterError) as exc:
                 unstable.add(path)
                 partial_failures.append({"path": path, "code": "file_changed", "detail": str(exc)})
         failed_paths |= unstable
-        if connection_id == "codex" and any(Path(p).name == "session_index.jsonl" for p in snapshots):
+        if connection_id == "codex" and any(os.path.basename(p) == "session_index.jsonl" for p in snapshots):
             try:
                 from app.adapters import codex
                 titles = codex._load_session_titles(roots)
                 if titles:
                     with db() as conn:
+                        conversation_service._ensure_relay_index(conn)
                         for sid, title in titles.items():
                             if sid and title:
+                                conn.execute(
+                                    "DELETE FROM conversation_relay_index WHERE conversation_id IN "
+                                    "(SELECT id FROM conversations WHERE agent='codex' "
+                                    "AND (external_id=? OR external_id=?) AND title != ?)",
+                                    (f"codex:{sid}", sid, title),
+                                )
                                 conn.execute(
                                     "UPDATE conversations SET title = ? WHERE agent = 'codex' AND (external_id = ? OR external_id = ?) AND title != ?",
                                     (title, f"codex:{sid}", sid, title),
@@ -1337,6 +1647,8 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
             physical_source = source_path.rsplit("#", 1)[0] if connection_id == "opencode" and source_path else source_path
             if physical_source and str(Path(physical_source).resolve()) in unstable:
                 continue
+            if external_id == expected_external_id and session.get("messages"):
+                target_observed = True
             title = session.get("title") or f"{connection_id} Session"
             cwd = session.get("cwd")
             tombstone_key = conversation_service.compute_source_identity_key(connection_id, source_path, title, external_id)
@@ -1344,7 +1656,10 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
                 if conn.execute("SELECT id FROM tombstones WHERE entity_type = 'conversation' AND dedupe_key = ?", (tombstone_key,)).fetchone():
                     continue
             project_id = project_service.reconstruct_or_resolve_project(
-                cwd, metadata={"name": session["project_name"]} if session.get("project_name") else None)
+                cwd,
+                metadata={"name": session["project_name"]} if session.get("project_name") else None,
+                activity_at=session.get("updated_at") or session.get("started_at"),
+            )
             if session.get("messages"):
                 conversation_service.upsert_conversation(
                     agent=connection_id, title=title, external_id=external_id, project_id=project_id,
@@ -1399,10 +1714,14 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
                     f"partial_sync: readable sessions processed; {len(unique_failures)} "
                     f"unreadable sources require repair: {failed}"
                 )
+        # Target freshness describes only this observed group. The connection
+        # receipt below still reports unrelated host-wide failures separately.
+        selected_source_error = partial_error
         if budget:
             budget.checkpoint()
         source_fingerprint = None
-        if not partial_failures and not pending_sources:
+        if (source_paths is None and not partial_failures and not pending_sources
+                and not advanced_sqlite_paths):
             source_fingerprint = _source_fingerprint(connection_id, roots, budget=budget)
         with db() as conn:
             ensure_source_cursor_schema(conn)
@@ -1496,6 +1815,12 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
         budget.checkpoint()
         result["pending_sources"] = pending_sources
         result["processed_sources"] = len(selected)
+    if expected_external_id is not None:
+        result["target_observed"] = target_observed
+    if source_paths is not None:
+        result["source_error"] = selected_source_error
+    # Empty means no same-inode SQLite source advanced during this read.
+    result["advanced_sources"] = sorted(advanced_sqlite_paths)
     return result
 
 

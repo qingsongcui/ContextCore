@@ -28,6 +28,7 @@ import os
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 from .base import (
     iter_complete_jsonl,
@@ -41,6 +42,51 @@ from .base import (
 )
 
 USER_REQUEST_RE = re.compile(r"<USER_REQUEST>(.*?)</USER_REQUEST>", re.DOTALL)
+
+
+def _explicit_workspace(item: dict[str, Any]) -> str:
+    """Read session metadata only; file/tool targets and quoted text are not cwd."""
+    metadata = item.get("metadata")
+    for source in (item, metadata if isinstance(metadata, dict) else {}):
+        for key in ("cwd", "working_directory", "directory"):
+            value = source.get(key)
+            if isinstance(value, str) and value.strip().startswith("/"):
+                return os.path.normpath(value.strip())
+        uris = source.get("workspaceUris")
+        if isinstance(uris, list) and len(uris) == 1 and isinstance(uris[0], str):
+            uri = urlsplit(uris[0])
+            if uri.scheme == "file" and uri.netloc in ("", "localhost") and uri.path.startswith("/"):
+                return os.path.normpath(unquote(uri.path))
+    return ""
+
+
+def infer_transcript_cwd(path: str | Path, roots: list[str | Path] | None = None) -> str:
+    """Fast metadata-only pass to infer workspace cwd from an Antigravity transcript file on disk."""
+    p = Path(path).expanduser()
+    if not p.is_file():
+        return ""
+    try:
+        if roots is not None:
+            p = validate_path(p, roots)
+        validate_file_safety(p, host="antigravity")
+        lines = iter_complete_jsonl(p, encoding="utf-8-sig", host="antigravity")
+    except (AgentAdapterError, OSError):
+        return ""
+    # Missing metadata is valid for general conversations.
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except Exception:
+            continue
+        if not isinstance(item, dict):
+            continue
+        cwd = _explicit_workspace(item)
+        if cwd:
+            return cwd
+    return ""
 
 
 def _conversation_external_id(
@@ -198,18 +244,8 @@ def _parse_transcript(path: Path, *, allow_empty: bool = False) -> dict[str, Any
         content = item.get("content")
         raw_text = content.strip() if isinstance(content, str) else ""
 
-        # Check for cwd metadata in step
         if not cwd:
-            for k in ("cwd", "working_directory", "directory"):
-                if item.get(k):
-                    cwd = str(item[k])
-                    break
-            meta = item.get("metadata")
-            if not cwd and isinstance(meta, dict):
-                for k in ("cwd", "working_directory", "directory"):
-                    if meta.get(k):
-                        cwd = str(meta[k])
-                        break
+            cwd = _explicit_workspace(item)
 
         # Extract token usage when present on steps
         step_usage: dict[str, int] = {}
@@ -304,6 +340,25 @@ def _parse_transcript(path: Path, *, allow_empty: bool = False) -> dict[str, Any
     return result
 
 
+def _dialogue_freshness(session: dict[str, Any]) -> tuple[float, int]:
+    """Compare native dialogue positions, not filename preference or tool-file mtime."""
+    latest = 0.0
+    step = 0
+    for message in session["messages"]:
+        timestamp = message.get("timestamp")
+        if timestamp:
+            try:
+                parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                if parsed.tzinfo is not None:
+                    latest = max(latest, parsed.timestamp())
+            except ValueError:
+                pass
+        suffix = str(message.get("external_id") or "").rsplit(":", 1)[-1]
+        if suffix.isdecimal():
+            step = max(step, int(suffix))
+    return latest, step
+
+
 def read_antigravity_sessions(roots: list[str | Path], *, source_paths: list[str] | None = None) -> list[dict[str, Any]]:
     """
     Scan authorized roots and return parsed Antigravity sessions.
@@ -382,10 +437,11 @@ def read_antigravity_sessions(roots: list[str | Path], *, source_paths: list[str
 
         for candidate_path in candidate_list:
             try:
-                parsed_session = _parse_transcript(candidate_path, allow_empty=True)
-                if parsed_session is None:
+                candidate_session = _parse_transcript(candidate_path, allow_empty=True)
+                if candidate_session is None:
                     is_empty_session = True
-                break
+                elif parsed_session is None or _dialogue_freshness(candidate_session) > _dialogue_freshness(parsed_session):
+                    parsed_session = candidate_session
             except AgentAdapterError as exc:
                 last_error = exc
             except Exception as exc:
@@ -396,7 +452,7 @@ def read_antigravity_sessions(roots: list[str | Path], *, source_paths: list[str
                     detail=f"Failed to read Antigravity transcript: {exc}",
                 )
 
-        if is_empty_session:
+        if is_empty_session and parsed_session is None and last_error is None:
             # Legitimately empty session (tool-only / system run without dialogue); skip cleanly
             continue
 
@@ -511,8 +567,11 @@ def _allowed_hook_transcript_roots() -> list[Path]:
         import sqlite3
         db_file = Path(settings.db_path)
         if db_file.is_file() and not db_file.is_symlink():
-            conn = sqlite3.connect(f"file:{db_file}?mode=ro", uri=True, timeout=1.0)
+            conn = sqlite3.connect(db_file, timeout=5.0)
             try:
+                conn.execute("PRAGMA busy_timeout = 5000")
+                conn.execute("PRAGMA mmap_size = 0")
+                conn.execute("PRAGMA query_only = ON")
                 row = conn.execute(
                     "SELECT config FROM connections WHERE id = 'antigravity' AND enabled = 1"
                 ).fetchone()
@@ -729,15 +788,15 @@ def normalize_antigravity_hook(payload: dict[str, Any]) -> dict[str, Any]:
         for candidate in validated_candidates:
             try:
                 parsed = _parse_transcript(candidate, allow_empty=True)
-                if parsed and parsed.get("messages"):
+                if parsed and (parsed_transcript is None or _dialogue_freshness(parsed) > _dialogue_freshness(parsed_transcript)):
                     resolved_transcript = candidate
                     parsed_transcript = parsed
-                    messages = list(parsed["messages"])
-                    if not cwd and parsed.get("cwd"):
-                        cwd = str(parsed["cwd"])
-                    break
             except Exception:
                 continue
+        if parsed_transcript:
+            messages = list(parsed_transcript["messages"])
+            if not cwd:
+                cwd = parsed_transcript.get("cwd") or ""
 
     source_path = str(resolved_transcript) if resolved_transcript is not None else None
     user_messages = [m for m in messages if m.get("role") == "user" and str(m.get("content") or "").strip()]

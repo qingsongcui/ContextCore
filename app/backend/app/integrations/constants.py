@@ -1,10 +1,10 @@
 """Constants and capability definitions for host integrations.
 
 Based strictly on HostAdapterRecon findings and official vendor documentation:
-- Codex: MCP TOML in ~/.codex/config.toml, hooks in ~/.codex/hooks.json, app-server stdio JSON-RPC.
+- Codex: MCP TOML in ~/.codex/config.toml, hooks in ~/.codex/hooks.json, skill in ~/.codex/skills/contextcore/.
 - OMP: MCP in ~/.omp/agent/mcp.json, extension in ~/.omp/agent/hooks/pre/contextcore.ts, /contextcore command.
-- Cursor: MCP in ~/.cursor/mcp.json, hooks in ~/.cursor/hooks.json, skill in ~/.cursor/skills/contextcore-handoff/.
-- Antigravity: MCP in ~/.gemini/config/mcp_config.json, hooks in ~/.gemini/config/hooks.json, skill in ~/.gemini/config/skills/contextcore-handoff/.
+- Cursor: MCP in ~/.cursor/mcp.json, hooks in ~/.cursor/hooks.json, skill in ~/.cursor/skills/contextcore/.
+- Antigravity: MCP in ~/.gemini/config/mcp_config.json, hooks in ~/.gemini/config/hooks.json, skill in ~/.gemini/config/skills/contextcore/.
 """
 
 from typing import Literal
@@ -80,7 +80,7 @@ HOST_CAPABILITY_STATUS: dict[HostId, dict[str, dict[str, str]]] = {
         },
         "memory_read": {
             "status": "available",
-            "detail": "Opt-in via MCP assemble_context and the contextcore-handoff skill. Lifecycle hooks stay silent.",
+            "detail": "Opt-in via MCP assemble_context and the /contextcore skill. Lifecycle hooks stay silent.",
         },
         "memory_write": {
             "status": "available",
@@ -132,7 +132,7 @@ HOST_CAPABILITY_STATUS: dict[HostId, dict[str, dict[str, str]]] = {
         },
         "memory_read": {
             "status": "partial",
-            "detail": "Opt-in via MCP assemble_context and /contextcore-handoff. beforeSubmitPrompt cannot inject; sessionStart additional_context is unused after silent-hooks.",
+            "detail": "Opt-in via MCP assemble_context and /contextcore. beforeSubmitPrompt cannot inject; sessionStart additional_context is unused after silent-hooks.",
         },
         "memory_write": {
             "status": "available",
@@ -140,7 +140,7 @@ HOST_CAPABILITY_STATUS: dict[HostId, dict[str, dict[str, str]]] = {
         },
         "handoff": {
             "status": "partial",
-            "detail": "beforeSubmitPrompt cannot inject context; handoff must be triggered explicitly via /contextcore-handoff skill or rules.",
+            "detail": "beforeSubmitPrompt cannot inject context; handoff must be triggered explicitly via /contextcore skill or rules.",
         },
         "compute": {
             "status": "unavailable",
@@ -166,7 +166,7 @@ HOST_CAPABILITY_STATUS: dict[HostId, dict[str, dict[str, str]]] = {
         },
         "handoff": {
             "status": "partial",
-            "detail": "Natural language prompt interception is impossible because hook payload lacks prompt text; requires explicit /contextcore-handoff skill.",
+            "detail": "Natural language prompt interception is impossible because hook payload lacks prompt text; requires explicit /contextcore skill.",
         },
         "compute": {
             "status": "unavailable",
@@ -184,7 +184,7 @@ HOST_CAPABILITY_STATUS: dict[HostId, dict[str, dict[str, str]]] = {
         },
         "memory_read": {
             "status": "available",
-            "detail": "Opt-in via MCP assemble_context and /contextcore-handoff. SessionStart and UserPromptSubmit hooks stay silent.",
+            "detail": "Opt-in via MCP assemble_context and /contextcore. SessionStart and UserPromptSubmit hooks stay silent.",
         },
         "memory_write": {
             "status": "available",
@@ -192,7 +192,7 @@ HOST_CAPABILITY_STATUS: dict[HostId, dict[str, dict[str, str]]] = {
         },
         "handoff": {
             "status": "available",
-            "detail": "Supported via the /contextcore-handoff skill and MCP tools. Hooks do not intercept the prompt or inject a card.",
+            "detail": "Supported via the /contextcore skill and MCP tools. Hooks do not intercept the prompt or inject a card.",
         },
         "compute": {
             "status": "unavailable",
@@ -232,7 +232,7 @@ HOST_CONFIG_PATHS: dict[HostId, dict[str, str]] = {
     "codex": {
         "mcp": "~/.codex/config.toml",
         "hooks": "~/.codex/hooks.json",
-        "skill": "~/.agents/skills/contextcore-handoff/SKILL.md",
+        "skill": "~/.codex/skills/contextcore/SKILL.md",
     },
     "omp": {
         "mcp": "~/.omp/agent/mcp.json",
@@ -242,23 +242,34 @@ HOST_CONFIG_PATHS: dict[HostId, dict[str, str]] = {
     "cursor": {
         "mcp": "~/.cursor/mcp.json",
         "hooks": "~/.cursor/hooks.json",
-        "skill": "~/.cursor/skills/contextcore-handoff/SKILL.md",
+        "skill": "~/.cursor/skills/contextcore/SKILL.md",
     },
     "antigravity": {
         "mcp": "~/.gemini/config/mcp_config.json",
         "hooks": "~/.gemini/config/hooks.json",
-        "skill": "~/.gemini/config/skills/contextcore-handoff/SKILL.md",
+        "skill": "~/.gemini/config/skills/contextcore/SKILL.md",
     },
     "claude-code": {
         "mcp": "~/.claude.json",
         "hooks": "~/.claude/settings.json",
-        "skill": "~/.claude/skills/contextcore-handoff/SKILL.md",
+        "skill": "~/.claude/skills/contextcore/SKILL.md",
     },
     "opencode": {
         "mcp": "~/.config/opencode/opencode.json",
         "hooks": "~/.config/opencode/plugins/contextcore.ts",
         "command": "~/.config/opencode/commands/contextcore.md",
     },
+}
+
+# Legacy owned skill locations accepted during upgrade/uninstall migration
+LEGACY_HOST_SKILL_PATHS: dict[HostId, tuple[str, ...]] = {
+    "codex": (
+        "~/.agents/skills/contextcore-handoff/SKILL.md",
+        "~/.codex/skills/contextcore-handoff/SKILL.md",
+    ),
+    "cursor": ("~/.cursor/skills/contextcore-handoff/SKILL.md",),
+    "antigravity": ("~/.gemini/config/skills/contextcore-handoff/SKILL.md",),
+    "claude-code": ("~/.claude/skills/contextcore-handoff/SKILL.md",),
 }
 
 # JSON MCP config container path per host. Codex uses TOML and is intentionally absent.

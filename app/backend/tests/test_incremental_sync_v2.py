@@ -103,6 +103,49 @@ def test_wal_changes_trigger_read_without_writing_source(isolated):
     assert writer.execute('SELECT count(*) FROM part').fetchone()[0] == 1
     writer.close()
 
+
+def test_targeted_relay_does_not_certify_cached_identity_missing_from_shared_db(isolated):
+    root = isolated / "opencode"
+    root.mkdir()
+    source = root / "opencode.db"
+    writer = sqlite3.connect(source)
+    writer.executescript("""
+        CREATE TABLE session(id TEXT, title TEXT, directory TEXT, parent_id TEXT, time_created INTEGER, time_updated INTEGER);
+        CREATE TABLE message(id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        CREATE TABLE part(id TEXT, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+    """)
+    writer.execute("INSERT INTO session VALUES('original','Original session','/synthetic/project',NULL,1,1)")
+    writer.execute("INSERT INTO message VALUES('u','original',1,?)", (json.dumps({"role": "user"}),))
+    writer.execute("INSERT INTO part VALUES('p','u','original',1,?)",
+                   (json.dumps({"type": "text", "text": "Original retained dialogue"}),))
+    writer.commit()
+    configure(root, "opencode")
+    service.sync_connection("opencode", force=False)
+    selected = conversation_service.list_conversations(agent="opencode")[0]
+
+    # The database is still readable, but the selected native identity vanished.
+    writer.execute("UPDATE session SET id='replacement', title='Replacement session'")
+    writer.execute("UPDATE message SET session_id='replacement'")
+    writer.execute("UPDATE part SET session_id='replacement', data=?",
+                   (json.dumps({"type": "text", "text": "Different native conversation"}),))
+    writer.commit()
+    writer.close()
+    # A background pass already advanced the file cursor. A ready/unchanged
+    # cursor must not certify presence of every historical row from that source.
+    service.sync_connection("opencode", force=False)
+    statuses = service.sync_conversation_for_relay(
+        selected["id"], agent="opencode", source_path=selected["source_path"])
+    assert statuses[0]["status"] == "partial"
+    assert statuses[0]["reason"] == "target_not_observed"
+    assert statuses[0]["target_observed"] is False
+    assert conversation_service.get_conversation(selected["id"])["messages"][0]["content"] == "Original retained dialogue"
+    replacement = next(item for item in conversation_service.list_conversations(agent="opencode")
+                       if item["id"] != selected["id"])
+    fresh = service.sync_conversation_for_relay(
+        replacement["id"], agent="opencode", source_path=replacement["source_path"])
+    assert fresh[0]["status"] == "ok"
+    assert fresh[0]["target_observed"] is True
+
 def test_tombstone_blocks_replay_after_source_change(isolated):
     root = history(isolated); source = root / 's.jsonl'; source.write_bytes(line('u1', 'do not resurrect')); configure(root)
     service.sync_connection('claude-code', force=False); record = conversation_service.list_conversations(agent='claude-code')[0]
@@ -300,3 +343,141 @@ def test_history_pause_resume_preserves_cursor_and_reconciles_once(isolated):
     assert record['messages'][1]['content'] == 'synthetic while paused'
     service.sync_connection('claude-code', force=False)
     assert len(conversation_service.get_conversation(records[0]['id'])['messages']) == 2
+
+
+def test_sqlite_wal_after_read_keeps_snapshot_but_does_not_acknowledge_new_data(isolated, monkeypatch):
+    import app.adapters
+    root = isolated / "cursor-wal"
+    root.mkdir()
+    source = root / "state.vscdb"
+    writer = sqlite3.connect(source)
+    writer.executescript("""
+        PRAGMA journal_mode=WAL;
+        PRAGMA wal_autocheckpoint=0;
+        CREATE TABLE composerHeaders (composerId TEXT, value TEXT, isSubagent INTEGER, createdAt INTEGER, lastUpdatedAt INTEGER);
+        CREATE TABLE cursorDiskKV (key TEXT, value TEXT);
+    """)
+    writer.execute("INSERT INTO composerHeaders VALUES('selected',?,0,1,1)",
+                   (json.dumps({"name": "WAL conversation", "workspaceIdentifier": {"uri": {"fsPath": "/synthetic/project"}}}),))
+    def append_bubble(bubble_id, text):
+        writer.execute("INSERT INTO cursorDiskKV VALUES(?,?)", (
+            f"bubbleId:selected:{bubble_id}",
+            json.dumps({"type": 1, "bubbleId": bubble_id, "text": text, "createdAt": "2026-11-12T10:00:00Z"}),
+        ))
+        writer.commit()
+    try:
+        append_bubble("b1", "Previously imported")
+        configure(root, "cursor")
+        service.sync_connection("cursor", force=False)
+        selected = conversation_service.list_conversations(agent="cursor")[0]
+        append_bubble("b2", "Valid consistent read")
+        before_read = service._snapshot_source("cursor", source, [str(root)])
+        original = app.adapters.read_sessions
+        def append_after_read(*args, **kwargs):
+            batch = original(*args, **kwargs)
+            append_bubble("b3", "Written after read")
+            return batch
+        monkeypatch.setattr(app.adapters, "read_sessions", append_after_read)
+        statuses = service.sync_conversation_for_relay(
+            selected["id"], agent="cursor", source_path=selected["source_path"])
+        assert statuses[0]["status"] == "partial"
+        assert statuses[0]["reason"] == "source_changed_during_read"
+        assert statuses[0]["error"] is None
+        assert statuses[0]["connection_error"] is None
+        assert statuses[0]["target_observed"] is True
+        messages = conversation_service.get_conversation(selected["id"])["messages"]
+        assert {message["content"] for message in messages} == {"Previously imported", "Valid consistent read"}
+        receipt = cursor("cursor")[0]
+        # The consistent snapshot is acknowledged without certifying the newer
+        # WAL: the cursor keeps the pre-read fingerprint so the next pass retries.
+        assert receipt["status"] == "ready" and receipt["error"] is None
+        assert receipt["fingerprint"] == before_read["fingerprint"]
+        current_disk_fp = service._snapshot_source("cursor", source, [str(root)])["fingerprint"]
+        assert receipt["fingerprint"] != current_disk_fp
+
+        monkeypatch.setattr(app.adapters, "read_sessions", original)
+        service.sync_connection("cursor", force=False)
+        messages = conversation_service.get_conversation(selected["id"])["messages"]
+        assert {message["content"] for message in messages} == {
+            "Previously imported", "Valid consistent read", "Written after read",
+        }
+        assert cursor("cursor")[0]["status"] == "ready"
+    finally:
+        writer.close()
+
+
+def test_codex_session_index_rename_invalidates_cached_relay_title(isolated):
+    from app.services import handoff_service
+    root = history(isolated)
+    selected = conversation_service.upsert_conversation(
+        agent="codex", external_id="codex:renamed", title="Cached before rename",
+        source_path=str(root / "rollout-renamed.jsonl"),
+        messages=[{"external_id": "q1", "role": "user", "content": "Explain the code path"}],
+    )
+    with db() as conn:
+        assert conn.execute("SELECT 1 FROM conversation_relay_index WHERE conversation_id=?", (selected["id"],)).fetchone()
+    (root / "session_index.jsonl").write_text(
+        json.dumps({"id": "renamed", "thread_name": "Current native title", "updated_at": "2026-11-12T10:00:00Z"}) + "\n")
+    configure(root, "codex")
+    service.sync_connection("codex", force=False)
+    with db() as conn:
+        assert conn.execute("SELECT title FROM conversations WHERE id=?", (selected["id"],)).fetchone()[0] == "Current native title"
+        assert conn.execute("SELECT 1 FROM conversation_relay_index WHERE conversation_id=?", (selected["id"],)).fetchone() is None
+    listing = handoff_service.discover_relay_conversations(sync_first=False, link_unlinked=False, language="en")
+    assert "Current native title" in json.dumps(listing)
+    assert "Cached before rename" not in json.dumps(listing)
+
+
+def test_opencode_wal_after_spooled_read_keeps_valid_history_and_retries(isolated, monkeypatch):
+    from app.adapters import opencode
+    root = isolated / "opencode-wal"
+    root.mkdir()
+    source = root / "opencode.db"
+    writer = sqlite3.connect(source)
+    writer.executescript("""
+        PRAGMA journal_mode=WAL;
+        PRAGMA wal_autocheckpoint=0;
+        CREATE TABLE session(id TEXT, title TEXT, directory TEXT, parent_id TEXT, time_created INTEGER, time_updated INTEGER);
+        CREATE TABLE message(id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        CREATE TABLE part(id TEXT, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        INSERT INTO session VALUES('selected','WAL session','/synthetic/project',NULL,1,1);
+    """)
+    def append_message(message_id, text, timestamp):
+        writer.execute("INSERT INTO message VALUES(?,'selected',?,?)",
+                       (message_id, timestamp, json.dumps({"role": "user"})))
+        writer.execute("INSERT INTO part VALUES(?,?,'selected',?,?)",
+                       ("p-" + message_id, message_id, timestamp, json.dumps({"type": "text", "text": text})))
+        writer.commit()
+    try:
+        append_message("m1", "Earlier message", 1)
+        configure(root, "opencode")
+        service.sync_connection("opencode", force=False)
+        selected = conversation_service.list_conversations(agent="opencode")[0]
+        append_message("m2", "Consistent snapshot message", 2)
+        before_read = service._snapshot_source("opencode", source, [str(root)])
+        original = opencode.iter_opencode_sessions
+        def moving(*args, **kwargs):
+            yield from original(*args, **kwargs)
+            append_message("m3", "New WAL message", 3)
+        monkeypatch.setattr(opencode, "iter_opencode_sessions", moving)
+        statuses = service.sync_conversation_for_relay(
+            selected["id"], agent="opencode", source_path=selected["source_path"])
+        assert statuses[0]["status"] == "partial"
+        assert statuses[0]["reason"] == "source_changed_during_read"
+        assert statuses[0]["error"] is None
+        assert statuses[0]["target_observed"] is True
+        messages = conversation_service.get_conversation(selected["id"])["messages"]
+        assert {message["content"] for message in messages} == {"Earlier message", "Consistent snapshot message"}
+        receipt = cursor("opencode")[0]
+        # Spooled read succeeded; only the post-read WAL tail is still pending.
+        assert receipt["status"] == "ready" and receipt["error"] is None
+        assert receipt["fingerprint"] == before_read["fingerprint"]
+        current_disk_fp = service._snapshot_source("opencode", source, [str(root)])["fingerprint"]
+        assert receipt["fingerprint"] != current_disk_fp
+        monkeypatch.setattr(opencode, "iter_opencode_sessions", original)
+        service.sync_connection("opencode", force=False)
+        messages = conversation_service.get_conversation(selected["id"])["messages"]
+        assert {message["content"] for message in messages} == {"Earlier message", "Consistent snapshot message", "New WAL message"}
+        assert cursor("opencode")[0]["status"] == "ready"
+    finally:
+        writer.close()

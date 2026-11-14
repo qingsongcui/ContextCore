@@ -1,4 +1,5 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Path
+from typing import Literal
+from fastapi import APIRouter, Body, UploadFile, File, Form, HTTPException, Query, Path
 from app.models import (
     Content,
     ContentCreate,
@@ -8,6 +9,8 @@ from app.models import (
     ContentRestoreRequest,
     ContentBatchRequest,
     ContentMergeRequest,
+    ContentOutdatedRequest,
+    ContentCorrectRequest,
 )
 from app.services import content_service
 
@@ -19,12 +22,13 @@ def list_content_endpoint(
     project_id: str | None = None,
     kind: str | None = None,
     category: str | None = None,
+    exclude_category: str | None = Query(default=None),
     agent: str | None = None,
     tag: str | None = None,
     query: str | None = None,
     since: str | None = None,
     until: str | None = None,
-    status: str | None = None,
+    status: Literal["active", "outdated", "historical", "all"] | None = Query(default=None),
     scope: str | None = None,
     pinned: bool | None = None,
     pinned_first: bool = False,
@@ -36,6 +40,7 @@ def list_content_endpoint(
         project_id=project_id,
         kind=kind,
         category=category,
+        exclude_category=exclude_category,
         agent=agent,
         tag=tag,
         query=query,
@@ -56,12 +61,13 @@ def content_index_endpoint(
     project_id: str | None = None,
     kind: str | None = None,
     category: str | None = None,
+    exclude_category: str | None = Query(default=None),
     agent: str | None = None,
     tag: str | None = None,
     query: str | None = None,
     since: str | None = None,
     until: str | None = None,
-    status: str | None = None,
+    status: Literal["active", "outdated", "historical", "all"] | None = Query(default=None),
     scope: str | None = None,
     pinned: bool | None = None,
     pinned_first: bool = False,
@@ -72,6 +78,7 @@ def content_index_endpoint(
         project_id=project_id,
         kind=kind,
         category=category,
+        exclude_category=exclude_category,
         agent=agent,
         tag=tag,
         query=query,
@@ -116,6 +123,9 @@ def create_content_endpoint(req: ContentCreate):
         tags=req.tags,
         pinned=req.pinned,
         scope=req.scope,
+        applicability=req.applicability,
+        origin_authority=req.origin_authority,
+        promoted_from_task_id=req.promoted_from_task_id,
         agent=req.agent,
         source_id=req.source_id,
         source_kind=req.source_kind,
@@ -163,9 +173,44 @@ def update_content_endpoint(content_id: str, req: ContentUpdate):
         tags=req.tags,
         pinned=req.pinned,
         scope=req.scope,
+        applicability=req.applicability,
+        origin_authority=req.origin_authority,
+        outdated_reason=req.outdated_reason,
         agent=req.agent,
         status=req.status,
         project_id=req.project_id,
+        expected_version=req.expected_version,
+    )
+
+
+@router.post("/api/content/{content_id}/outdated", response_model=Content)
+def mark_content_outdated_endpoint(
+    content_id: str,
+    req: ContentOutdatedRequest | None = Body(default=None),
+):
+    payload = req or ContentOutdatedRequest()
+    return content_service.mark_outdated(
+        content_id=content_id,
+        reason=payload.reason,
+        actor=payload.actor or "user",
+        expected_version=payload.expected_version,
+    )
+
+
+@router.post("/api/content/{content_id}/correct", response_model=Content)
+def correct_content_endpoint(content_id: str, req: ContentCorrectRequest):
+    return content_service.correct_content(
+        content_id=content_id,
+        content=req.content,
+        title=req.title,
+        category=req.category,
+        tags=req.tags,
+        pinned=req.pinned,
+        applicability=req.applicability,
+        actor=req.actor or "user",
+        quote=req.quote,
+        source_id=req.source_id,
+        source_kind=req.source_kind,
         expected_version=req.expected_version,
     )
 
@@ -213,6 +258,7 @@ def merge_content_endpoint(req: ContentMergeRequest):
         content=req.content,
         project_id=req.project_id,
         expected_versions=req.expected_versions,
+        category=req.category,
     )
 
 

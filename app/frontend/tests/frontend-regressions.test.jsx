@@ -25,7 +25,7 @@ import { SettingsPage } from '../src/pages/SettingsPage.jsx';
 import { ProviderSetup } from '../src/components/agent-management/ProviderSetup.jsx';
 let root, container, mobile;
 const props = { projectId: 'p', projects: [{ id: 'p', name: 'Project' }], kind: 'memory', revision: 0, onChanged: vi.fn(), onProject: vi.fn(), onBack: vi.fn(), onClose: vi.fn() };
-const indexPath = '/api/content/index?limit=50&offset=0&kind=memory&project_id=p';
+const indexPath = '/api/content/index?status=active&exclude_category=task&limit=50&offset=0&kind=memory&project_id=p&pinned_first=true';
 const button = (text, scope = container) => Array.from(scope.querySelectorAll('button')).find(item => item.textContent.trim() === text);
 const field = text => Array.from(container.querySelectorAll('label')).find(item => item.querySelector(':scope > span')?.textContent === text)?.querySelector('input,textarea,select');
 async function render(node) { await act(async () => root.render(node)); }

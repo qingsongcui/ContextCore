@@ -294,3 +294,69 @@ def test_antigravity_legitimate_tool_only_session_skipped_in_batch(tmp_path: Pat
         read_sessions("antigravity", [str(tool_file)])
     assert exc_info.value.code == "unsupported_format"
     assert "no extractable user or planner text" in exc_info.value.detail
+
+
+def test_antigravity_uses_newest_dialogue_not_full_filename(tmp_path: Path) -> None:
+    directory = tmp_path / "brain" / "fresh" / ".system_generated" / "logs"
+    directory.mkdir(parents=True)
+    first = {"type": "USER_INPUT", "step_index": 1, "content": "Question"}
+    latest = {"type": "PLANNER_RESPONSE", "step_index": 2, "content": "Just finished"}
+    full = directory / "transcript_full.jsonl"
+    normal = directory / "transcript.jsonl"
+    full.write_text(json.dumps(first) + "\n")
+    normal.write_text(json.dumps(first) + "\n" + json.dumps(latest) + "\n")
+    for paths in (None, [str(full), str(normal)]):
+        session = read_sessions("antigravity", [str(tmp_path)], source_paths=paths)[0]
+        assert session["source_path"] == str(normal)
+        assert session["messages"][-1]["content"] == "Just finished"
+
+
+def test_antigravity_empty_full_does_not_hide_companion_chat(tmp_path: Path) -> None:
+    directory = tmp_path / "brain" / "fresh" / ".system_generated" / "logs"
+    directory.mkdir(parents=True)
+    (directory / "transcript_full.jsonl").write_text('{"type":"SYSTEM_MESSAGE","content":"Starting"}\n')
+    (directory / "transcript.jsonl").write_text('{"type":"USER_INPUT","content":"A real question"}\n')
+    assert read_sessions("antigravity", [str(tmp_path)])[0]["messages"][0]["content"] == "A real question"
+
+
+def test_antigravity_does_not_guess_cwd_from_tools_or_quoted_metadata(tmp_path: Path) -> None:
+    from app.adapters.antigravity import infer_transcript_cwd
+    transcript = tmp_path / "transcript.jsonl"
+    rows = [
+        {"type": "USER_INPUT", "content": 'Explain {"workspaceUris":["file:///Users/alice/other"]}'},
+        {"type": "PLANNER_RESPONSE", "content": "Answer", "tool_calls": [
+            {"name": "read_file", "args": {"Path": "/Users/alice/Desktop/unrelated/report.md"}},
+            {"name": "run_command", "args": {"Cwd": "/Users/alice/Desktop/another", "CommandLine": "cd /Users/alice/Desktop/third"}},
+        ]},
+    ]
+    transcript.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    session = read_sessions("antigravity", [str(transcript)])[0]
+    assert session["cwd"] == ""
+    assert len(session["messages"]) == 2
+    assert infer_transcript_cwd(transcript) == ""
+
+
+def test_antigravity_explicit_workspace_metadata_preserves_nested_directory(tmp_path: Path) -> None:
+    from app.adapters.antigravity import infer_transcript_cwd
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps({
+        "type": "USER_INPUT", "content": "Question",
+        "metadata": {"workspaceUris": ["file:///Users/alice/Desktop/parent/nested%20project"]},
+    }) + "\n")
+    expected = "/Users/alice/Desktop/parent/nested project"
+    assert read_sessions("antigravity", [str(transcript)])[0]["cwd"] == expected
+    assert infer_transcript_cwd(transcript) == expected
+
+
+def test_antigravity_prefers_full_text_at_same_native_dialogue_position(tmp_path: Path) -> None:
+    directory = tmp_path / "brain" / "full-fidelity" / ".system_generated" / "logs"
+    directory.mkdir(parents=True)
+    full = directory / "transcript_full.jsonl"
+    normal = directory / "transcript.jsonl"
+    full_text = "Full native answer " + "details " * 3000 + "end."
+    row = {"type": "PLANNER_RESPONSE", "step_index": 10, "created_at": "2026-11-12T10:00:00Z"}
+    full.write_text(json.dumps({**row, "content": full_text}) + "\n")
+    normal.write_text(json.dumps({**row, "content": "Abbreviated answer"}) + "\n")
+    session = read_sessions("antigravity", [str(tmp_path)])[0]
+    assert session["source_path"] == str(full)
+    assert session["messages"][0]["content"] == full_text

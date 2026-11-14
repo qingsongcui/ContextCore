@@ -65,9 +65,11 @@ def resolve_conflict(
     merged_title: str | None = None,
     merged_content: str | None = None,
     merged_category: str | None = None,
+    actor: str = "user",
 ) -> dict[str, Any]:
     if resolution not in ("keep", "replace", "both", "merge"):
         raise HTTPException(status_code=422, detail="Resolution must be 'keep', 'replace', 'both', or 'merge'")
+    eff_actor = (actor or "user").strip() or "user"
     with db() as conn:
         # Claim the conflict and apply its content mutation in one transaction.
         # Concurrent web/Agent resolutions must not both create alternatives.
@@ -97,6 +99,22 @@ def resolve_conflict(
             if isinstance(proposed.get("quote"), str) and proposed.get("quote").strip()
             else None
         )
+        prop_applicability = (
+            proposed.get("applicability")
+            if isinstance(proposed.get("applicability"), dict)
+            else None
+        )
+        prop_origin = (
+            str(proposed.get("origin_authority")).strip()
+            if proposed.get("origin_authority") is not None and str(proposed.get("origin_authority")).strip()
+            else None
+        )
+        prop_pinned = bool(proposed.get("pinned")) or (isinstance(prop_tags, list) and "pinned" in prop_tags)
+        prop_promoted_from_task_id = (
+            str(proposed.get("promoted_from_task_id")).strip()
+            if proposed.get("promoted_from_task_id") is not None and str(proposed.get("promoted_from_task_id")).strip()
+            else None
+        )
         now = now_iso()
         if existing is None:
             if resolution in ("replace", "both", "merge"):
@@ -120,9 +138,14 @@ def resolve_conflict(
                     content=final_content,
                     category=final_category,
                     tags=prop_tags,
+                    pinned=prop_pinned,
                     project_id=conflict.get("project_id"),
                     kind="memory",
+                    agent=eff_actor,
+                    applicability=prop_applicability,
+                    origin_authority=prop_origin,
                     quote=prop_quote,
+                    promoted_from_task_id=prop_promoted_from_task_id,
                     _connection=conn,
                 )
                 if prop_quote:
@@ -144,15 +167,26 @@ def resolve_conflict(
                     and not t.strip().casefold().startswith(("role:", "message_index:", "source_version:", "stance:"))
                 ]
                 merged_tags = list(dict.fromkeys([*base_tags, *prop_tags]))
+            replace_pinned = True if prop_pinned else (False if "pinned" in proposed else None)
+            replace_app = prop_applicability if prop_applicability is not None else ({} if "applicability" in proposed else None)
             update_content(
                 content_id=existing["id"],
                 title=proposed["title"],
                 content=proposed["content"],
                 category=proposed["category"],
                 tags=merged_tags,
+                pinned=replace_pinned,
+                agent=eff_actor,
+                applicability=replace_app,
+                origin_authority=prop_origin,
                 expected_version=existing["version"],
                 _connection=conn,
             )
+            if prop_promoted_from_task_id:
+                conn.execute(
+                    "UPDATE contents SET promoted_from_task_id = COALESCE(?, promoted_from_task_id) WHERE id = ?",
+                    (prop_promoted_from_task_id, existing["id"]),
+                )
             if prop_quote:
                 _attach_conflict_quote_source(
                     conn,
@@ -170,23 +204,55 @@ def resolve_conflict(
                 else f"{existing.get('content', '').strip()}\n\n{proposed.get('content', '').strip()}".strip()
             )
             final_category = merged_category or proposed.get("category") or existing["category"]
+            existing_tags = existing.get("tags") if isinstance(existing.get("tags"), list) else []
+            combined_tags = list(dict.fromkeys([*existing_tags, *(prop_tags or [])]))
+            merged_tags = combined_tags if (existing_tags or prop_tags) else None
+            existing_app = existing.get("applicability") if isinstance(existing.get("applicability"), dict) else {}
+            merged_app = {**existing_app, **(prop_applicability or {})}
+            merged_pinned = True if (bool(existing.get("pinned")) or prop_pinned) else None
+            merged_origin = prop_origin or existing.get("origin_authority")
             update_content(
                 content_id=existing["id"],
                 title=final_title,
                 content=final_content,
                 category=final_category,
+                tags=merged_tags,
+                pinned=merged_pinned,
+                agent=eff_actor,
+                applicability=merged_app if merged_app else None,
+                origin_authority=merged_origin,
                 expected_version=existing["version"],
                 _connection=conn,
             )
+            if prop_promoted_from_task_id:
+                conn.execute(
+                    "UPDATE contents SET promoted_from_task_id = COALESCE(promoted_from_task_id, ?) WHERE id = ?",
+                    (prop_promoted_from_task_id, existing["id"]),
+                )
+            if prop_quote:
+                _attach_conflict_quote_source(
+                    conn,
+                    content_id=existing["id"],
+                    project_id=existing.get("project_id"),
+                    prop_tags=prop_tags,
+                    prop_quote=prop_quote,
+                    now=now,
+                )
         elif resolution == "both":
             created = create_content(
                 title=proposed["title"],
                 content=proposed["content"],
                 category=proposed["category"],
                 tags=prop_tags,
+                pinned=prop_pinned,
                 project_id=existing["project_id"],
                 kind="memory",
                 related_ids=[existing["id"]],
+                agent=eff_actor,
+                applicability=prop_applicability,
+                origin_authority=prop_origin,
+                quote=prop_quote,
+                promoted_from_task_id=prop_promoted_from_task_id,
                 _connection=conn,
             )
             if prop_quote:
@@ -202,7 +268,7 @@ def resolve_conflict(
             "UPDATE conflicts SET status = 'resolved', resolution = ?, resolved_at = ? WHERE id = ? AND status = 'pending'",
             (resolution, now, conflict_id),
         )
-        log_audit(actor="user", action="conflict.resolve", target=conflict_id, conn=conn)
+        log_audit(actor=eff_actor, action="conflict.resolve", target=conflict_id, conn=conn)
         return row_to_dict(conn.execute("SELECT * FROM conflicts WHERE id = ?", (conflict_id,)).fetchone())
 
 
