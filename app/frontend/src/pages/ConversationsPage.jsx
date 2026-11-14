@@ -108,6 +108,22 @@ export function ConversationDetail({
                 });
               }}><option value="" disabled>{t("还没选项目")}</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}{project.status === 'archived' ? t("（已归档）") : ''}</option>)}</select></Field>{owner ? <Button onClick={() => onProject(owner.id)}>{t("打开所属项目")}</Button> : null}</div><div><span className="field-label">{t("记忆整理状态")}</span><Badge>{t(PROCESSING[item.processing_status] || "状态未知")}</Badge>{item.processing_error ? <ErrorNotice error={new Error(errorFeedback(500, item.processing_error))} /> : null}</div></div>
       {item.process_summary ? <details className="process-summary"><summary>{t("关键过程摘要")}</summary><Markdown>{item.process_summary}</Markdown><small>{t("摘要不是完整的工具输出，也不能单独当证据。")}</small></details> : null}
+      {item.handoff_page && (item.handoff_page.status === 'ready' || item.handoff_page.status === 'error') ? <details className="process-summary" open={item.handoff_page.status === 'ready'}><summary>{t("交接纸（点选接力后生成）")}</summary>
+        <div className="handoff-page-meta">
+          <Badge tone={item.handoff_page.status === 'ready' ? 'success' : 'warning'}>{item.handoff_page.status === 'ready' ? t("已写好") : t("未写成")}</Badge>
+          {item.handoff_page.stale ? <Badge tone="badge-status-outdated">{t("有新消息未合入")}</Badge> : null}
+          {item.handoff_page.covered_message_count > 0 ? <span className="field-hint">{t("覆盖前 {count} 条消息", { count: item.handoff_page.covered_message_count })}</span> : null}
+          {item.handoff_page.error || item.handoff_page.write_error ? <span className="field-hint">{item.handoff_page.error || item.handoff_page.write_error}</span> : null}
+        </div>
+        {item.handoff_page.status === 'ready' ? <dl className="handoff-page-fields">
+          <dt>{t("在做什么")}</dt><dd><Markdown>{item.handoff_page.goal || '—'}</Markdown></dd>
+          <dt>{t("已经做完的")}</dt><dd><Markdown>{item.handoff_page.done || '—'}</Markdown></dd>
+          <dt>{t("不能重做的")}</dt><dd><Markdown>{item.handoff_page.do_not_redo || '—'}</Markdown></dd>
+          <dt>{t("还没验证的")}</dt><dd><Markdown>{item.handoff_page.unverified || '—'}</Markdown></dd>
+          <dt>{t("下一步")}</dt><dd><Markdown>{item.handoff_page.next_step || '—'}</Markdown></dd>
+        </dl> : null}
+        <small>{t("打开详情不会重新写纸；只有点中接力候选时才会写或复用。")}</small>
+      </details> : null}
       <ResourceState resource={messages}><div className="message-list">{messages.data?.items?.length ? messages.data.items.map((message, index) => <section key={message.id || message.external_id || `${offset}:${index}`} className={`message message-${message.role}`}><header><strong>{message.role === 'user' ? t("你") : message.role === 'assistant' ? AGENTS[item.agent] || item.agent : message.role}</strong><time>{formatTime(message.timestamp)}</time></header><Markdown>{message.content}</Markdown></section>) : <EmptyState title={t("这份记录还没有可显示的消息")} body={t("采集到了，不代表对话是完整的。请检查接入状态。")} />}</div></ResourceState><Pagination total={messages.data?.total} offset={offset} limit={30} loading={messages.loading} onChange={setOffset} />
     </> : null}</ResourceState>
     {confirmation ? <Modal title={confirmation.action === 'delete' ? t("永久删除这份聊天？") : t("把这份聊天移到别的项目？")} busy={busy} onClose={() => setConfirmation(null)}><p className="modal-copy">{confirmation.action === 'delete' ? t("「{title}」将从 Senrelay 永久删除，无法恢复。已经生成的内容不会被一起删掉，也不会改 Agent 自己的原始文件。", { title: confirmation.title }) : t("会移到「{name}」。不会动磁盘上的目录，也不会改原始聊天文件；已经生成的记忆不会跟着走。", { name: confirmation.targetName })}</p><ErrorNotice error={error} />{staleMove || resource.error ? <div className="version-recovery"><p>{t("记录或目标项目有变化，刷新后再操作。")}</p><Button onClick={() => {

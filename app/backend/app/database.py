@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,7 +10,10 @@ from typing import Any, Literal
 from uuid import uuid4
 from app.config import settings
 from app.event_bus import discard_pending_events, publish_pending_events, queue_event
-from app.private_storage import prepare_database
+from app.private_storage import prepare_database, verify_database_stat
+
+_WAL_KEEPER_LOCK = threading.Lock()
+_ACTIVE_WAL_KEEPERS: dict[Path, int] = {}
 
 
 def now_iso() -> str:
@@ -49,6 +53,7 @@ JSON_COLUMNS = {
     "versions",
     "counts",
     "applicability",
+    "facts_json",
 }
 
 
@@ -60,11 +65,21 @@ def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     return item
 
 
+def _ensure_prepared_database(db_path: Path, *, data_directory: Path | None = None) -> None:
+    key = db_path.expanduser().absolute()
+    with _WAL_KEEPER_LOCK:
+        has_keeper = _ACTIVE_WAL_KEEPERS.get(key, 0) > 0
+    if has_keeper and db_path.exists():
+        verify_database_stat(db_path, data_directory=data_directory)
+    else:
+        prepare_database(db_path, data_directory=data_directory)
+
+
 @contextmanager
 def db(path: Path | None = None) -> sqlite3.Connection:
     db_path = path or settings.db_path
     data_dir = os.environ.get('CONTEXTCORE_DATA_DIR')
-    prepare_database(db_path, data_directory=Path(data_dir) if data_dir else None)
+    _ensure_prepared_database(db_path, data_directory=Path(data_dir) if data_dir else None)
     conn = sqlite3.connect(db_path, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -89,12 +104,21 @@ class _WalKeeperHandle:
 
     def __init__(self, path: Path | None = None) -> None:
         self.path = path
+        self._resolved_path: Path | None = None
         self._keeper: sqlite3.Connection | None = None
 
     def __enter__(self) -> sqlite3.Connection:
-        db_path = self.path or settings.db_path
+        db_path = (self.path or settings.db_path).expanduser()
+        key = db_path.absolute()
+        self._resolved_path = key
         data_dir = os.environ.get("CONTEXTCORE_DATA_DIR")
-        prepare_database(db_path, data_directory=Path(data_dir) if data_dir else None)
+        data_directory = Path(data_dir) if data_dir else None
+        with _WAL_KEEPER_LOCK:
+            has_keeper = _ACTIVE_WAL_KEEPERS.get(key, 0) > 0
+        if has_keeper and db_path.exists():
+            verify_database_stat(db_path, data_directory=data_directory)
+        else:
+            prepare_database(db_path, data_directory=data_directory)
         keeper = sqlite3.connect(db_path, timeout=10, check_same_thread=False)
         try:
             keeper.execute("PRAGMA journal_mode = WAL")
@@ -106,14 +130,24 @@ class _WalKeeperHandle:
             keeper.close()
             raise
         self._keeper = keeper
+        with _WAL_KEEPER_LOCK:
+            _ACTIVE_WAL_KEEPERS[key] = _ACTIVE_WAL_KEEPERS.get(key, 0) + 1
         return keeper
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Literal[False]:
         if self._keeper is not None:
             try:
+                if self._resolved_path is not None:
+                    with _WAL_KEEPER_LOCK:
+                        count = _ACTIVE_WAL_KEEPERS.get(self._resolved_path, 0)
+                        if count <= 1:
+                            _ACTIVE_WAL_KEEPERS.pop(self._resolved_path, None)
+                        else:
+                            _ACTIVE_WAL_KEEPERS[self._resolved_path] = count - 1
                 self._keeper.close()
             finally:
                 self._keeper = None
+                self._resolved_path = None
         return False
 
 
@@ -414,6 +448,21 @@ def create_schema(db_path: Path | None = None) -> None:
             CREATE INDEX IF NOT EXISTS idx_conversations_updated_id ON conversations(updated_at DESC,id DESC);
             CREATE INDEX IF NOT EXISTS idx_conversations_project_updated ON conversations(project_id,updated_at DESC,id DESC);
             CREATE INDEX IF NOT EXISTS idx_conversations_agent_updated ON conversations(agent,updated_at DESC,id DESC);
+
+            CREATE TABLE IF NOT EXISTS conversation_handoff_pages (
+                conversation_id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+                source_content_hash TEXT NOT NULL,
+                covered_message_count INTEGER NOT NULL DEFAULT 0 CHECK(covered_message_count >= 0),
+                status TEXT NOT NULL DEFAULT 'error' CHECK(status IN ('ready', 'error')),
+                goal TEXT NOT NULL DEFAULT '',
+                done TEXT NOT NULL DEFAULT '',
+                do_not_redo TEXT NOT NULL DEFAULT '',
+                unverified TEXT NOT NULL DEFAULT '',
+                next_step TEXT NOT NULL DEFAULT '',
+                facts_json TEXT NOT NULL DEFAULT '{}',
+                error TEXT,
+                updated_at TEXT NOT NULL
+            );
 
             CREATE TABLE IF NOT EXISTS conversation_message_offsets (
                 conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -796,7 +845,7 @@ def backup_database(destination: Path | str | None = None, db_path: Path | None 
 
     source_path = Path(db_path or settings.db_path).expanduser()
     data_dir = os.environ.get("CONTEXTCORE_DATA_DIR")
-    prepare_database(source_path, data_directory=Path(data_dir) if data_dir else None)
+    _ensure_prepared_database(source_path, data_directory=Path(data_dir) if data_dir else None)
 
     created_at = now_iso()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

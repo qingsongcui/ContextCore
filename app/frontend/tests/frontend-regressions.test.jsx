@@ -683,3 +683,55 @@ it('keeps Shell aria-current aligned, deduplicates UsagePage host options, and h
   }));
 });
 
+it('renders five-field handoff_page in ConversationDetail when ready and hides it when missing or unavailable', async () => {
+  const baseConv = {
+    id: 'c_hp',
+    agent: 'codex',
+    title: 'Handoff Page UI Test',
+    project_id: 'p',
+    cwd: '/tmp/repo',
+    message_count: 6,
+    processing_status: 'processed',
+  };
+  h.data['/api/conversations/c_hp/messages?limit=30&offset=0'] = { total: 0, items: [] };
+
+  h.data['/api/conversations/c_hp?include_messages=false'] = { ...baseConv, handoff_page: null };
+  await render(<ConversationDetail {...props} id="c_hp" />);
+  expect(container.textContent).not.toContain('交接纸（点选接力后生成）');
+
+  h.data['/api/conversations/c_hp?include_messages=false'] = { ...baseConv, handoff_page: { status: 'unavailable' } };
+  await render(<ConversationDetail {...props} id="c_hp" />);
+  expect(container.textContent).not.toContain('交接纸（点选接力后生成）');
+
+  h.data['/api/conversations/c_hp?include_messages=false'] = {
+    ...baseConv,
+    handoff_page: {
+      status: 'ready',
+      stale: true,
+      covered_message_count: 6,
+      goal: 'Fix handoff page UX',
+      done: 'Schema & backend service done',
+      do_not_redo: 'Rewriting migration tests',
+      unverified: 'Live OMP test pending',
+      next_step: 'Run automated gates',
+    },
+  };
+  await render(<ConversationDetail {...props} id="c_hp" />);
+  expect(container.textContent).toContain('交接纸（点选接力后生成）');
+  expect(container.textContent).toContain('已写好');
+  expect(container.textContent).toContain('有新消息未合入');
+  expect(container.textContent).toContain('覆盖前 6 条消息');
+  expect(container.textContent).toContain('下一步');
+  expect(container.textContent).toContain('Fix handoff page UX');
+
+  await act(async () => setLang('en'));
+  await render(<ConversationDetail {...props} id="c_hp" />);
+  expect(container.textContent).toContain('Handoff page (written after relay selection)');
+  expect(container.textContent).toContain('Ready');
+  expect(container.textContent).toContain('Newer turns not yet merged');
+  expect(container.textContent).toContain('Covers first 6 messages');
+  expect(container.textContent).toContain('Goal');
+  expect(container.textContent).toContain('Do not redo');
+  expect(container.textContent).toContain('Next steps');
+});
+

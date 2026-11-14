@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Any
 from fastapi import HTTPException
@@ -288,8 +289,10 @@ contextcore_mcp = FastMCP(
         "`upsert_working_task` or call `cite_memory(memory_ids=[...], reason=...)`, and briefly mention key referenced constraints/task state to the user.\n"
         "5. Explicit `/contextcore` Cross-Agent Relay: When the user types `/contextcore` or asks to relay a specific chat ('接力', '接着做', 'continue'), "
         "call `relay_conversation(cwd=...)` (or `discover_relay_conversations(cwd=...)`). If `conversation_id` is omitted, present the numbered candidate list. "
-        "Once selected, call `relay_conversation(conversation_id=..., cwd=...)`: if `status='loaded'` (`must_not_execute=True`), report `✅ 已加载对话上下文：《<标题>》` "
-        "with a 2-3 line summary and wait for the user's concrete instruction; only execute immediately when `continuation.status='ready'` (`must_not_execute=False`)."
+        "Once selected, call `relay_conversation(conversation_id=..., cwd=...)`. If `transcript_paging.complete` is false (or `coverage.omitted_messages > 0`), "
+        "sequentially call `read_conversation_messages(conversation_id=..., offset=..., limit=30)` from `offset=0` until `next_offset` is null to read the ENTIRE transcript, "
+        "then compact the full conversation in context (like `/compact`) and report a clean compacted summary — NEVER present a handoff card or six-element card. "
+        "If `status='loaded'` (`must_not_execute=True`), stop and wait for the user's concrete instruction after reporting; only execute immediately when `continuation.status='ready'` (`must_not_execute=False`)."
     ),
     stateless_http=True,
     json_response=True,
@@ -1412,6 +1415,152 @@ def read_evidence(evidence_id: str, offset: int = 0, limit: int = 2000) -> dict[
     return retrieval_service.read_evidence(evidence_id, offset, limit)
 
 
+_MAX_MCP_TRANSCRIPT_PAGE_BYTES = 48_000
+_MAX_MCP_SINGLE_ITEM_BYTES = 24_000
+
+
+def _clip_utf8_head_tail(text: str, max_bytes: int) -> tuple[str, int]:
+    """Trim an oversized text field by keeping head and tail within max_bytes UTF-8."""
+    raw = text.encode("utf-8")
+    if len(raw) <= max_bytes:
+        return text, 0
+    keep_each = max(256, (max_bytes - 96) // 2)
+    head = raw[:keep_each].decode("utf-8", errors="ignore")
+    tail = raw[-keep_each:].decode("utf-8", errors="ignore")
+    omitted = max(0, len(raw) - len(head.encode("utf-8")) - len(tail.encode("utf-8")))
+    return f"{head}\n... [truncated {omitted} bytes] ...\n{tail}", omitted
+
+
+def _bound_mcp_transcript_item(item: dict[str, Any]) -> dict[str, Any]:
+    """Bound an oversized single transcript item so one giant message never breaks MCP paging."""
+    encoded = json.dumps(item, ensure_ascii=False).encode("utf-8")
+    if len(encoded) <= _MAX_MCP_SINGLE_ITEM_BYTES:
+        return item
+    bounded = dict(item)
+    omitted_total = 0
+    if isinstance(bounded.get("tool_calls"), list):
+        compact_calls = []
+        for call in bounded["tool_calls"]:
+            call_bytes = len(json.dumps(call, ensure_ascii=False).encode("utf-8"))
+            if call_bytes > 2048 and isinstance(call, dict):
+                copy_call = dict(call)
+                for key in ("arguments", "result", "output", "content"):
+                    val = copy_call.get(key)
+                    if isinstance(val, str) and len(val.encode("utf-8")) > 1024:
+                        clipped, omitted = _clip_utf8_head_tail(val, 1024)
+                        copy_call[key] = clipped
+                        omitted_total += omitted
+                if isinstance(copy_call.get("function"), dict) and isinstance(copy_call["function"].get("arguments"), str):
+                    fn = dict(copy_call["function"])
+                    clipped, omitted = _clip_utf8_head_tail(fn["arguments"], 1024)
+                    fn["arguments"] = clipped
+                    omitted_total += omitted
+                    copy_call["function"] = fn
+                compact_calls.append(copy_call)
+            else:
+                compact_calls.append(call)
+        bounded["tool_calls"] = compact_calls
+    if isinstance(bounded.get("content"), str):
+        remaining = max(1024, _MAX_MCP_SINGLE_ITEM_BYTES - 2048)
+        clipped, omitted = _clip_utf8_head_tail(bounded["content"], remaining)
+        bounded["content"] = clipped
+        omitted_total += omitted
+    if omitted_total > 0:
+        bounded["truncated_bytes"] = omitted_total
+    return bounded
+
+
+def _bound_mcp_transcript_page(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Pack as many sequential items as fit inside _MAX_MCP_TRANSCRIPT_PAGE_BYTES (always >= 1 if non-empty)."""
+    packed: list[dict[str, Any]] = []
+    running_bytes = 512  # JSON envelope headroom
+    for raw_item in items:
+        candidate = _bound_mcp_transcript_item(raw_item)
+        item_bytes = len(json.dumps(candidate, ensure_ascii=False).encode("utf-8")) + 4
+        if packed and running_bytes + item_bytes > _MAX_MCP_TRANSCRIPT_PAGE_BYTES:
+            break
+        packed.append(candidate)
+        running_bytes += item_bytes
+    return packed
+
+
+@contextcore_mcp.tool(
+    title="Read paged conversation transcript messages",
+    annotations=READ_ONLY_ANNOTATIONS,
+)
+def read_conversation_messages(
+    conversation_id: str,
+    offset: int = 0,
+    limit: int = 30,
+) -> dict[str, Any]:
+    """Page stored full-transcript messages (0-based ordinal offset) for a conversation identified by exact conversation_id or unambiguous native external_id/UUID."""
+    from app.services import conversation_service
+
+    raw = str(conversation_id or "").strip()
+    if not raw or raw.isdigit():
+        raise ValueError("Pass an exact conversation_id or unambiguous native external_id/UUID")
+    if type(limit) is not int or not 1 <= limit <= 100:
+        raise ValueError("limit must be between 1 and 100")
+    if type(offset) is not int or offset < 0:
+        raise ValueError("offset must be nonnegative")
+    _observe("memory_read", "read_conversation_messages")
+
+    with db() as conn:
+        row = conn.execute("SELECT id FROM conversations WHERE id = ?", (raw,)).fetchone()
+        if row:
+            resolved_id = row["id"]
+        else:
+            native_uuid = bool(re.fullmatch(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", raw))
+            if native_uuid:
+                rows = conn.execute(
+                    "SELECT id, external_id, agent, title FROM conversations "
+                    "WHERE lower(external_id) = lower(?) OR lower(external_id) LIKE ? ESCAPE '\\'",
+                    (raw, "%:" + conversation_service.escape_like(raw.lower())),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id, external_id, agent, title FROM conversations WHERE external_id = ?",
+                    (raw,),
+                ).fetchall()
+            if len(rows) > 1:
+                raise HTTPException(
+                    422,
+                    {
+                        "code": handoff_service.AMBIGUOUS_CONVERSATION_CODE,
+                        "message": "Multiple conversations match; pass an exact conversation_id.",
+                        "candidates": [
+                            {
+                                "conversation_id": r["id"],
+                                "external_id": r["external_id"],
+                                "agent": r["agent"],
+                                "title": r["title"],
+                            }
+                            for r in rows
+                        ],
+                    },
+                )
+            resolved_id = rows[0]["id"] if rows else raw
+
+    page = conversation_service.conversation_messages_page(resolved_id, limit=limit, offset=offset)
+    bounded_items = _bound_mcp_transcript_page(page["items"])
+    next_offset = (
+        offset + len(bounded_items)
+        if offset + len(bounded_items) < page["total"]
+        else None
+    )
+    return {
+        "ok": True,
+        "conversation_id": resolved_id,
+        "items": bounded_items,
+        "total": page["total"],
+        "limit": page["limit"],
+        "offset": page["offset"],
+        "returned_count": len(bounded_items),
+        "next_offset": next_offset,
+        "has_more": next_offset is not None,
+    }
+
+
 @contextcore_mcp.tool(
     title="Discover relay conversations across agents",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
@@ -1486,10 +1635,13 @@ def relay_conversation(
     - If `conversation_id` is omitted, requests background refresh and pages stored conversation metadata.
       If `sync_pending=True`, newer native sessions may still be importing; retry the list rather than claim no history exists.
     - Use `next_offset` to page the list; prefer its stable conversation_id or native external_id over a number.
-    - Once selected, refresh only that source and load its context (not the whole project).
+    - Once selected, refreshes only that source without calling any background distillation model, returning metadata,
+      initial/recent turns, and `transcript_paging`. When `transcript_paging.complete` is false (or `coverage.omitted_messages > 0`),
+      sequentially call `read_conversation_messages(conversation_id=..., offset=0, limit=30)` until `next_offset` is null to read
+      the ENTIRE transcript, then compact the whole conversation in context without presenting a handoff card.
       A bare native UUID is accepted only when unambiguous. Without a concrete task in `query`, returns `status='loaded'`
-      (`must_not_execute=True`) so the Agent reports that loading is complete (`✅ 已加载对话上下文`) and waits for the
-      user's next instruction; when a concrete task instruction is provided in `query`, returns `continuation.status='ready'`
+      (`must_not_execute=True`) so the Agent reports the compacted full-conversation context and waits for the user's next
+      instruction; when a concrete task instruction is provided in `query`, returns `continuation.status='ready'`
       (`must_not_execute=False`) so the Agent can execute that task immediately.
     """
     caller = _actor()

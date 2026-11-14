@@ -307,6 +307,7 @@ def test_mcp_tool_annotations_and_initialize_contract():
         "get_system_status",
         "read_evidence",
         "read_handoff",
+        "read_conversation_messages",
     }
     assert expected_read_only_tools <= set(tools_by_name)
     for tool_name in expected_read_only_tools:
@@ -634,6 +635,7 @@ def test_all_six_host_skills_meet_frontmatter_size_and_closed_loop_invariants():
         "mark_memory_outdated",
         "discover_relay_conversations",
         "relay_conversation",
+        "read_conversation_messages",
     )
 
     for filename in expected_files:

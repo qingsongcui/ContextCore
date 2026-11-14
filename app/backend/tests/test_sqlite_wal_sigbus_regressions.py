@@ -292,3 +292,57 @@ def test_hold_wal_keeper_supports_concurrent_db_and_backup(tmp_path: Path, monke
     with db(db_file) as conn:
         count = conn.execute("SELECT COUNT(*) FROM app_settings WHERE key LIKE 'k-%'").fetchone()[0]
     assert count == 40
+
+
+def test_hold_wal_keeper_survives_external_process_connect_and_close(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_file = tmp_path / "multiprocess.db"
+    data_dir = tmp_path / "multiprocess-data"
+    data_dir.mkdir(mode=0o700)
+    monkeypatch.setenv("CONTEXTCORE_DB", str(db_file))
+    monkeypatch.setenv("CONTEXTCORE_DATA_DIR", str(data_dir))
+    create_schema(db_file)
+
+    with hold_wal_keeper(db_file):
+        # Parent db() calls must not drop the keeper's POSIX fcntl -shm locks via os.close(fd).
+        with db(db_file) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)",
+                ("parent-initial", json.dumps({"ok": True}), "2026-11-15T00:00:00Z"),
+            )
+
+        child_code_1 = "\n".join(
+            [
+                "import json, sys",
+                "from pathlib import Path",
+                "from app.database import db",
+                "p = Path(sys.argv[1])",
+                "with db(p) as conn:",
+                "    conn.execute(",
+                "        'INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)',",
+                "        ('child-1', json.dumps({'ok': True}), '2026-11-15T00:00:01Z'),",
+                "    )",
+            ]
+        )
+        subprocess.run([sys.executable, "-c", child_code_1, str(db_file)], check=True, timeout=15)
+
+        child_code_2 = "\n".join(
+            [
+                "import sqlite3, sys",
+                "c = sqlite3.connect(sys.argv[1], timeout=5)",
+                "c.execute('PRAGMA journal_mode=WAL')",
+                "c.execute('PRAGMA wal_checkpoint(PASSIVE)')",
+                "c.close()",
+            ]
+        )
+        subprocess.run([sys.executable, "-c", child_code_2, str(db_file)], check=True, timeout=15)
+
+        assert Path(f"{db_file}-shm").exists()
+        with db(db_file) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)",
+                ("parent-after-child", json.dumps({"ok": True}), "2026-11-15T00:00:02Z"),
+            )
+            keys = {row["key"] for row in conn.execute("SELECT key FROM app_settings").fetchall()}
+        assert {"parent-initial", "child-1", "parent-after-child"} <= keys

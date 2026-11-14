@@ -32,7 +32,9 @@ ContextCore hooks stay silent and never auto-inject noisy dumps. Drive both **Da
 1. When the user types `/contextcore` or says `"接力"`, `"接着做"`, or `"continue"` without specifying a conversation, call `discover_relay_conversations(cwd="<current_working_directory>")` or `relay_conversation(cwd="<current_working_directory>")` (or `relay_project` for project-level relay), always passing `cwd`.
 2. Present the numbered candidate list — **every row MUST show `#序号 · [来源Agent] · 时间 · 对话主题 (title) + 对话简介 (brief_summary：聊了什么、停在哪) · ID / 原生会话ID` (NEVER omit `brief_summary`)** — and ask which conversation to continue.
 3. Once the user replies with a number (e.g. `1`) or `conversation_id`, call `relay_conversation(conversation_id=..., cwd="<current_working_directory>")`.
-4. If `status="loaded"` (`must_not_execute=True`) or `status="sync_pending"`, report `✅ 已加载对话上下文：《<标题>》` (noting if background history refresh is still pending) with a 2–3 line summary of the goal and latest progress, and **stop to wait for the user's concrete next instruction**. Only execute immediately when `must_not_execute=False` (`status="confirmed"` / `continuation.status="ready"`). Never redo `do_not_redo` items.
+4. If `transcript_paging.complete` is `false` (or `coverage.omitted_messages > 0`), **immediately page `read_conversation_messages(conversation_id=..., offset=..., limit=30)` sequentially from `offset=0` until `next_offset` is `null`** so you read the ENTIRE conversation from turn 0 to the end (do not stop with only the tail).
+5. Compact the entire conversation you just read in context (as in `/compact`: goal & background, full progression & modified files/commands, key decisions & user corrections, verified vs unverified/pitfalls, current stopping point, and the last 1–2 verbatim turns). Present `✅ 已读完并压缩完整上下文：《<标题>》（共 <total> 条消息）` with that clean compacted context — **NEVER present a handoff card / six-element card / missing-handoff notice**.
+6. If `status="loaded"` (`must_not_execute=True`) or `status="sync_pending"`, stop and wait for the user's concrete next instruction (noting if background history refresh is still pending). Only execute immediately when `must_not_execute=False` (`status="confirmed"` / `continuation.status="ready"`).
 
 ## 3. Local CLI / HTTP Fallback (When MCP Tools Are Not Loaded Yet)
 
@@ -44,4 +46,7 @@ curl -sS -G "http://127.0.0.1:8420/api/handoffs/relay/conversation" --data-urlen
 
 # Load selected conversation (<N> or <conversation_id>)
 curl -sS -G "http://127.0.0.1:8420/api/handoffs/relay/conversation" --data-urlencode "conversation_id=<N>" --data-urlencode "consumer=claude-code" --data-urlencode "cwd=$PWD" || curl -sS -G "http://127.0.0.1:18420/api/handoffs/relay/conversation" --data-urlencode "consumer=claude-code" --data-urlencode "cwd=$PWD"
+
+# Page full transcript from offset=0, 30, ... until all `total` messages are read, then compact context
+curl -sS "http://127.0.0.1:8420/api/conversations/<conversation_id>/messages?offset=0&limit=30" || curl -sS "http://127.0.0.1:18420/api/conversations/<conversation_id>/messages?offset=0&limit=30"
 ```

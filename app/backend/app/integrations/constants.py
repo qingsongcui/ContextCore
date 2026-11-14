@@ -58,6 +58,7 @@ MCP_TOOLS: tuple[str, ...] = (
     "import_note",
     "get_system_status",
     "read_evidence",
+    "read_conversation_messages",
     "discover_relay_conversations",
     "list_relay_conversations",
     "relay_conversation",

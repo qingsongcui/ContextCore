@@ -4,6 +4,7 @@ All notable changes to ContextCore will be documented in this file.
 
 ## [Unreleased]
 
+- Keep `/contextcore` candidate lists as short recognizable briefs without calling a model; upon concrete selection, avoid handoff-card clutter and return `transcript_paging` so the receiving Agent reads the full transcript sequentially via `read_conversation_messages` (bounded per page to stay within MCP response budgets) and compacts the entire conversation directly in context.
 - Preserve native session IDs in conversation APIs, search, and relay candidates; resolve bare native UUIDs without guessing when multiple sessions match.
 - Keep distinct same-title sessions and explicitly labeled unassigned sessions visible in newest-first, counted relay pages. Read indexed metadata for discovery instead of decoding all stored transcripts.
 - Refresh a selected authorized native source independently of unrelated tasks and history backlogs. Selection-only reads do not create or confirm handoffs; stale, unavailable, or changing sources are reported explicitly.

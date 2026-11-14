@@ -306,6 +306,15 @@
   .policy-list { margin: 0; } .policy-list>div { display: grid; gap: 6px; padding: 14px 0; border-top: 1px solid var(--line); } .policy-list dt { font-size: 12px; } .policy-list dd { margin: 0; font-size: 12px; color: var(--secondary); }
   .audit-filters { margin-bottom: 24px; } .table-scroll { overflow: auto; } .audit-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; } .audit-table th { font-weight: 500; color: var(--secondary); font-size: 11px; } .audit-table th, .audit-table td { padding: 17px 12px; border-bottom: 1px solid var(--line); } .audit-target { overflow-wrap: anywhere; min-width: 120px; } .audit-table td:first-child { white-space: nowrap; }
   .conversation-meta { display: grid; gap: 20px; padding-bottom: 24px; border-bottom: 1px solid var(--line); } .conversation-meta select { max-width: 300px; } .message { padding: 28px 0; border-bottom: 1px solid var(--line); } .message header { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; margin-bottom: 16px; } .message time { font-size: 11px; color: var(--muted); } .message-user { padding-left: 18px; border-left: 2px solid var(--line-strong); } .process-summary { background: var(--surface-soft); padding: 18px; border-radius: var(--r-sm); margin-top: 24px; font-size: 13px; } .process-summary .markdown { margin-top: 16px; }
+  .handoff-page-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+  .handoff-page-fields { display: grid; gap: 8px 16px; margin: 12px 0; grid-template-columns: max-content 1fr; }
+  .handoff-page-fields dt { color: var(--muted); font-size: 12px; }
+  .handoff-page-fields dd { margin: 0; }
+  .handoff-page-fields .markdown { margin-top: 0; }
+  @media (max-width: 560px) {
+    .handoff-page-fields { grid-template-columns: 1fr; gap: 4px; }
+    .handoff-page-fields dt { margin-top: 8px; }
+  }
   .conversation-row h3 { font-size: 15px; } .conversation-row p { font-size: 12px; color: var(--secondary); margin-top: 5px; } .task-row { display: flex; gap: 14px; width: 100%; text-align: left; padding: 24px 0; border-bottom: 1px solid var(--line); } .task-row>div { flex: 1; min-width: 0; } .task-row h3 { margin: 10px 0; } .task-row p { color: var(--secondary); font-size: 13px; white-space: pre-line; margin-bottom: 10px; }
   .handoff-section { display: flex; gap: 18px; padding: 12px 0 20px; border-bottom: 1px solid var(--line); } .handoff-section>span { font-size: 11px; color: var(--muted); padding-top: 3px; } .handoff-section>div { flex: 1; min-width: 0; } .handoff-section h3 { font-size: 14px; margin-bottom: 12px; } .handoff-section .markdown { font-size: 13px; } .handoff-id { font-size: 11px; color: var(--secondary); overflow-wrap: anywhere; } .confirmation-note { display: flex; gap: 10px; color: var(--success); font-size: 12px; }
   .split-selections label { display: flex; align-items: center; gap: 8px; padding: 8px 0; font-size: 12px; } .split-selections h3 { font-size: 13px; margin: 18px 0 8px; }

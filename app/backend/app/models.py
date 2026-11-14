@@ -301,6 +301,25 @@ class ChatMessage(BaseModel):
     timestamp: str
 
 
+class ConversationHandoffPage(BaseModel):
+    conversation_id: str | None = None
+    source_content_hash: str | None = None
+    covered_message_count: int | None = None
+    status: Literal["ready", "error", "unavailable"] | None = None
+    goal: str = ""
+    done: str = ""
+    do_not_redo: str = ""
+    unverified: str = ""
+    next_step: str = ""
+    facts_json: dict[str, Any] | None = None
+    error: str | None = None
+    updated_at: str | None = None
+    fresh: bool | None = None
+    reused: bool | None = None
+    stale: bool | None = None
+    write_error: str | None = None
+
+
 class Conversation(BaseModel):
     id: str
     external_id: str | None = None
@@ -317,6 +336,7 @@ class Conversation(BaseModel):
     process_summary: str = ""
     processing_status: Literal["pending", "processed", "error"] = "pending"
     processing_error: str | None = None
+    handoff_page: ConversationHandoffPage | None = None
 
 
 class ConversationCreate(BaseModel):

@@ -67,7 +67,15 @@ def conversation_messages_endpoint(
 
 @router.get("/{conversation_id}", response_model=Conversation)
 def get_conversation_endpoint(conversation_id: str, include_messages: bool = False):
-    return conversation_service.get_conversation(conversation_id, include_messages=include_messages)
+    conv = conversation_service.get_conversation(conversation_id, include_messages=include_messages)
+    from app.services import handoff_page_service
+    # Read-only: attach a previously written page; never write on detail view.
+    page = handoff_page_service.public_page_view(
+        handoff_page_service.get_handoff_page_for_detail(conversation_id)
+    )
+    if page is not None:
+        conv = {**conv, "handoff_page": page}
+    return conv
 
 
 @router.patch("/{conversation_id}", response_model=Conversation)

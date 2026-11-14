@@ -2952,13 +2952,18 @@ def relay_conversation(
             "已加载；等待用户下一步指令。",
             "Loaded; wait for the user's next instruction.",
         )
-        state_note = _code_state_text(project_service.worktree_code_state(selected_conv.get("cwd")))
-        rendered_state = render(str(state_note), getattr(state_note, "spans", []), language)
+        conv_cwd = str(selected_conv.get("cwd") or "").strip()
+        if conv_cwd:
+            state_note = _code_state_text(project_service.worktree_code_state(conv_cwd))
+            rendered_state = render(str(state_note), getattr(state_note, "spans", []), language)
+            evidence_text = f"[{source_agent}] {display_title} ({conv_cwd}) // {rendered_state}"
+        else:
+            evidence_text = f"[{source_agent}] {display_title} ({pname})"
         card = {
             "goal": (query if has_task else None) or conv_summary.get("user_goal") or selected_conv.get("title") or local("继续所选对话任务", "Continue selected conversation"),
             "progress": conv_summary.get("brief_summary") or local("已加载所选对话记录", "Loaded selected conversation record"),
             "decisions": "\n".join(decision_lines) if decision_lines else local("沿用当前项目与全局偏好约束", "Follow current project and global preferences"),
-            "evidence": f"[{source_agent}] {display_title} ({selected_conv.get('cwd') or pname}) // {rendered_state}",
+            "evidence": evidence_text,
             "blockers": local("无显式阻塞", "No explicit blockers") if has_task else local("尚未收到具体执行指令", "No concrete task instruction yet"),
             "next_steps": query if has_task else wait_steps,
         }
@@ -3084,6 +3089,10 @@ def relay_conversation(
             if is_discussion_only else local("已加载，等待指令", "Loaded; wait for instruction")
             if not ready else local("执行用户本次明确指令", "Follow the user's explicit instruction")
         ),
+        local(
+            f"- 原文翻页: read_conversation_messages(conversation_id=\"{selected_conv['id']}\") 或 GET /api/conversations/{selected_conv['id']}/messages",
+            f"- Full transcript: read_conversation_messages(conversation_id=\"{selected_conv['id']}\") or GET /api/conversations/{selected_conv['id']}/messages",
+        ),
     ]
     if not history_fresh:
         header.append(local(
@@ -3103,8 +3112,11 @@ def relay_conversation(
     def pack(messages, clipped=None):
         ordered = sorted(messages, key=lambda m: m["source_index"])
         oldest = ordered[0]["source_index"] if ordered else len(raw_msgs)
+        full_transcript_loaded = bool(
+            len(ordered) == len(raw_msgs) and not clipped and not tool_fields_omitted
+        )
         coverage = {
-            "scope": "partial" if len(ordered) != len(raw_msgs) or clipped or tool_fields_omitted else "complete_messages",
+            "scope": "complete_messages" if full_transcript_loaded else "partial",
             "total_messages": len(raw_msgs), "included_messages": len(ordered),
             "omitted_messages": len(raw_msgs) - len(ordered),
             "omitted_older_messages": oldest,
@@ -3113,48 +3125,113 @@ def relay_conversation(
             "summary_clipped_fields": summary_clipped_fields,
             "process_summary_omitted": bool(selected_conv.get("process_summary")),
             "tool_fields_omitted": tool_fields_omitted,
+            "full_transcript_loaded": full_transcript_loaded,
         }
+        transcript_paging: dict[str, Any] = {
+            "complete": full_transcript_loaded,
+            "total_messages": len(raw_msgs),
+            "included_count": len(ordered),
+            "omitted_messages": len(raw_msgs) - len(ordered),
+            "tool": "read_conversation_messages",
+        }
+        if not full_transcript_loaded:
+            transcript_paging["next_args"] = {
+                "conversation_id": selected_conv["id"],
+                "offset": 0,
+                "limit": 30,
+            }
         selected = selected_metadata | {"messages": ordered, "truncated_older_messages": oldest}
-        note = local(
-            f"消息节选 {len(ordered)}/{len(raw_msgs)}；省略 {coverage['omitted_messages']} 条；非完整历史。",
-            f"Message excerpt {len(ordered)}/{len(raw_msgs)}; {coverage['omitted_messages']} omitted; not full history.",
-        )
-        if clipped:
+        if full_transcript_loaded:
+            note = local(
+                f"已附带全部 {len(ordered)}/{len(raw_msgs)} 条原文；请直接压缩完整上下文（勿用交接卡格式）。",
+                f"Full transcript included ({len(ordered)}/{len(raw_msgs)}); compact full context directly (no handoff card).",
+            )
+        else:
+            note = local(
+                f"消息节选 {len(ordered)}/{len(raw_msgs)}；省略 {coverage['omitted_messages']} 条；非完整历史。",
+                f"Message excerpt {len(ordered)}/{len(raw_msgs)}; {coverage['omitted_messages']} omitted; not full history.",
+            )
+            if clipped:
+                note += local(
+                    f" 消息 {clipped['source_index']} 仅保留末尾，省略前缀 {clipped['omitted_prefix_bytes']} 字节。",
+                    f" Message {clipped['source_index']} is a tail excerpt; {clipped['omitted_prefix_bytes']} prefix bytes omitted.",
+                )
             note += local(
-                f" 消息 {clipped['source_index']} 仅保留末尾，省略前缀 {clipped['omitted_prefix_bytes']} 字节。",
-                f" Message {clipped['source_index']} is a tail excerpt; {clipped['omitted_prefix_bytes']} prefix bytes omitted.",
+                f" 请先用 read_conversation_messages(conversation_id=\"{selected_conv['id']}\", offset=0, limit=30) 连续翻完全部 {len(raw_msgs)} 条再压缩整场上下文。",
+                f" Read all {len(raw_msgs)} messages sequentially with read_conversation_messages(conversation_id=\"{selected_conv['id']}\", offset=0, limit=30) before compacting full context.",
             )
         payload = {
             "ok": True, "status": "confirmed" if ready else "loaded", "selection_kind": "conversation",
+            "relay_mode": "full_transcript_compaction",
             "confirmed": ready, "must_not_execute": not ready, "execution_mode": continuation["execution_mode"],
             "project": project, "conversation_id": selected_conv["id"],
             "synced_agents": synced_agents, "sync_failed": sync_failed,
             "history_fresh": history_fresh, "sync_requested": sync_first,
             "selected_conversation": selected,
+            "transcript_paging": transcript_paging,
             "handoff_id": handoff["id"] if handoff else None,
             "handoff": {"id": handoff["id"], "status": "confirmed" if ready else handoff["status"]} if handoff else None,
-            "card": card, "readback": d005_readback(card), "continuation": continuation,
+            "card": card, "readback": d005_readback(card) if handoff else None, "continuation": continuation,
             "context": {
-                "mode": "conversation_detail", "selected_conversation": selected,
-                "project": {"$ref": "#/project"}, "six_elements": {"$ref": "#/card"},
+                "mode": "full_transcript_relay", "selected_conversation": selected,
+                "project": {"$ref": "#/project"},
             },
-            "context_text": "\n".join([*header, note, *[f"- **{m['role']}**: {m['content']}" for m in ordered]]),
+            "context_text": "\n".join([
+                *header,
+                note,
+                *[f"- **{m['role']}** [{m['source_index']}]: {m['content']}" for m in ordered],
+            ]),
             "truncated_older_messages": oldest, "coverage": coverage,
         }
         return retrieval_service.bound_context_response(payload, max_tokens, language=language)
 
-    # Protect the newest user request while fitting the latest assistant tail;
-    # otherwise a huge reply could crowd out what the user actually asked.
-    latest = text_messages[-1] if text_messages else None
-    newest_user = next((m for m in reversed(text_messages) if m["role"] == "user"), None)
-    kept = [newest_user] if newest_user and latest is not newest_user else []
-    result = pack(kept)
+    def _fit_message_tail(base_messages, target_msg):
+        text = target_msg["content"]
+        low, high = 1, min(len(text), max_tokens)
+        fitted_resp = None
+        fitted_msg = None
+        original_bytes = len(text.encode("utf-8"))
+        while low <= high:
+            count = (low + high) // 2
+            suffix = text[-count:]
+            clipped = {
+                "source_index": target_msg["source_index"],
+                "original_bytes": original_bytes,
+                "included_bytes": len(suffix.encode("utf-8")),
+                "omitted_prefix_bytes": original_bytes - len(suffix.encode("utf-8")),
+            }
+            candidate_msg = target_msg | {"content": suffix}
+            candidate_resp = pack([*base_messages, candidate_msg], clipped)
+            if candidate_resp["ok"]:
+                fitted_resp = candidate_resp
+                fitted_msg = candidate_msg
+                low = count + 1
+            else:
+                high = count - 1
+        return fitted_resp, fitted_msg
+
+    # The five-field page must fit whole. Then protect the newest user request
+    # (trimming its head only if oversized) and fit the latest reply tail; older turns fill remaining budget.
+    result = pack([])
     if not result["ok"]:
         if created_new_handoff_id:
             _cleanup_provisional_handoff(created_new_handoff_id)
             _clear_deleted_handoff_refs(result, created_new_handoff_id)
-        return result  # Protected metadata/request alone cannot fit.
-    if latest:
+        return result
+    latest = text_messages[-1] if text_messages else None
+    newest_user = next((m for m in reversed(text_messages) if m["role"] == "user"), None)
+    kept: list[dict[str, Any]] = []
+    if newest_user and latest is not newest_user:
+        candidate = pack([newest_user])
+        if candidate["ok"]:
+            kept = [newest_user]
+            result = candidate
+        else:
+            fitted_user_resp, fitted_user_msg = _fit_message_tail([], newest_user)
+            if fitted_user_resp is not None and fitted_user_msg is not None:
+                kept = [fitted_user_msg]
+                result = fitted_user_resp
+    if latest and result.get("ok"):
         candidate = pack([*kept, latest])
         if candidate["ok"]:
             kept.append(latest)
@@ -3169,33 +3246,9 @@ def relay_conversation(
                 kept.append(message)
                 result = candidate
         else:
-            # Fit the exact Unicode suffix against the *serialized* payload,
-            # including both structured aliases and its Markdown rendering.
-            text = latest["content"]
-            low, high = 1, min(len(text), max_tokens)
-            fitted = None
-            original_bytes = len(text.encode("utf-8"))
-            while low <= high:
-                count = (low + high) // 2
-                suffix = text[-count:]
-                clipped = {
-                    "source_index": latest["source_index"],
-                    "original_bytes": original_bytes,
-                    "included_bytes": len(suffix.encode("utf-8")),
-                    "omitted_prefix_bytes": original_bytes - len(suffix.encode("utf-8")),
-                }
-                candidate = pack([*kept, latest | {"content": suffix}], clipped)
-                if candidate["ok"]:
-                    fitted = candidate
-                    low = count + 1
-                else:
-                    high = count - 1
-            if fitted is None:
-                if created_new_handoff_id:
-                    _cleanup_provisional_handoff(created_new_handoff_id)
-                    _clear_deleted_handoff_refs(candidate, created_new_handoff_id)
-                return candidate
-            result = fitted
+            fitted_latest_resp, _ = _fit_message_tail(kept, latest)
+            if fitted_latest_resp is not None:
+                result = fitted_latest_resp
     try:
         with db() as conn:
             current = conn.execute("SELECT content_hash FROM conversations WHERE id=?", (selected_conv["id"],)).fetchone()
