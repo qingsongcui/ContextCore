@@ -316,3 +316,16 @@ def test_provider_summary_exposes_declared_default_without_legacy_external_selec
     assert 'cc_switch_current_hosts' not in manager._public(manager.get('provider', provider['id']))
     assert 'model_map' not in item
 
+
+
+def test_global_provider_summary_reports_legacy_membership_and_preserves_model_inheritance(manager):
+    provider = manager.save('provider', {'name':'Test provider','protocol':'openai','base_url':'http://127.0.0.1:18913/v1'})
+    model = manager.save('model', {'name':'Test model','model_id':'example','provider_id':provider['id']})
+    manager.save('binding', {'host_id':'cursor','provider_id':provider['id'],'model_id':model['id']})
+    row, = manager.catalog_page('provider',scope='all')['items']
+    assert row['inherited_agent_ids'] == ['cursor']
+    manager.save('provider', {'agent_ids':row['inherited_agent_ids']+['codex','claude-code']},row['id'],row['version'])
+    for host in ['cursor','codex','claude-code']:
+        assert manager.catalog_page('model',agent_id=host)['items'][0]['id'] == model['id']
+    assert manager.catalog_page('provider',scope='all')['items'][0]['agent_ids'] == ['cursor','codex','claude-code']
+    assert (manager.home / '.codex/config.toml').exists() is False

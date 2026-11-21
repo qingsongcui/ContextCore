@@ -14,7 +14,7 @@ from app.routers import (
     session,
     status,
     projects,
-    workbench,
+    workbench, workbench_methods,
     content,
     conversations,
     connections,
@@ -180,6 +180,7 @@ app.include_router(session.router)
 app.include_router(status.router)
 app.include_router(projects.router)
 app.include_router(workbench.router)
+app.include_router(workbench_methods.router)
 app.include_router(content.router)
 app.include_router(conversations.router)
 app.include_router(connections.router)

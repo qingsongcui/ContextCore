@@ -415,3 +415,5 @@
     margin-bottom: 26px;
   }
 }
+.method-library-actions { display: grid; gap: 12px; }
+.method-library-actions pre { margin-block: 10px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 19rem; overflow-y: auto; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-soft); }

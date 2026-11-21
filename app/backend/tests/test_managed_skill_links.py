@@ -46,6 +46,12 @@ def root(manager, asset):
     return manager.home / ".codex" / "skills" / asset["id"]
 
 
+def codex_entry(asset, body, name="SKILL.md"):
+    if name != "SKILL.md":
+        return body
+    return f'---\nname: {asset["id"].replace("_", "-")}\ndescription: {json.dumps(asset["name"], ensure_ascii=False)}\n---\n\n{body}'
+
+
 def archive(files):
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as bundle:
@@ -72,7 +78,8 @@ def test_skill_api_lifecycle_smoke(env, tmp_path):
         assert entry["before_state"] is None
         assert entry["install_mode"] == "symlink"
         assert entry["source_version"] == asset["version"]
-        expected = files[Path(entry["path"]).relative_to(target_root).as_posix()].encode()
+        name = Path(entry["path"]).relative_to(target_root).as_posix()
+        expected = codex_entry(asset, files[name], name).encode()
         assert entry["after_hash"] == digest(expected)
         assert entry["after_state"]["bytes_hash"] == digest(expected)
         assert entry["after_state"]["target_hash"] == digest(entry["after_state"]["target"].encode())
@@ -91,7 +98,7 @@ def test_skill_api_lifecycle_smoke(env, tmp_path):
     for name, text in files.items():
         path = target_root / name
         assert path.is_symlink()
-        assert path.read_text() == text
+        assert path.read_text() == codex_entry(asset, text, name)
         targets[name] = Path(os.readlink(path))
         assert targets[name].is_relative_to(manager.db_path.parent / "skill-versions")
         assert targets[name].stat().st_mode & 0o777 == 0o400
@@ -106,9 +113,9 @@ def test_skill_api_lifecycle_smoke(env, tmp_path):
     assert not (target_root / "scripts/run.sh").is_symlink()
     for name, text in changed.items():
         assert (target_root / name).is_symlink()
-        assert (target_root / name).read_text() == text
+        assert (target_root / name).read_text() == codex_entry(asset, text, name)
         assert str(updated["version"]) == Path(os.readlink(target_root / name)).parent.name
-    assert targets["SKILL.md"].read_text() == files["SKILL.md"]
+    assert targets["SKILL.md"].read_text() == codex_entry(asset, files["SKILL.md"])
 
     response = client.patch(f"/api/manage/assets/{asset['id']}", json={"install_mode": "copy", "expected_version": updated["version"]})
     assert response.status_code == 200
@@ -116,7 +123,7 @@ def test_skill_api_lifecycle_smoke(env, tmp_path):
     apply(manager, copied)
     for name, text in changed.items():
         assert not (target_root / name).is_symlink()
-        assert (target_root / name).read_text() == text
+        assert (target_root / name).read_text() == codex_entry(asset, text, name)
     response = client.post(f"/api/manage/assets/{asset['id']}/restore", json={"version": asset["version"], "expected_version": copied["version"]})
     assert response.status_code == 200, response.text
     restored = response.json()
@@ -124,14 +131,14 @@ def test_skill_api_lifecycle_smoke(env, tmp_path):
     apply(manager, restored)
     for name, text in files.items():
         assert (target_root / name).is_symlink()
-        assert (target_root / name).read_text() == text
+        assert (target_root / name).read_text() == codex_entry(asset, text, name)
     foreign = target_root / "user-added.txt"
     foreign.write_text("keep outside managed file set")
     receipt = apply(manager, restored, "uninstall")
     assert receipt["status"] == "applied"
     assert not (target_root / "SKILL.md").is_symlink()
     assert foreign.read_text() == "keep outside managed file set"
-    assert targets["SKILL.md"].read_text() == files["SKILL.md"]
+    assert targets["SKILL.md"].read_text() == codex_entry(asset, files["SKILL.md"])
     assert not marker.exists()
 
 
@@ -145,7 +152,7 @@ def test_export_import_and_local_source_updates_preserve_mode(env, tmp_path, mod
     asset = result["imported"][0]
     apply(manager, asset)
     (source / "SKILL.md").write_text("source two")
-    assert (root(manager, asset) / "SKILL.md").read_text() == "source one"
+    assert (root(manager, asset) / "SKILL.md").read_text() == codex_entry(asset, "source one")
     exported = client.get("/api/manage/assets/export?kind=skill").json()
     assert exported["objects"][0]["data"]["install_mode"] == mode
     other_home = tmp_path / "other-home"
@@ -156,11 +163,11 @@ def test_export_import_and_local_source_updates_preserve_mode(env, tmp_path, mod
     copied_asset = other.list("asset")[0]
     assert copied_asset["install_mode"] == mode
     apply(other, copied_asset)
-    assert (root(other, copied_asset) / "SKILL.md").read_text() == "source one"
+    assert (root(other, copied_asset) / "SKILL.md").read_text() == codex_entry(copied_asset, "source one")
     updated = manager.import_objects({"format": "skill-local", "data": str(source), "target_id": asset["id"], "expected_version": asset["version"]})["imported"][0]
     assert updated["install_mode"] == mode
     apply(manager, updated)
-    assert (root(manager, asset) / "SKILL.md").read_text() == "source two"
+    assert (root(manager, asset) / "SKILL.md").read_text() == codex_entry(asset, "source two")
 
 
 @pytest.mark.parametrize("initial,updated", [("copy", "symlink"), ("symlink", "copy"), ("symlink", "symlink")])
@@ -174,11 +181,11 @@ def test_bundle_restore_recovers_exact_original_mode_and_target(env, initial, up
     bundle = manager.save("bundle", {"name": "Synthetic bundle", "asset_ids": [asset["id"]], "host_ids": ["codex"]})
     plan = manager.plan({"host_id": "codex", "bundle_id": bundle["id"]})
     manager.apply(plan["id"], 1, True)
-    assert path.read_text() == "bundle version"
+    assert path.read_text() == codex_entry(asset, "bundle version")
     restore = manager.plan({"host_id": "codex", "operation": "restore"})
     receipt = manager.apply(restore["id"], 1, True)
     assert receipt["payload"]["readback"] == "verified"
-    assert path.read_text() == "# Version one"
+    assert path.read_text() == codex_entry(asset, "# Version one")
     assert path.is_symlink() == (initial == "symlink")
     if original_target:
         assert os.readlink(path) == original_target
@@ -199,7 +206,7 @@ def test_legacy_owned_copy_can_switch_to_link_without_weakening_ownership(env):
     asset = manager.save("asset", {"install_mode": "symlink"}, asset["id"], asset["version"])
     apply(manager, asset)
     assert path.is_symlink()
-    assert path.read_text() == "# Version one"
+    assert path.read_text() == codex_entry(asset, "# Version one")
 
 
 def test_stale_plan_detects_asset_and_same_bytes_mode_changes(env):
@@ -236,7 +243,7 @@ def test_external_link_or_content_changes_never_overwrite_or_uninstall(env, tmp_
         target.write_text("external change")
     else:
         path.unlink()
-        path.write_text("# Version one" if mutation == "replace_same_bytes" else "external change")
+        path.write_text(codex_entry(asset, "# Version one") if mutation == "replace_same_bytes" else "external change")
     with pytest.raises(ConfigurationError):
         manager.apply(plan["id"], 1, True)
     for operation in ("install", "uninstall"):
@@ -246,7 +253,7 @@ def test_external_link_or_content_changes_never_overwrite_or_uninstall(env, tmp_
     if mutation == "repoint":
         assert os.readlink(path) == str(outside)
     else:
-        assert path.read_text() == ("# Version one" if mutation == "replace_same_bytes" else "external change")
+        assert path.read_text() == (codex_entry(asset, "# Version one") if mutation == "replace_same_bytes" else "external change")
 
 
 @pytest.mark.parametrize("mode", ["copy", "symlink"])
@@ -341,7 +348,7 @@ def test_mixed_partial_failure_recovery_restores_mode_ownership_and_bytes(env, m
     monkeypatch.setattr(manager.transactions, "_atomic", fail_mcp)
     with pytest.raises(ConfigurationError, match="recovery is required"):
         manager.apply(plan["id"], 1, True)
-    assert path.read_text() == "changed"
+    assert path.read_text() == codex_entry(asset, "changed")
     assert path.is_symlink() == (initial == "copy")
     persisted = manager.transactions.get(plan["id"])
     assert persisted["status"] == "recovery_required"
@@ -353,14 +360,14 @@ def test_mixed_partial_failure_recovery_restores_mode_ownership_and_bytes(env, m
     # A restarted service must use persisted link states, not process memory.
     restarted = ManagementService(manager.db_path, manager.home, manager.vault)
     assert restarted.transactions.recover(plan["id"], True)["status"] == "recovered"
-    assert path.read_text() == "# Version one"
+    assert path.read_text() == codex_entry(asset, "# Version one")
     assert path.is_symlink() == (initial == "symlink")
     if target:
         assert os.readlink(path) == target
     assert not (manager.home / ".codex/config.toml").exists()
     assert restarted.transactions.recover(plan["id"], True)["status"] == "recovered"
     apply(restarted, asset)
-    assert path.read_text() == "changed"
+    assert path.read_text() == codex_entry(asset, "changed")
 
 
 def test_recovery_rejects_repointed_link_without_deleting_external_file(env, tmp_path, monkeypatch):
@@ -419,7 +426,7 @@ def test_copy_default_and_generic_link_rejection_remain_intact(env):
     assert asset["install_mode"] == "copy"
     apply(manager, asset)
     path = root(manager, asset) / "SKILL.md"
-    assert path.read_text() == "default"
+    assert path.read_text() == codex_entry(asset, "default")
     assert not path.is_symlink()
     asset = manager.save("asset", {"install_mode": "symlink"}, asset["id"], asset["version"])
     apply(manager, asset)
@@ -428,7 +435,7 @@ def test_copy_default_and_generic_link_rejection_remain_intact(env):
     # A generic file operation must not gain the typed link capability.
     with pytest.raises(ConfigurationError, match="Symlink"):
         manager.transactions.create([{"path": str(path), "kind": "file", "owner": asset["id"], "value": "overwrite"}])
-    assert path.is_symlink() and path.read_text() == "default"
+    assert path.is_symlink() and path.read_text() == codex_entry(asset, "default")
 
 
 def test_failed_metadata_commit_recovers_link_install_without_false_ownership(env):
@@ -486,7 +493,7 @@ def test_retained_copy_only_bundle_baseline_restores_after_link_cutover(env):
     assert all(item["source_version"] is None for item in restore["payload"]["files"])
     manager.apply(restore["id"], 1, True)
     assert not path.is_symlink()
-    assert path.read_text() == "# Version one"
+    assert path.read_text() == codex_entry(asset, "# Version one")
     assert (root(manager, asset) / "scripts/helper.sh").read_text() == "echo not-executed\n"
     apply(manager, asset, "uninstall")
     assert not path.exists()
@@ -506,7 +513,7 @@ def test_hidden_skill_file_does_not_block_sibling_install_or_uninstall(env):
     for name, text in files.items():
         path = root(manager, asset) / name
         assert path.is_symlink()
-        assert path.read_text() == text
+        assert path.read_text() == codex_entry(asset, text, name)
     removed = apply(manager, asset, "uninstall")
     assert removed["status"] == "applied"
     for name in files:

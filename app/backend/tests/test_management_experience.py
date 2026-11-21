@@ -264,7 +264,7 @@ def archive(files):
 
 def test_finder_zip_wrapper_and_metadata_import_as_one_named_skill_and_apply(manager):
     result = manager.import_objects(archive({
-        "writing/SKILL.md": "---\nname: writing-fixture\n---\n# Writing\n",
+        "writing/SKILL.md": "---\nname: writing-fixture\ndescription: Verify wrapped archive metadata.\n---\n# Writing\n",
         "writing/references/guide.md": "Keep references.",
         "writing/.DS_Store": b"\xff\x00finder metadata",
         "__MACOSX/writing/._SKILL.md": b"\xff\x00finder metadata",
@@ -274,7 +274,7 @@ def test_finder_zip_wrapper_and_metadata_import_as_one_named_skill_and_apply(man
     assert set(asset["files"]) == {"SKILL.md", "references/guide.md"}
     plan = manager.plan({"host_id": "codex", "asset_ids": [asset["id"]]})
     manager.apply(plan["id"], plan["version"], True)
-    assert (manager.home / ".codex/skills" / asset["id"] / "references/guide.md").read_text() == "Keep references."
+    assert (manager.home / ".codex/skills/writing-fixture/references/guide.md").read_text() == "Keep references."
 
 
 @pytest.mark.parametrize("files", [

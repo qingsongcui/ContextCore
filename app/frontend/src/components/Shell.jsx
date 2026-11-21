@@ -1,5 +1,5 @@
 import { t } from "../lib/i18n.jsx";
-import { BarChart3, BookOpen, BriefcaseBusiness, CircleDot, ContactRound, FolderOpen, House, Layers3, Menu, Monitor, Moon, Plug, Settings2, Sun, UsersRound, X } from 'lucide-react';
+import { BarChart3, BookOpen, BriefcaseBusiness, CircleDot, ContactRound, FolderOpen, House, LibraryBig, Layers3, Menu, Monitor, Moon, Plug, Settings2, Sun, UsersRound, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTheme } from '../lib/theme.js';
 import { Button } from './ui.jsx';
@@ -18,6 +18,7 @@ const GROUPS = [
   ] },
   { name: '管理', items: [
     { id: 'agents', label: 'Agent 管理', icon: Plug },
+    { id: 'agents', section: 'library', label: '全局资源库', icon: LibraryBig },
     { id: 'usage', label: '用量与性能', icon: BarChart3 },
     { id: 'settings', label: '设置', icon: Settings2 }
   ] }
@@ -26,6 +27,7 @@ export function Shell({
   lang,
   page,
   section,
+  agent,
   navigate,
   projects,
   selectedProject,
@@ -105,14 +107,15 @@ export function Shell({
   }
   const currentSection = section || 'memory';
   const active = item => {
-    if (page === 'connections') return item.id === 'agents';
+    if (page === 'connections') return item.id === 'agents' && !item.section;
+    if (page === 'agents' && item.id === 'agents') return (!agent && section === 'library') === (item.section === 'library');
     if (page === 'audit') return item.id === 'settings';
     return item.id === page && (!item.section || item.section === currentSection);
   };
   function navItem(item) {
     const Icon = item.icon;
     const unavailable = ['agents', 'usage'].includes(item.id) && managementState !== 'ready';
-    const destination = item.section ? { page: item.id, section: item.section } : item.id === 'projects' ? { page: 'projects', project: null, section: null } : item.id;
+    const destination = item.id === 'agents' && item.section ? {page: 'agents', section: 'library', agent: null} : item.section ? { page: item.id, section: item.section } : item.id === 'projects' ? { page: 'projects', project: null, section: null } : item.id;
     return <button key={item.section || item.id} data-route-page={item.id} data-route-section={item.section}
       disabled={unavailable} aria-current={active(item) ? 'page' : undefined} className={active(item) ? 'active' : ''}
       onClick={() => go(destination)}><Icon size={17} aria-hidden="true" /><span>{t(item.label)}</span>

@@ -99,6 +99,12 @@ def catalog_page(manager, kind, *, agent_id=None, resource_kind=None, provider_i
     fields += [f"substr(json_extract(e.data,'$.source.{name}'),1,{size}) AS source_{name}" for name, size in SOURCE_FIELDS.items()]
     known_hosts = ','.join("'" + host.replace("'", "''") + "'" for host in HOSTS)
     fields += [f"CASE WHEN json_type(e.data,'$.{name}')='array' THEN (SELECT json_group_array(DISTINCT value) FROM json_each(e.data,'$.{name}') WHERE value IN ({known_hosts})) ELSE NULL END AS {name}" for name in ('agent_ids', 'host_ids')]
+    if kind == 'provider' and scope == 'all':
+        # Old provider definitions inherit membership from bindings until explicitly assigned.
+        fields.append(f"""CASE WHEN json_type(e.data,'$.agent_ids') IS NOT 'array' THEN
+            (SELECT json_group_array(DISTINCT json_extract(b.data,'$.host_id')) FROM management_entities b
+             WHERE b.kind='binding' AND json_extract(b.data,'$.provider_id')=e.id
+             AND json_extract(b.data,'$.host_id') IN ({known_hosts})) END AS inherited_agent_ids""")
     fields += ["CASE WHEN json_type(e.data,'$.supported_endpoints')='array' THEN (SELECT json_group_array(DISTINCT value) FROM json_each(e.data,'$.supported_endpoints') WHERE value IN ('chat/completions','responses','messages','generateContent')) ELSE NULL END AS supported_endpoints"]
     fields += ["CASE WHEN e.kind='provider' THEN substr(coalesce("
                "json_extract(e.data,'$.default_model'), "
@@ -143,6 +149,8 @@ def catalog_page(manager, kind, *, agent_id=None, resource_kind=None, provider_i
         for name in ('agent_ids', 'host_ids'):
             if row[name] is not None:
                 item[name] = json.loads(row[name])
+        if kind == 'provider' and scope == 'all' and row['inherited_agent_ids'] is not None:
+            item['inherited_agent_ids'] = json.loads(row['inherited_agent_ids'])
         if row['default_model'] is not None:
             item['default_model'] = row['default_model']
         if row['supported_endpoints'] is not None:

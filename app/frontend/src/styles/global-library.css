@@ -1,0 +1,32 @@
+.global-library { min-width:0; max-width:1180px }
+.global-library .global-back { margin-bottom:20px }
+.global-tabs,.global-toolbar,.global-section-head,.global-asset-heading,.global-selection,.global-share-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px }
+.global-tabs { border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:18px }
+.global-tabs .button[aria-pressed=true] { color:var(--accent); border-color:var(--accent); background:var(--accent-tint) }
+.global-toolbar,.global-section-head,.global-asset-heading { justify-content:space-between }
+.global-toolbar { align-items:flex-end }
+.global-toolbar .field { flex:1; min-width:min(210px,100%); max-width:410px }
+.global-native { margin:14px 0 22px; padding-block:10px; border-block:1px solid var(--line) }
+.global-native>summary,.global-asset-row summary { cursor:pointer; color:var(--secondary); font-size:.88rem }
+.global-native .field { max-width:360px; margin:.65rem 0 }
+.global-work-area { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:24px }
+.global-assets,.global-states { list-style:none; margin:0; padding:0 }
+.global-asset-row { padding:14px 0; border-bottom:1px solid var(--line); overflow-wrap:anywhere }
+.global-asset-row details { margin-top:8px }
+.global-asset-heading>label { display:flex; gap:12px; align-items:center; min-width:0; flex:1 }
+.global-asset-heading>label small { display:block }
+.global-targets { padding:20px; border:1px solid var(--line); background:var(--surface-soft); border-radius:10px; display:grid; gap:16px }
+.global-targets h2,.global-host-choice { display:flex; align-items:center; gap:8px }
+.global-hosts { border:0; margin:0; padding:0; min-width:0 }
+.global-hosts legend { margin-bottom:8px; font-weight:600 }
+.global-host-choice { min-height:38px; font-size:.9rem; cursor:pointer }
+.global-host-choice small { margin-left:auto }
+.global-selection ul { width:100%; margin:0; padding-left:20px; max-height:96px; overflow:auto; overflow-wrap:anywhere }
+.global-share-actions { border-top:1px solid var(--line); padding-top:14px }
+.global-states { display:grid; margin:8px 0; gap:4px }
+.global-states li { display:flex; justify-content:space-between; column-gap:12px; border-bottom:1px solid var(--line); font-size:.82rem }
+@media(min-width:850px) { .global-work-area { grid-template-columns:minmax(0,1fr) minmax(270px, .6fr) } }
+@media(max-width:649px) { .global-host-choice { min-height:44px } }
+.agent-global-link { display:flex; flex-wrap:wrap; align-items:center; column-gap:12px; row-gap:4px; margin:16px 0; color:var(--secondary); font-size:.875rem }
+.global-focus { display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+.global-host-scroll { margin-top:6px; max-height:300px; overflow-y:auto; overscroll-behavior:contain; padding:2px 6px }

@@ -149,10 +149,12 @@ def native_skill(asset: dict, host_id: str) -> tuple[str, dict]:
     Existing frontmatter is never silently repaired or discarded.
     """
     files = dict(asset["files"])
-    name = asset["id"].replace("_", "-") if host_id in ("omp", "cursor", "antigravity", "codex-desktop") else asset["id"]
+    codex = host_id in ("codex", "codex-desktop")
+    name = asset["id"].replace("_", "-")
     text = files["SKILL.md"]
-    if host_id not in ("omp", "cursor", "antigravity", "codex-desktop"):
-        return name, files
+    if not codex and host_id not in ("omp", "cursor", "antigravity"):
+        return asset["id"], files
+    folder = asset["id"] if codex else name
     if text.startswith("---\n") or text.startswith("---\r\n"):
         from app.integrations.structured_config import parse_document
         match = re.match(r"\A---\r?\n(.*?)\r?\n---(?:\r?\n|\Z)", text, re.S)
@@ -167,16 +169,19 @@ def native_skill(asset: dict, host_id: str) -> tuple[str, dict]:
         description = metadata.get("description")
         if not isinstance(description, str) or not description.strip():
             raise ConfigurationError("This host requires a non-empty Skill description in YAML frontmatter", 422)
-        if host_id in ("omp", "antigravity", "codex-desktop") and "name" in metadata:
+        if (codex or host_id in ("omp", "antigravity")) and "name" in metadata:
             authored_name = metadata["name"]
             if not isinstance(authored_name, str) or not authored_name.strip() or any(char in authored_name for char in ("/", "\\", "\n", "\r")):
                 raise ConfigurationError("Native SKILL.md frontmatter name must be a non-empty name without path separators", 422)
-        if host_id == "codex-desktop" and "name" not in metadata:
+        if codex and "name" not in metadata:
             raise ConfigurationError("Native SKILL.md frontmatter requires a name for Codex", 422)
+        if codex and re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", metadata["name"]):
+            folder = metadata["name"]
         if host_id == "cursor":
             name = metadata.get("name")
             if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
                 raise ConfigurationError("Cursor Skill name must contain lowercase letters, digits and single hyphens and match its folder", 422)
+            folder = name
     else:
         files["SKILL.md"] = "---\nname: " + name + "\ndescription: " + json.dumps(asset["name"], ensure_ascii=False) + "\n---\n\n" + text
-    return name, files
+    return folder, files

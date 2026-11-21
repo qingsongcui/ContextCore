@@ -10,6 +10,7 @@ import { CredentialRemoval } from '../components/CredentialRemoval.jsx';
 import { AssetTools } from '../components/AssetTools.jsx';
 import { ProviderChecks } from '../components/ProviderChecks.jsx';
 import { NativeConfiguration } from '../components/agent-management/NativeConfiguration.jsx';
+import { GlobalLibrary } from '../components/agent-management/GlobalLibrary.jsx';
 import { AgentDirectory } from '../components/agent-management/AgentDirectory.jsx';
 import { SharedResourceMatrix, ConfigurationBackup, ProfileScope } from '../components/agent-management/SharedResources.jsx';
 import AccountQuotaPanel from '../components/AccountQuotaPanel.jsx';
@@ -83,7 +84,7 @@ const MODEL_GUIDES = {
 };
 const DEFAULT_SHORTCUTS = ['claude-code', 'codex', 'opencode'];
 
-export function AgentManagementPage({ agentId = '', section = '', onAgentChange, navigate, revision, onChanged, projects = [], draftStore }) {
+export function AgentManagementPage({ agentId = '', section = '', libraryView, libraryRecord, onAgentChange, navigate, revision, onChanged, projects = [], draftStore }) {
   const hosts = useResource('/api/manage/hosts', revision);
   const hostList = list(hosts.data);
   const preferences = useResource('/api/manage/agent-preferences', revision);
@@ -92,7 +93,8 @@ export function AgentManagementPage({ agentId = '', section = '', onAgentChange,
   const requestedTab = aliases[section] || section || 'providers';
   const tab = [...PRIMARY, ...SECONDARY, ['library']].some(([id]) => id === requestedTab) ? requestedTab : 'providers';
   const effectiveAgentId = configurationTarget(hostList, agentId, tab);
-  const directoryConnections = useResource(effectiveAgentId ? null : '/api/connections', revision);
+  const globalLibrary = !agentId && section === 'library';
+  const directoryConnections = useResource(effectiveAgentId || globalLibrary ? null : '/api/connections', revision);
   const selected = hostList.find(item => item.id === effectiveAgentId);
   const rootScope = selected?.config_root;
   const scope = `${effectiveAgentId}:${tab}` + (rootScope ? JSON.stringify([rootScope.status, rootScope.path]) : '');
@@ -116,6 +118,10 @@ export function AgentManagementPage({ agentId = '', section = '', onAgentChange,
     }
     onAgentChange?.(configurationTarget(hostList, id, category), category);
   };
+  function openRecovery(hostId, planId) {
+    if (navigate) navigate({page:'agents', agent:hostId, section:'plans', record:planId});
+    else choose(hostId, 'plans');
+  }
   async function pinHost(hostId, pinned) {
     if (pinLock.current) return;
     pinLock.current = true;
@@ -133,12 +139,16 @@ export function AgentManagementPage({ agentId = '', section = '', onAgentChange,
   }
   return <div className="agent-experience operations-studio">
     <ErrorNotice error={shortcutError || preferences.error} />
-    {!effectiveAgentId ? <><PageHeader title={t('Agent 管理')} description={t('管理本机助手的读取权限、模型账号与工具。')} actions={<Button icon={RefreshCw} onClick={() => { hosts.reload(); directoryConnections.reload(); }}>{t('刷新')}</Button>} /><ResourceState resource={hosts}><AgentDirectory connections={directoryConnections} hosts={primaryAgents(hostList)} favorites={favorites.map(agentGroup)} recent={recent.map(agentGroup)} nameOf={agentGroupName} onChoose={choose} onPin={pinHost} busy={pinBusy} /></ResourceState></> : <ResourceState resource={hosts}>{selected ? <AgentWorkspace key={scope} host={selected} favorites={favorites.map(agentGroup)} recent={recent.map(agentGroup)} allHosts={list(hosts.data)} tab={tab} revision={revision} onChanged={onChanged} projects={projects} navigate={navigate} choose={choose} scope={scope} scopeRef={scopeRef} drafts={drafts} /> : !hosts.loading && !hosts.error ? <EmptyState title={t('找不到这个助手')} body={t('地址中的助手不在当前列表中，请重新选择。')} action={<Button onClick={() => choose('', '')}>{t('返回助手列表')}</Button>} /> : null}</ResourceState>}
+    {globalLibrary ? <ResourceState resource={hosts}><GlobalLibrary key={JSON.stringify([libraryView, libraryRecord])} hosts={hostList} revision={revision}
+      initialKind={libraryView} focusedRecord={libraryRecord} onLocation={navigate ? kind =>
+        navigate({page:'agents', agent:null, section:'library', view:kind, record:null}) : undefined}
+      onBack={() => choose('', '')} onChanged={onChanged} onHostPlans={openRecovery}/></ResourceState> : !effectiveAgentId ? <><PageHeader title={t('Agent 管理')} description={t('管理本机助手的读取权限、模型账号与工具。')} actions={<><Button variant="primary" onClick={() => choose('', 'library')}>{t('全局资源库')}</Button><Button icon={RefreshCw} onClick={() => { hosts.reload(); directoryConnections.reload(); }}>{t('刷新')}</Button></>} /><ResourceState resource={hosts}><AgentDirectory connections={directoryConnections} hosts={primaryAgents(hostList)} favorites={favorites.map(agentGroup)} recent={recent.map(agentGroup)} nameOf={agentGroupName} onChoose={choose} onPin={pinHost} busy={pinBusy} /></ResourceState></> : <ResourceState resource={hosts}>{selected ? <AgentWorkspace key={scope} recoveryId={tab === 'plans' ? libraryRecord : null} onRecovery={openRecovery} host={selected} favorites={favorites.map(agentGroup)} recent={recent.map(agentGroup)} allHosts={list(hosts.data)} tab={tab} revision={revision} onChanged={onChanged} projects={projects} navigate={navigate} choose={choose} scope={scope} scopeRef={scopeRef} drafts={drafts} /> : !hosts.loading && !hosts.error ? <EmptyState title={t('找不到这个助手')} body={t('地址中的助手不在当前列表中，请重新选择。')} action={<Button onClick={() => choose('', '')}>{t('返回助手列表')}</Button>} /> : null}</ResourceState>}
   </div>;
 }
 
-export function AgentWorkspace({ host, favorites = DEFAULT_SHORTCUTS, recent = [], allHosts = [], tab, revision, onChanged, projects, navigate, choose, scope, scopeRef, drafts }) {
+export function AgentWorkspace({ host, recoveryId, onRecovery, favorites = DEFAULT_SHORTCUTS, recent = [], allHosts = [], tab, revision, onChanged, projects, navigate, choose, scope, scopeRef, drafts }) {
   const hostId = host.id;
+  const recoveryPlan = useResource(recoveryId ? '/api/manage/plans/' + encodeURIComponent(recoveryId) : null, revision);
   const connId = host.registry_host_id || hostId;
   const configRoot = host.config_root;
   const rootBlocked = configRoot?.status === 'blocked';
@@ -880,13 +890,20 @@ export function AgentWorkspace({ host, favorites = DEFAULT_SHORTCUTS, recent = [
     {tab === 'bundles' ? <ProfileScope hosts={allChoices} /> : null}
     {nativeOpen ? <NativeConfiguration host={host} initialKind={nativeKind} onClose={() => setNativeOpen(false)} onChanged={refresh} /> : null}
     {quotaAccount ? <Modal wide title={t('账号额度')} onClose={() => setQuotaAccount(null)}><AccountQuotaPanel accountId={quotaAccount} hostId={hostId} /></Modal> : null}
-    {tab === 'shared' ? <SharedResourceMatrix hostId={hostId} allHosts={allChoices} revision={tick} onChanged={refresh} /> : tab === 'connections' ? <ConsolePage embedded installerRoot={installerRoot} agentId={host.registry_host_id || hostId} returnAgent={hostId} navigate={navigate} revision={revision} onChanged={onChanged} /> : tab === 'advanced' ? <><ConfigurationBackup onChanged={refresh} /><RoutingSettings revision={tick} providers={providers.data} catalogContext /><ResourceState resource={status}><EvidenceDetails value={status.data} title={t('管理服务与凭据库状态')} /></ResourceState></> : tab === 'plans' ? <section className="management-panel"><h2>{t('{agent} 的更改记录', { agent: name })}</h2><ResourcePagination label={t('更改记录分页')} resource={resource} onPage={setAssetOffset} busy={busy} /><ResourceState resource={resource}><DataTable rows={rows.filter(item => planMatchesAgent(item, hostId))} onRow={item => execute(async () => { const value = await request(`/api/manage/plans/${encodeURIComponent(item.id)}`); if (isCurrent() && planMatchesAgent(value, hostId)) { setPlanDescription(''); setPlan(value); const applied = value.status !== 'planned'; setResult(applied ? value : null); setHostReadback(applied ? await loadHostReadback(value) : null); } })} columns={[{ key: 'id', label: t('更改内容'), render: item => {
+    {tab === 'plans' && recoveryId && <ResourceState resource={recoveryPlan}>
+      {recoveryPlan.data && planMatchesAgent(recoveryPlan.data, hostId) && recoveryPlan.data.id === recoveryId && <section className="management-panel">
+        <h2>{t('批量分发关联的更改')}</h2><code>{recoveryId}</code> <StatusBadge value={recoveryPlan.data.status}/>
+        {['recovery_required','applying'].includes(recoveryPlan.data.status) && <Button disabled={busy || rootBlocked} onClick={() => setAccountAction({type:'recover', item:recoveryPlan.data})}>{t('检查恢复')}</Button>}
+      </section>}
+    </ResourceState>}
+    {['shared', 'library', 'mcp', 'skill', 'prompt'].includes(tab) && <div className="agent-global-link"><Button onClick={() => changeScope('', 'library')}>{t('打开全局资源库')}</Button><span>{t('跨助手分发及应用记录')}</span></div>}
+    {tab === 'shared' ? <SharedResourceMatrix hostId={hostId} allHosts={allChoices} revision={tick} onChanged={refresh} onRecovery={onRecovery} /> : tab === 'connections' ? <ConsolePage embedded installerRoot={installerRoot} agentId={host.registry_host_id || hostId} returnAgent={hostId} navigate={navigate} revision={revision} onChanged={onChanged} /> : tab === 'advanced' ? <><ConfigurationBackup onChanged={refresh} /><RoutingSettings revision={tick} providers={providers.data} catalogContext /><ResourceState resource={status}><EvidenceDetails value={status.data} title={t('管理服务与凭据库状态')} /></ResourceState></> : tab === 'plans' ? <section className="management-panel"><h2>{t('{agent} 的更改记录', { agent: name })}</h2><ResourcePagination label={t('更改记录分页')} resource={resource} onPage={setAssetOffset} busy={busy} /><ResourceState resource={resource}><DataTable rows={rows.filter(item => planMatchesAgent(item, hostId))} onRow={item => execute(async () => { const value = await request(`/api/manage/plans/${encodeURIComponent(item.id)}`); if (isCurrent() && planMatchesAgent(value, hostId)) { setPlanDescription(''); setPlan(value); const applied = value.status !== 'planned'; setResult(applied ? value : null); setHostReadback(applied ? await loadHostReadback(value) : null); } })} columns={[{ key: 'id', label: t('更改内容'), render: item => {
       const metadata = item.payload?.metadata || {};
       const operation = { restore: t('恢复'), uninstall: t('移除自有条目'), install: t('安装或更新'), undo: t('撤销这次更改') }[metadata.operation];
       const changes = (metadata.configuration_changes || []).map(change => change.name).filter(Boolean);
       const extra = (metadata.change_count || changes.length) - changes.length;
       return [operation, changes.join(', '), extra > 0 ? '+' + extra : null].filter(Boolean).join(' · ') || item.id;
-    } }, { key: 'status', label: t('状态'), render: item => <StatusBadge value={item.status} /> }, { key: 'created_at', label: t('创建时间') }, { key: 'recovery', label: t('恢复'), render: item => ['recovery_required', 'applying'].includes(item.status) ? <Button disabled={busy || rootBlocked} onClick={() => setAccountAction({ type: 'recover', item })} >{t('检查恢复')}</Button> : item.undo_available ? <Button disabled={busy || rootBlocked} onClick={() => previewUndo(item)}>{t('预览撤销')}</Button> : display(null) }]} /></ResourceState></section> : tab === 'library' ? <section className="management-panel"><h2>{t('共享资料库')}</h2><p>{t('这里的资料可以被多个助手引用；保存、删除或恢复定义不会自动重写助手文件。要应用，请返回对应分类并选择单个助手。')}</p><div className="toolbar-actions">{[...PRIMARY, ['accounts', '账号授权'], ['bundles', '项目配置组合']].map(([id, label]) => <Button key={id} onClick={() => changeScope(hostId, id)}>{t(label)}</Button>)}<Button icon={Upload} disabled={busy} onClick={() => setImporting({})}>{t('导入共享定义')}</Button><Button icon={Download} onClick={exportAssets}>{t('导出共享定义')}</Button></div><SharedLibrary revision={tick} onManage={category => changeScope(hostId, category)} /></section> : <>
+    } }, { key: 'status', label: t('状态'), render: item => <StatusBadge value={item.status} /> }, { key: 'created_at', label: t('创建时间') }, { key: 'recovery', label: t('恢复'), render: item => ['recovery_required', 'applying'].includes(item.status) ? <Button disabled={busy || rootBlocked} onClick={() => setAccountAction({ type: 'recover', item })} >{t('检查恢复')}</Button> : item.undo_available ? <Button disabled={busy || rootBlocked} onClick={() => previewUndo(item)}>{t('预览撤销')}</Button> : display(null) }]} /></ResourceState></section> : tab === 'library' ? <section className="management-panel"><h2>{t('共享资料库')}</h2><p>{t('共享定义保存在本机。可从当前助手应用，也可在全局资源库批量分发。')}</p><div className="toolbar-actions">{[...PRIMARY, ['accounts', '账号授权'], ['bundles', '项目配置组合']].map(([id, label]) => <Button key={id} onClick={() => changeScope(hostId, id)}>{t(label)}</Button>)}<Button icon={Upload} disabled={busy} onClick={() => setImporting({})}>{t('导入共享定义')}</Button><Button icon={Download} onClick={exportAssets}>{t('导出共享定义')}</Button></div><SharedLibrary revision={tick} onManage={category => changeScope(hostId, category)} /></section> : <>
       <section className="management-panel">
         <header className="cc-panel-header-bar">
           <div className="cc-panel-header-title">

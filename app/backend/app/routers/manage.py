@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse
 from app.integrations.config_transactions import ConfigurationError
 from app.integrations.secret_store import SecretUnavailable
 from app.services import management_service as management
-from app.services import provider_presets
+from app.services import provider_presets, shared_batches
 
 router = APIRouter(prefix="/api/manage", tags=["management"])
 
@@ -342,26 +342,95 @@ def restore_configuration_backup(body: dict = Body(...)):
     return invoke(restore, management.service(), body.get('data'), body.get('replace_existing', False), body['preview_id'], True)
 
 
+@router.post('/shared-batches')
+def preview_shared_batch(body: dict = Body(...)):
+    return invoke(shared_batches.create, management.service(), body)
+
+
+@router.get('/shared-batches')
+def shared_batch_history(limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0)):
+    return invoke(shared_batches.history, management.service(), limit, offset)
+
+
+@router.get('/shared-batches/{batch_id}')
+def shared_batch_detail(batch_id: str):
+    return invoke(shared_batches.detail, management.service(), batch_id)
+
+
+@router.post('/shared-batches/{batch_id}/apply')
+def apply_shared_batch(batch_id: str, body: dict = Body(...)):
+    return invoke(shared_batches.update, management.service(), batch_id, body, 'apply')
+
+
+@router.post('/shared-batches/{batch_id}/preview')
+def repreview_shared_targets(batch_id: str, body: dict = Body(...)):
+    return invoke(shared_batches.update, management.service(), batch_id, body, 'repreview')
+
+
+_RESOURCE_PATHS = {'mcp': ('mcp_path',), 'skill': ('skill_dir',), 'prompt': ('prompt_path', 'prompt_dir')}
+
+
+def _matrix_readback(manager, host, kinds):
+    config = manager.host_config(host, display=True)
+    if config.get('config_root', {}).get('status') == 'blocked':
+        return {}, {}, 'not_checked'
+    roots = {kind: next((config[field] for field in _RESOURCE_PATHS.get(kind, ()) if config.get(field)), None)
+             for kind in kinds}
+    if not any(roots.values()):
+        return roots, {}, 'unsupported'
+    state = manager.host_state(host)
+    return roots, state['resources'], 'not_managed' if state['coverage'] == 'complete_owned_entries' else 'not_checked'
+
+
 @router.get('/shared-resource-matrix')
-def shared_resource_matrix(host_ids: str = Query(..., max_length=200), kind: str = 'mcp',
-                           q: str = Query('', max_length=200), offset: int = Query(0, ge=0)):
+def shared_resource_matrix(host_ids: str = Query(..., max_length=500), kind: str = 'mcp',
+                           q: str = Query('', max_length=200), offset: int = Query(0, ge=0),
+                           scope: str = Query('selected', pattern='^(selected|global)$'),
+                           asset_id: str | None = Query(None, min_length=1, max_length=100)):
     hosts = list(dict.fromkeys(host_ids.split(',')))
-    if not 1 <= len(hosts) <= 3 or any(key not in management.HOSTS for key in hosts):
-        raise HTTPException(422, 'Select one to three known assistants')
+    max_hosts = len(management.HOSTS) if scope == 'global' else 3
+    if not 1 <= len(hosts) <= max_hosts or any(key not in management.HOSTS for key in hosts):
+        raise HTTPException(422, 'Select known assistants within the requested scope')
+    if kind == 'all' and scope != 'global':
+        raise HTTPException(422, 'Select global scope to view all resource types')
     manager = management.service()
-    page = invoke(manager.catalog_page, 'asset', scope='all', resource_kind=kind, query=q, offset=offset, limit=15)
-    if page['items']:
-        for host in hosts:
-            if manager.host_config(host, display=True).get('config_root', {}).get('status') == 'blocked':
-                for row in page['items']:
-                    row.setdefault('cells', {})[host] = {'status': 'not_checked'}
+    page = invoke(manager.catalog_page, 'asset', scope='all', resource_kind=None if kind == 'all' else kind,
+                  query=q, offset=offset, limit=15, entity_ids=[asset_id] if asset_id else None)
+    kinds = {row['kind'] for row in page['items']}
+    if not kinds:
+        return page
+    shared = {resource_kind: {} for resource_kind in kinds}
+    for host in hosts:
+        try:
+            roots, resources, default = invoke(_matrix_readback, manager, host, kinds)
+        except (HTTPException, OSError):
+            if scope != 'global':
+                raise
+            roots, resources, default = {}, {}, 'not_checked'
+        for resource_kind, root in roots.items():
+            if root:
+                shared[resource_kind].setdefault(root, []).append(host)
+        for row in page['items']:
+            if row['kind'] in roots and not roots[row['kind']]:
+                cell = {'status': 'unsupported'}
+            else:
+                receipt = resources.get(row['id'], {})
+                cell = {key: receipt[key] for key in ('applied_version', 'updated_at') if key in receipt}
+                cell['status'] = receipt.get('status', default)
+            row.setdefault('cells', {})[host] = cell
+    # Some surfaces share a physical directory, but store plan receipts under the surface
+    # that performed the write. Use the newest matching receipt after both readbacks.
+    for row in page['items']:
+        for aliases in shared[row['kind']].values():
+            if len(aliases) < 2:
                 continue
-            state = invoke(manager.host_state, host)
-            default = 'not_managed' if state['coverage'] == 'complete_owned_entries' else 'not_checked'
-            for row in page['items']:
-                receipt = state['resources'].get(row['id'], {})
-                row.setdefault('cells', {})[host] = {key: receipt[key] for key in ('applied_version', 'updated_at') if key in receipt}
-                row['cells'][host]['status'] = receipt.get('status', default)
+            owned = [row['cells'][host] for host in aliases
+                     if row['cells'][host]['status'] in ('verified', 'update_available')]
+            latest = max((cell for cell in owned if cell.get('applied_version') is not None),
+                         key=lambda cell: cell.get('updated_at') or '', default=None)
+            if latest:
+                for cell in owned:
+                    cell.update(latest)
     return page
 
 

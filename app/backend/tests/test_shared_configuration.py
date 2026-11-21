@@ -187,3 +187,75 @@ def test_replacement_checks_content_when_a_backup_recreates_the_same_id_and_vers
     with pytest.raises(ConfigurationError, match='changed since'):
         restore(manager, replacement, True, planned['preview_id'], True)
     assert manager.get('asset', resource['id'])['name'] == 'Recreated elsewhere'
+
+
+def test_global_matrix_shows_all_surfaces_and_shared_updates(manager, monkeypatch):
+    from app.services.management_service import HOSTS
+    api = FastAPI()
+    api.include_router(manage.router)
+    monkeypatch.setattr(management_service, 'service', lambda: manager)
+    client = TestClient(api)
+    asset = manager.save('asset', {'name': 'Release checklist', 'kind': 'skill', 'files': {'SKILL.md': '# Review'}})
+    apply(manager, {'host_id': 'codex', 'asset_ids': [asset['id']]})
+    manager.save('asset', {'files': {'SKILL.md': '# Revised'}}, asset['id'], 1)
+    params = {'host_ids': ','.join(HOSTS), 'kind': 'skill'}
+    assert client.get('/api/manage/shared-resource-matrix', params=params).status_code == 422
+    response = client.get('/api/manage/shared-resource-matrix', params={**params, 'scope': 'global'})
+    assert response.status_code == 200, response.text
+    item, = response.json()['items']
+    assert set(item['cells']) == set(HOSTS)
+    assert item['cells']['codex']['status'] == item['cells']['codex-desktop']['status'] == 'update_available'
+    assert item['cells']['codex']['applied_version'] == item['cells']['codex-desktop']['applied_version'] == 1
+    assert item['cells']['claude-desktop']['status'] == 'unsupported'
+    assert item['cells']['cursor']['status'] == 'not_managed'
+    assert 'files' not in item
+
+
+def test_global_matrix_keeps_other_readbacks_when_one_host_cannot_be_inspected(manager, monkeypatch):
+    api = FastAPI()
+    api.include_router(manage.router)
+    monkeypatch.setattr(management_service, 'service', lambda: manager)
+    real_state = manager.host_state
+    def state(host):
+        if host == 'cursor':
+            raise OSError('Private fixture details')
+        return real_state(host)
+    monkeypatch.setattr(manager, 'host_state', state)
+    mcp(manager)
+    response = TestClient(api).get('/api/manage/shared-resource-matrix', params={
+        'host_ids': 'codex,cursor', 'kind': 'mcp', 'scope': 'global'})
+    assert response.status_code == 200
+    cells = response.json()['items'][0]['cells']
+    assert cells['codex']['status'] == 'not_managed' and cells['cursor']['status'] == 'not_checked'
+    assert 'Private fixture' not in response.text
+
+
+def test_mixed_global_matrix_filters_and_paginates_before_host_reads(manager, monkeypatch):
+    api = FastAPI()
+    api.include_router(manage.router)
+    monkeypatch.setattr(management_service, 'service', lambda: manager)
+    client = TestClient(api)
+    for idx in range(15):
+        mcp(manager, 'Tool '+str(idx))
+    skill = manager.save('asset', {'name':'Review guide','kind':'skill','files':{'SKILL.md':'# Review'}})
+    prompt = manager.save('asset', {'name':'Review policy','kind':'prompt','content':'Ask about scope'})
+    calls = []
+    state = manager.host_state
+    def read(host_id):
+        calls.append(host_id)
+        return state(host_id)
+    monkeypatch.setattr(manager,'host_state',read)
+    path = '/api/manage/shared-resource-matrix'
+    query = {'host_ids':'codex,claude-desktop', 'scope':'global', 'kind':'all'}
+    first = client.get(path, params=query).json()
+    assert first['total'] == 17 and len(first['items']) == 15 and first['has_more']
+    assert calls == ['codex','claude-desktop']
+    calls.clear()
+    second = client.get(path, params={**query,'offset':15}).json()
+    assert [row['id'] for row in second['items']] == [skill['id'],prompt['id']]
+    assert all(row['cells']['claude-desktop']['status'] == 'unsupported' for row in second['items'])
+    assert all(row['cells']['codex']['status'] == 'not_managed' for row in second['items'])
+    assert calls == ['codex']
+    focused = client.get(path,params={**query,'asset_id':prompt['id']}).json()
+    assert focused['total'] == 1 and focused['items'][0]['kind'] == 'prompt'
+    assert client.get(path,params={**query,'scope':'selected'}).status_code == 422

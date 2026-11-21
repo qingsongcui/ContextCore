@@ -390,9 +390,26 @@ def _collect(manager, host_id, kind):
     return {**header, 'status': 'ready', 'fingerprint': _digest([host_id, kind, evidence, entries])}, entries, private, origins
 
 
-def _existing(conn, key):
-    return conn.execute("""SELECT i.definition_hash,e.id,e.kind,e.version,e.data FROM management_native_imports i
-        JOIN management_entities e ON e.id=i.entity_id WHERE i.source_key=?""", (key,)).fetchone()
+def _match_import(conn, key, kind, data, origin):
+    """Resolve old host-scoped import IDs to the same physical resource across surfaces."""
+    keys = {key: data['source']['host_id']}
+    if origin:
+        (relative, name), _, _ = origin
+        keys.update({_digest([host, kind, relative, name])[:32]: host for host in HOSTS})
+    placeholders = ','.join('?' for _ in keys)
+    rows = conn.execute(f"""SELECT i.source_key,i.definition_hash,e.id,e.kind,e.version,e.data
+        FROM management_native_imports i JOIN management_entities e ON e.id=i.entity_id
+        WHERE i.source_key IN ({placeholders})""", tuple(keys)).fetchall()
+    prior = next((row for row in rows if row['source_key'] == key), None)
+    if prior is None and rows:
+        if len(rows) > 1:
+            raise ConfigurationError('Multiple saved definitions match this native source; review them in the library', 409)
+        prior = rows[0]
+        # Keep the original source and membership for fingerprints. Opening a second
+        # surface must not create a version, replace user edits or move the asset.
+        source_host = keys[prior['source_key']]
+        data = {**data, 'agent_ids': [source_host], 'source': {**data['source'], 'host_id': source_host}}
+    return prior, data
 
 
 def _disposition(prior, data):
@@ -406,11 +423,13 @@ def _disposition(prior, data):
 
 
 def preview(manager, host_id, kind):
-    result, entries, private, _ = _collect(manager, host_id, kind)
+    result, entries, private, origins = _collect(manager, host_id, kind)
     with manager.connect() as conn:
         for item in entries:
             if item['available']:
-                action = _disposition(_existing(conn, item['id']), private[item['id']])
+                key = item['id']
+                prior, data = _match_import(conn, key, kind, private[key], origins.get(key))
+                action = _disposition(prior, data)
                 item['disposition'] = action
                 if action == 'conflict':
                     item.update(available=False, reason='definition_edited')
@@ -436,7 +455,7 @@ def import_selection(manager, host_id, body):
         for key in selected:
             data = private[key]
             kind = 'provider' if body['kind'] == 'providers' else 'asset'
-            prior = _existing(conn, key)
+            prior, data = _match_import(conn, key, body['kind'], data, origins.get(key))
             action = _disposition(prior, data)
             if action == 'conflict':
                 raise ConfigurationError('Native source and saved definition both changed; review your edits', 409)
@@ -469,7 +488,7 @@ def import_selection(manager, host_id, body):
                         model_data['context_window'] = data['model_context_windows'][model]
                     conn.execute('INSERT INTO management_entities VALUES(?,?,?,1,?,?)',
                                  ('model_' + uuid4().hex[:16], 'model', canonical(model_data), now, now))
-            conn.execute('INSERT OR REPLACE INTO management_native_imports VALUES(?,?,?)', (key, entity_id, _digest(data)))
+            conn.execute('INSERT OR REPLACE INTO management_native_imports VALUES(?,?,?)', (prior['source_key'] if prior else key, entity_id, _digest(data)))
             imported += 1
             entities.append({'id': entity_id, 'name': data['name'], 'kind': kind})
         conn.execute('INSERT INTO audit_logs VALUES(?,?,?,?,?,?)', ('aud_'+uuid4().hex, 'user', 'native_import', host_id, 'success', now))

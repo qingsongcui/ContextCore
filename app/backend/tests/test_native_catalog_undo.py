@@ -140,7 +140,7 @@ def test_skill_undo_reverts_files_registry_and_ownership(manager, mode):
     plan = manager.plan({'host_id':'codex','asset_ids':[item['id']]})
     applied = manager.apply(plan['id'],1,True)
     path = manager.home/'.codex/skills'/item['id']/'SKILL.md'
-    assert path.read_text() == 'hi'
+    assert path.read_text().split('---\n\n', 1)[1] == 'hi'
     undo = management_undo.preview(manager,applied['id'])
     manager.apply(undo['id'],1,True)
     assert not path.exists() and not path.is_symlink() and not manager.transactions._skill_registry(str(path))
@@ -384,3 +384,38 @@ def test_codex_toml_takes_over_shared_native_mcp_table_without_touching_neighbou
     undo = management_undo.preview(manager,plan['id'])
     manager.apply(undo['id'],1,True)
     assert tomllib.loads(path.read_text()) == after
+
+
+@pytest.mark.parametrize('first,second', [('codex', 'codex-desktop'), ('codex-desktop', 'codex')])
+def test_shared_source_import_reuses_one_definition_and_preserves_edits(manager, first, second):
+    skill = manager.home / '.codex/skills/local-notes'
+    skill.mkdir(parents=True)
+    (skill/'SKILL.md').write_text('# Notes')
+    attachment = skill/'example.md'
+    attachment.write_text('First example')
+
+    def select(host):
+        source = native_catalog.preview(manager, host, 'skills')
+        candidate, = source['candidates']
+        return candidate, {'kind':'skills', 'fingerprint':source['fingerprint'],
+                           'selected_ids':[candidate['id']], 'confirmed': True}
+
+    asset_id = native_catalog.import_selection(manager, first, select(first)[1])['entities'][0]['id']
+    candidate, payload = select(second)
+    assert candidate['disposition'] == 'unchanged'
+    assert native_catalog.import_selection(manager, second, payload)['unchanged'] == 1
+    assert manager.get('asset', asset_id)['version'] == 1
+    attachment.write_text('Second example')
+    candidate, payload = select(second)
+    assert candidate['disposition'] == 'update'
+    assert native_catalog.import_selection(manager, second, payload)['entities'][0]['id'] == asset_id
+    assert manager.get('asset', asset_id)['files']['example.md'] == 'Second example'
+    assert manager.get('asset', asset_id)['source']['host_id'] == first
+    manager.save('asset', {'name':'Renamed in the library'}, asset_id, 2)
+    assert select(second)[0]['disposition'] == 'unchanged'
+    attachment.write_text('Concurrent external edit')
+    candidate, payload = select(second)
+    assert candidate['disposition'] == 'conflict' and not candidate['available']
+    with pytest.raises(ConfigurationError,match='both changed'):
+        native_catalog.import_selection(manager, second, payload)
+    assert len(manager.list('asset')) == 1

@@ -5,10 +5,21 @@ import projects from './messages.project-workspace.en.js';
 import evidence from './messages.project-evidence.en.js';
 import operations from './messages.operations-studio.en.js';
 import preferences from './messages.operation-preferences.en.js';
+import globalConfiguration from './messages.global-configuration.en.js';
+import globalLibrary from './messages.global-library.en.js';
 import exchange from './messages.exchange.en.js';
 
 export const en = {
-  ...workspaceHome, ...personalStudio, ...projects, ...evidence, ...operations, ...preferences, ...exchange,
+  '来源助手': 'Source agent',
+  '目标助手': 'Target agents',
+  '预览全局 Skill': 'Preview for the library',
+  '核对将写入资源库的 SKILL.md。分发给哪些 Agent 可以在保存后选择。': 'Review the SKILL.md to save in the library. Choose its target agents after saving.',
+  '对照资源库中的现有版本': 'Compare the current library version',
+  '打开全局资源库': 'Open global library',
+  '更新资源库中的 Skill': 'Update library Skill',
+  '加入全局资源库': 'Add to global library',
+  'Skill 已保存到全局资源库。': 'Skill saved to the global library.',
+  ...globalConfiguration, ...globalLibrary, ...workspaceHome, ...personalStudio, ...projects, ...evidence, ...operations, ...preferences, ...exchange,
   "打开项目": "Open project",
   "返回工作台": "Back to workspace",
   "工作台": "Workspace",
@@ -157,20 +168,13 @@ export const en = {
   "切换方案时，移除上一份方案独有的受管资源": "When switching profiles, remove managed resources unique to the previous profile",
   "配置写入 {agent} 的用户级文件。项目归属用于整理方案。": "This profile writes to user-level files for {agent}. The project label organizes saved profiles.",
   "方案按助手应用到用户级配置文件。Codex CLI 和桌面版共用原生配置。": "Profiles apply to user-level files for the selected assistant. Codex CLI and Desktop share native configuration.",
-  "资源已变更，请刷新并重新选择。": "A selected resource changed. Refresh and select it again.",
-  "所选助手共用同一目标文件。请选择其中一个入口应用，再核对另一个入口的状态。": "These assistants share a target file. Apply through one entry, then check the other.",
-  "更改回执与所选助手不一致。": "The change receipt did not match the selected assistant.",
-  "此助手尚未完成应用，后续助手已暂停。": "This assistant did not finish applying. Remaining assistants are paused.",
   "查看助手列，从此处开始": "Show assistant columns starting with",
   "选中项的操作": "Action for selected items",
   "移除受管资源": "Remove managed resources",
   "{resource} · {agent} · {status}": "{resource} · {agent} · {status}",
   "预览所选更改（{count}）": "Preview selected changes ({count})",
   "清空选择": "Clear selection",
-  "共享资源更改": "Shared resource changes",
-  "每个助手分别写入并核对文件。出现冲突时会暂停后续更改。": "Each assistant writes and verifies its files separately. A conflict pauses remaining changes.",
   "查看文件差异": "View file changes",
-  "已核对所选助手、资源和文件差异": "I reviewed the assistants, resources and file changes.",
   "替换本机定义": "Replace local definition",
   "定义相同": "Already matches",
   "保留本机定义": "Keep local definition",
@@ -602,7 +606,6 @@ export const en = {
   "创建时间": "Created",
   "恢复": "Recovery",
   "检查恢复": "Review recovery",
-  "这里的资料可以被多个助手引用；保存、删除或恢复定义不会自动重写助手文件。要应用，请返回对应分类并选择单个助手。": "Several assistants can reference these definitions. Saving, deleting or restoring one does not automatically rewrite assistant files. To apply it, return to its category and select one assistant.",
   "新建": "Create",
   "导入技能": "Import a Skill",
   "更多资料操作": "More library actions",

@@ -16,7 +16,8 @@ const snapshot = {
   revision: 7, name: 'Plan Studio', bio: 'other bio',
   assets: [{ title: 'Data audit', excerpt: 'Check totals', notes: 'private' }, { title: 'Other', excerpt: 'Not chosen' }],
 };
-let root, container, reload, navigate, store, result;
+const briefsPath = '/api/workbench/briefs';
+let root, container, reload, navigate, store, result, library;
 beforeEach(() => {
   vi.resetAllMocks();
   setLang('zh');
@@ -28,8 +29,14 @@ beforeEach(() => {
   navigate = vi.fn();
   store = { current: null };
   result = { data: snapshot, loading: false, error: null, reload };
-  useResource.mockImplementation(() => result);
-  request.mockResolvedValue(snapshot);
+  library = { data: { items: [], total: 0 }, loading: false, error: null, reload: vi.fn() };
+  useResource.mockImplementation(url => url === path ? result : library);
+  request.mockImplementation(async (url, options) => {
+    if (url !== briefsPath + '/export') throw Error('Unexpected request');
+    const input = JSON.parse(options.body);
+    return { profile_revision: snapshot.revision, provider: snapshot.name, title: snapshot.assets[0].title,
+      excerpt: snapshot.assets[0].excerpt, deliverable: input.deliverable, terms: input.terms };
+  });
 });
 afterEach(async () => {
   await act(() => root.unmount());
@@ -63,8 +70,9 @@ it('exports only the single previewed offer and explicit brief fields after a fr
   await write(1, 'Customer supplies anonymized tables');
   expect(exportButton.disabled).toBe(false);
   await act(() => exportButton.click());
-  expect(request).toHaveBeenCalledWith(path, expect.objectContaining({ cache: 'no-store' }));
-  expect(useResource.mock.calls.every(([url]) => url === path)).toBe(true);
+  expect(request).toHaveBeenCalledWith(briefsPath + '/export', expect.objectContaining({ method: 'POST' }));
+  expect(JSON.parse(request.mock.calls[0][1].body)).toEqual({revision: 0, profile_revision: 7, asset_index: 0,
+    deliverable: 'One audit report', terms: 'Customer supplies anonymized tables'});
   const [name, body] = downloadText.mock.calls[0];
   expect(name).toBe('Senrelay-collaboration.txt');
   expect(body).toContain('Plan Studio');
@@ -136,4 +144,54 @@ it('blocks a delayed export response when a newer card arrived in the meantime',
   expect(downloadText).not.toHaveBeenCalled();
   expect(store.current.selection).toBeNull();
   expect(store.current.deliverable).toBe('Deliver report');
+});
+
+it('saves and reopens a local draft, protects edits when switching, and checks the version before delete', async () => {
+  let saved;
+  request.mockImplementation(async (url, options) => {
+    if (options.method === 'PUT') {
+      const payload = JSON.parse(options.body);
+      expect(payload).toMatchObject({revision: 0, asset_index: 0, profile_revision: 7});
+      saved = {id: url.split('/').at(-1), revision: 1, deliverable: payload.deliverable, terms: payload.terms,
+        selection: store.current.selection, updated_at: '2026-11-20T12:30:00Z'};
+      library.data = {items:[saved],total:1};
+      return saved;
+    }
+    if (options.method === 'DELETE') {
+      expect(url).toBe(briefsPath + '/' + saved.id + '?revision=1');
+      library.data = {items:[],total:0};
+      return null;
+    }
+    expect(url).toBe(briefsPath + '/' + saved.id);
+    return saved;
+  });
+  await render();
+  await choose();
+  await write(0, 'A saved brief');
+  await act(() => button('保存协作草稿').click());
+  expect(store.current).toMatchObject({revision: 1, dirty: false});
+  expect(container.querySelector('.exchange-draft-open').textContent).toContain('A saved brief');
+  await act(() => button('新草稿').click());
+  expect(container.querySelector('textarea').value).toBe('');
+  await write(0, 'Unsaved edits');
+  await act(() => container.querySelector('.exchange-draft-open').click());
+  expect(container.querySelector('textarea').value).toBe('Unsaved edits');
+  await act(() => button('放弃修改').click());
+  expect(container.querySelector('textarea').value).toBe('A saved brief');
+  await act(() => button('删除草稿').click());
+  await act(() => button('确认删除').click());
+  expect(container.querySelector('.exchange-draft-open')).toBeNull();
+  expect(container.querySelector('textarea').value).toBe('');
+});
+
+it('keeps stale-write text and offers a copy on a saved version conflict', async () => {
+  store.current = {id:'saved', revision:1, selection:null, deliverable:'Local changes', terms:'', dirty:true};
+  request.mockRejectedValue(Object.assign(new Error('Draft changed'), {status:409}));
+  await render();
+  await act(() => button('保存协作草稿').click());
+  expect(store.current.deliverable).toBe('Local changes');
+  await act(() => button('将当前文字另存为新草稿').click());
+  expect(store.current.id).not.toBe('saved');
+  expect(store.current.revision).toBe(0);
+  expect(store.current.deliverable).toBe('Local changes');
 });

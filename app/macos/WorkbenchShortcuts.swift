@@ -102,6 +102,7 @@ final class WorkbenchShortcuts: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         addAction(to: menu, text("打开工作台", "Open Workbench"), .init(page: "home"))
         addAction(to: menu, text("所有助手", "All agents"), .init(page: "agents"))
+        addAction(to: menu, text("全局资源库", "Global resource library"), .init(page: "agents", section: "library"))
         menu.addItem(.separator())
         addSection(to: menu, text("常用助手", "Favorite agents"), .hosts("favorite_hosts"))
         addSection(to: menu, text("最近使用", "Recent agents"), .hosts("recent_hosts"))
@@ -115,6 +116,7 @@ final class WorkbenchShortcuts: NSObject, NSMenuDelegate {
         addAction(to: parent, text("Agent 名片", "Agent card"), .init(page: "personal", section: "profile"))
         addAction(to: parent, text("项目", "Projects"), .init(page: "projects"), key: "1")
         addAction(to: parent, text("所有助手", "All agents"), .init(page: "agents"), key: "2")
+        addAction(to: parent, text("全局资源库", "Global resource library"), .init(page: "agents", section: "library"))
         addAction(to: parent, text("用量与性能", "Usage and performance"), .init(page: "usage", section: "overview"), key: "3")
         let item = addAction(to: parent, text("账号额度", "Account quotas"), .init(page: "usage", section: "accounts"), key: "3")
         item.keyEquivalentModifierMask = [.command, .option]

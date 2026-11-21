@@ -1,3 +1,4 @@
+import { MethodLibraryActions } from '../components/MethodLibraryActions.jsx';
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -400,44 +401,9 @@ function ProfileEditor({
                         maxLength={2000}
                         onChange={changeAsset}
                       />
-                      <Button
-                        data-export-kind="skill"
-                        disabled={
-                          !!draft ||
-                          !activeAsset.inputs?.trim() ||
-                          !activeAsset.steps?.trim() ||
-                          !activeAsset.outputs?.trim()
-                        }
-                        onClick={() => {
-                          const name =
-                            "method-" +
-                            activeAsset.id
-                              .toLowerCase()
-                              .replace(/[^a-z0-9-]/g, "")
-                              .slice(0, 48);
-                          const sections = [
-                            "---",
-                            "name: " + name,
-                            "description: " + JSON.stringify(activeAsset.title),
-                            "---",
-                            "# " + activeAsset.title,
-                            "## " + t("需要的输入"),
-                            activeAsset.inputs,
-                            "## " + t("执行步骤"),
-                            activeAsset.steps,
-                            "## " + t("预期交付"),
-                            activeAsset.outputs,
-                          ];
-                          if (activeAsset.verification)
-                            sections.push(
-                              "## " + t("新样例的验证记录"),
-                              activeAsset.verification,
-                            );
-                          downloadText("SKILL.md", sections.join("\n"));
-                        }}
-                      >
-                        {t("导出私有 Skill 草稿")}
-                      </Button>
+                      <MethodLibraryActions key={activeAsset.id + ':' + profile.revision + ':' + Boolean(draft)}
+                        asset={activeAsset} revision={profile.revision} dirty={Boolean(draft)}
+                        navigate={navigate} onChanged={onChanged} />
                     </details>
                     <details className="studio-disclosure">
                       <summary>

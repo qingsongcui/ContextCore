@@ -13,9 +13,11 @@ let root;
 const hosts = ['codex', 'claude-code'].map(id => ({ id, name: id, capabilities: { mcp: true } }));
 const byText = label => [...document.querySelectorAll('button')].find(node => node.textContent.includes(label));
 const click = async element => act(async () => { expect(element).toBeTruthy(); element.click(); });
-const plan = (host, path = '/' + host) => ({
-  id: host, version: 1, status: 'planned',
-  payload: { metadata: { host_id: host, entity_versions: { a: 3 } }, files: [{ path, diff: '+{"operation":"install","value":"test"}' }] },
+const batch = (targets, version = 1) => ({ id: 'batch-a', operation: 'install', version,
+  status: targets.every(t => t.status === 'applied') ? 'applied' : 'planned', targets });
+const target = (id, status = 'planned') => ({ host_id: id, status, plan_id: 'plan-' + id,
+  can_apply: status === 'planned', can_repreview: status === 'failed', files: [{ path: '/' + id, diff: '+tool' }],
+  asset_versions: { a: 3 }, asset_names: { a: 'Tool' },
 });
 async function mountMatrix() {
   await act(async () => root.render(<SharedResourceMatrix hostId="codex" allHosts={hosts} revision={0} />));
@@ -35,29 +37,38 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); });
 
-it('reviews every selected host and reads each apply receipt before continuing', async () => {
+it('persists one versioned preview and applies only the confirmed targets', async () => {
   await mountMatrix();
-  h.mutate.mockImplementation(async (path, _method, body) => path.endsWith('/plans') ? plan(body.host_id) : {});
-  h.request.mockImplementation(async path => ({ ...plan(path.split('/').at(-1)), status: 'applied' }));
+  const ids = ['codex','claude-code'];
+  h.mutate.mockResolvedValueOnce(batch(ids.map(id => target(id)))).mockResolvedValueOnce(batch(ids.map(id => target(id, 'applied')), 2));
   await click(byText('Preview selected changes (2)'));
-  expect(h.mutate).toHaveBeenCalledTimes(2);
+  expect(h.mutate).toHaveBeenCalledWith('/api/manage/shared-batches','POST', {
+    operation: 'install', targets: ids.map(host_id => ({ host_id, asset_versions: { a: 3 } })),
+  });
   const modal = document.querySelector('dialog[open]');
-  expect(modal).toBeTruthy();
-  const confirm = [...modal.querySelectorAll('button')].at(-1);
+  const confirm = modal.querySelector('.matrix-confirm button');
   expect(confirm.disabled).toBe(true);
-  await click(modal.querySelector('input[type=checkbox]'));
+  await click(modal.querySelector('.matrix-confirm input'));
   await click(confirm);
-  expect(h.request.mock.calls.map(([path]) => path)).toEqual(['/api/manage/plans/codex', '/api/manage/plans/claude-code']);
+  expect(h.mutate).toHaveBeenLastCalledWith('/api/manage/shared-batches/batch-a/apply','POST', {
+    expected_version: 1, host_ids: ids, confirmed: true,
+  });
   expect(modal.textContent).toContain('Applied');
 });
 
-it('stops before applying any plan when targets overlap', async () => {
+it('keeps blocked shared-file targets visible and excludes them from application', async () => {
   await mountMatrix();
-  h.mutate.mockImplementation(async (_path, _method, body) => plan(body.host_id, '/shared-file'));
+  const blocked = { ...target('claude-code','failed'), plan_id: null, error_code: 'shared_target', files: [] };
+  h.mutate.mockResolvedValueOnce(batch([target('codex'), blocked])).mockResolvedValueOnce(batch([target('codex','applied'), blocked], 2));
   await click(byText('Preview selected changes (2)'));
-  expect(document.body.textContent).toContain('share a target file');
-  expect(document.querySelector('dialog[open]')).toBeNull();
-  expect(h.request).not.toHaveBeenCalled();
+  const modal = document.querySelector('dialog[open]');
+  expect(modal.querySelectorAll('.matrix-receipt')).toHaveLength(2);
+  expect(modal.textContent).toContain('Failed');
+  await click(modal.querySelector('.matrix-confirm input'));
+  await click(modal.querySelector('.matrix-confirm button'));
+  expect(h.mutate).toHaveBeenLastCalledWith('/api/manage/shared-batches/batch-a/apply','POST', {
+    confirmed: true, expected_version: 1, host_ids: ['codex'],
+  });
 });
 
 it('requires the current reviewed preview for restoring a backup', async () => {

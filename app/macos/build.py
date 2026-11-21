@@ -131,6 +131,10 @@ if args.local_workbench_test:
 elif args.workspace_design_test:
     info.update(CFBundleIdentifier='com.senrelay.workspace-design-test', CFBundleDisplayName='Senrelay · Agent 工作台测试',
                 SenrelayLocalWorkbenchTest=True, SenrelayTestPort=19436, SenrelayTestStorage='SenrelayWorkspaceDesignTest')
+if args.workspace_design_test:
+    launcher = here / 'open-host-workspace.command'
+    shutil.copy2(launcher, resources / '使用本机Agent配置.command')
+    shutil.copy2(launcher, output / '使用本机Agent配置.command')
 with (contents / 'Info.plist').open('wb') as stream: plistlib.dump(info, stream)
 shutil.copy(backend / 'THIRD_PARTY_NOTICES.md', resources)
 shutil.copy(backend / 'LICENSE', resources)

@@ -612,19 +612,20 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         if (!sidebar || !serviceOnline) return null;
         const destinations = [
           ['home'], ['projects'], ['personal','memory'], ['personal','assets'],
-          ['personal','profile'], ['exchange'], ['agents'], ['usage'], ['settings'],
+          ['personal','profile'], ['exchange'], ['agents'], ['agents','library'], ['usage'], ['settings'],
         ];
         const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
         const findLink = (page, section) => sidebar.querySelector(
-          '[data-route-page="' + page + '"]' + (section ? '[data-route-section="' + section + '"]' : '')
+          '[data-route-page="' + page + '"]' + (section ? '[data-route-section="' + section + '"]' : ':not([data-route-section])')
         );
         const waitPage = async (page, section) => {
           for (let i = 0; i < 80; i++) {
             await sleep(50);
             const params = new URLSearchParams(location.search);
             const heading = document.querySelector('.page-surface h1, .page-surface h2')?.textContent.trim();
+            const catalogReady = page !== 'agents' || section !== 'library' || Boolean(document.querySelector('.global-library .global-targets'));
             if ((params.get('page') || 'home') === page && (!section || params.get('section') === section)
-                && heading && !document.querySelector('.skeleton-stack')) return heading;
+                && catalogReady && heading && !document.querySelector('.skeleton-stack')) return heading;
           }
           return '';
         };

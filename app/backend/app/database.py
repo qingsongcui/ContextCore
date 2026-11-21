@@ -340,6 +340,17 @@ def create_schema(db_path: Path | None = None) -> None:
         # 1. Core new tables
         conn.executescript(
             """
+            CREATE TABLE IF NOT EXISTS collaboration_briefs (
+                id TEXT PRIMARY KEY,
+                revision INTEGER NOT NULL,
+                asset_id TEXT,
+                profile_revision INTEGER,
+                deliverable TEXT NOT NULL,
+                terms TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_collaboration_briefs_updated
+                ON collaboration_briefs(updated_at DESC, id);
             CREATE TABLE IF NOT EXISTS personal_workspace (
                 id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL,
                 payload TEXT NOT NULL, updated_at TEXT NOT NULL

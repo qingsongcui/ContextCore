@@ -28,3 +28,9 @@
 @media (max-width: 639px) {
   .exchange-heading button, .exchange-workspace .button { min-height: 44px; }
 }
+.exchange-library { margin-block-start:2.4rem; }
+.exchange-draft-row { display:flex; gap:1rem; align-items:center; justify-content:space-between; border-block-end:1px solid var(--line); }
+.exchange-draft-open { flex:1; min-width:0; padding:.8rem .1rem; text-align:start; }
+.exchange-draft-open strong, .exchange-draft-open small { display:block; overflow-wrap:anywhere; }
+.exchange-draft-open[aria-current] { color:var(--accent); }
+.exchange-confirm { margin-block:1rem; }

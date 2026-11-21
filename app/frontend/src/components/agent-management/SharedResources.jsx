@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { request, mutate } from '../../lib/api.js';
+import { mutate } from '../../lib/api.js';
 import { t } from '../../lib/i18n.jsx';
 import { useResource } from '../../lib/useResource.js';
-import { list, safeEvidence, mcpNeedsReview } from '../../lib/management.js';
-import { Button, EmptyState, ErrorNotice, Field, Modal, ResourceState } from '../ui.jsx';
+import { list, mcpNeedsReview } from '../../lib/management.js';
+import { Button, EmptyState, ErrorNotice, Field, ResourceState } from '../ui.jsx';
 import { AssetTools } from '../AssetTools.jsx';
-import { StatusBadge } from '../ManagementUI.jsx';
+import { SharedBatchReceipt } from './SharedBatchReceipt.jsx';
 import { ResourcePagination } from './ResourcePagination.jsx';
 import { configuredLabel } from './ConfigurationState.jsx';
 import { agentGroup, agentGroupName, configurationChoices, configurationTarget } from '../../lib/agentGroups.js';
@@ -21,18 +21,16 @@ export function ProfileScope({ hosts = [] }) {
 const capability = { mcp: 'mcp', skill: 'skills', prompt: 'prompts' };
 const cellKey = (host, asset) => host + '/' + asset;
 
-export function SharedResourceMatrix({ hostId, allHosts, revision, onChanged }) {
+export function SharedResourceMatrix({ hostId, allHosts, revision, onChanged, onRecovery }) {
   const [kind, setKind] = useState('mcp');
   const [search, setSearch] = useState('');
   const [offset, setOffset] = useState(0);
   const [firstHost, setFirstHost] = useState('');
   const [selection, setSelection] = useState([]);
   const [operation, setOperation] = useState('install');
-  const [plans, setPlans] = useState([]);
+  const [batch, setBatch] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [reviewed, setReviewed] = useState(false);
   const [error, setError] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
   const mounted = useRef(false);
   const lock = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -51,57 +49,33 @@ export function SharedResourceMatrix({ hostId, allHosts, revision, onChanged }) 
 
   function selectCell(host, asset, checked) {
     const key = cellKey(host.id, asset.id);
-    setSelection(prev => checked ? [...prev.filter(entry => entry.key !== key), { key, host: host.id, asset: asset.id, name: asset.name, version: asset.version }] : prev.filter(entry => entry.key !== key));
+    setSelection(prev => checked ? [...prev.filter(entry => entry.key !== key), { key, host: host.id, asset: asset.id, version: asset.version }] : prev.filter(entry => entry.key !== key));
   }
 
   async function preview() {
     if (lock.current || !selection.length) return;
-    lock.current = true; setBusy(true); setError(null); setSubmitted(false); setReviewed(false);
+    lock.current = true; setBusy(true); setError(null);
+    const byHost = new Map();
+    for (const { host, asset, version } of selection) {
+      if (!byHost.has(host)) byHost.set(host, {});
+      byHost.get(host)[asset] = version;
+    }
     try {
-      const prepared = [];
-      const targets = new Set();
-      for (const host of new Set(selection.map(entry => entry.host))) {
-        if (!mounted.current) return;
-        const cells = selection.filter(entry => entry.host === host);
-        const plan = await mutate('/api/manage/plans', 'POST', { host_id: host, operation, asset_ids: cells.map(cell => cell.asset) });
-        if (plan?.status !== 'planned' || plan.payload?.metadata?.host_id !== host || cells.some(cell => plan.payload.metadata.entity_versions?.[cell.asset] !== cell.version)) {
-          throw new Error(t('资源已变更，请刷新并重新选择。'));
-        }
-        for (const file of plan.payload.files) {
-          if (targets.has(file.path)) throw new Error(t('所选助手共用同一目标文件。请选择其中一个入口应用，再核对另一个入口的状态。'));
-          targets.add(file.path);
-        }
-        prepared.push({ host, plan, cells, receipt: null });
+      const receipt = await mutate('/api/manage/shared-batches', 'POST', {
+        operation, targets: Array.from(byHost, ([host_id, asset_versions]) => ({ host_id, asset_versions })),
+      });
+      if (mounted.current) {
+        setBatch(receipt);
+        setSelection([]);
+        onChanged?.();
       }
-      if (mounted.current) setPlans(prepared);
-    } catch (failure) { if (mounted.current) setError(failure); }
-    finally { lock.current = false; if (mounted.current) setBusy(false); }
-  }
-
-  async function apply() {
-    if (lock.current || !reviewed || submitted || !plans.length) return;
-    lock.current = true; setBusy(true); setSubmitted(true); setError(null);
-    try {
-      for (const row of plans) {
-        if (!mounted.current) break;
-        let failure;
-        try { await mutate('/api/manage/plans/' + encodeURIComponent(row.plan.id) + '/apply', 'POST', { expected_version: row.plan.version, confirmed: true }); }
-        catch (error) { failure = error; }
-        const receipt = await request('/api/manage/plans/' + encodeURIComponent(row.plan.id));
-        if (receipt.id !== row.plan.id || receipt.payload?.metadata?.host_id !== row.host) throw new Error(t('更改回执与所选助手不一致。'));
-        if (mounted.current) setPlans(previous => previous.map(entry => entry.host === row.host ? { ...entry, receipt } : entry));
-        if (failure || receipt.status !== 'applied') throw failure || new Error(t('此助手尚未完成应用，后续助手已暂停。'));
-      }
-      if (mounted.current) setSelection([]);
-    } catch (failure) { if (mounted.current) setError(failure); }
-    finally {
+    } catch (failure) {
+      if (mounted.current) setError(failure);
+    } finally {
       lock.current = false;
-      if (mounted.current) { setBusy(false); matrix.reload(); onChanged?.(); }
+      if (mounted.current) setBusy(false);
     }
   }
-
-  function close() { if (!busy) { setPlans([]); setError(null); if (submitted) setSelection([]); } }
-  const names = Object.fromEntries([...allHosts, ...sorted].map(host => [host.id, host.name]));
   return <section className="management-panel resource-matrix">
     <h2>{t('共享资源')}</h2>
     <div className="toolbar-actions">{[['mcp', 'MCP'], ['skill', 'Skills'], ['prompt', t('使用规则')]].map(([id, label]) =>
@@ -134,18 +108,11 @@ export function SharedResourceMatrix({ hostId, allHosts, revision, onChanged }) 
           })}</tr>)}</tbody></table> : <EmptyState title={t('没有匹配的资料')} />}
     </ResourceState>
     <ResourcePagination label={t('共享资料分页')} resource={matrix} onPage={setOffset} />
-    {!plans.length ? <ErrorNotice error={error} /> : null}
-    <div className="toolbar-actions"><Button variant="primary" busy={busy && !plans.length} disabled={!selection.length} onClick={preview}>{t('预览所选更改（{count}）', { count: selection.length })}</Button>
+    <ErrorNotice error={error} />
+    {error?.status === 0 && <p role="status">{t('可在共享库的分发历史中检查预览是否已保存。')}</p>}
+    <div className="toolbar-actions"><Button variant="primary" busy={busy} disabled={!selection.length} onClick={preview}>{t('预览所选更改（{count}）', { count: selection.length })}</Button>
       {selection.length ? <Button disabled={busy} onClick={() => setSelection([])}>{t('清空选择')}</Button> : null}</div>
-    {plans.length ? <Modal wide title={t('共享资源更改')} busy={busy} onClose={close}>
-      <p>{t('每个助手分别写入并核对文件。出现冲突时会暂停后续更改。')}</p>
-      {plans.map(({ host, plan, cells, receipt }) => <section className="matrix-receipt" key={host}><h3>{names[host]} · {cells.map(cell => cell.name).join(', ')}</h3>
-        <StatusBadge value={receipt?.status || plan.status} />
-        <details><summary>{t('查看文件差异')}</summary>{plan.payload.files.map(file => <div key={file.path}><code>{file.path}</code><pre>{safeEvidence(file.diff)}</pre></div>)}</details>
-      </section>)}
-      <ErrorNotice error={error} />
-      {!submitted ? <label className="inline-checkbox"><input type="checkbox" checked={reviewed} onChange={e => setReviewed(e.target.checked)} />{t('已核对所选助手、资源和文件差异')}</label> : null}
-      <footer className="modal-actions"><Button disabled={busy} onClick={close}>{t('关闭')}</Button>{!submitted ? <Button variant="primary" disabled={!reviewed} busy={busy} onClick={apply}>{t('确认应用设置')}</Button> : null}</footer>
-    </Modal> : null}
+    {batch && <SharedBatchReceipt batch={batch} hosts={sorted} onUpdate={setBatch} onClose={() => setBatch(null)}
+      onChanged={() => { matrix.reload(); onChanged?.(); }} onRecovery={onRecovery} />}
   </section>;
 }

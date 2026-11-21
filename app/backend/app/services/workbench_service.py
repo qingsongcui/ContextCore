@@ -8,6 +8,7 @@ from app.services.memory_rules import is_asserted, reading_title, rule_topic
 def reading_page(project_id, offset, limit):
     with db() as conn:
         conn.execute("BEGIN")
+        conn.create_function("is_asserted", 1, lambda tags: int(is_asserted(decode(tags, []))), deterministic=True)
         args = ()
         where = "project_id IS NULL AND (category='preference' OR EXISTS (SELECT 1 FROM json_each(tags) WHERE value='personal'))"
         if project_id:
@@ -19,12 +20,11 @@ def reading_page(project_id, offset, limit):
             # Project conventions can shadow defaults on a different page.
             topics = {rule_topic(r[0]) for r in conn.execute(
                 """SELECT content FROM contents WHERE project_id=? AND kind='memory' AND status='active'
-                   AND category IN ('decision','preference') AND coalesce(applicability,'{}') IN ('{}','')""", args)}
+                   AND is_asserted(tags) AND category IN ('decision','preference') AND coalesce(applicability,'{}') IN ('{}','')""", args)}
             topics.discard(None)
             if topics:
                 conn.create_function("is_shadowed_default", 1, lambda text: int(rule_topic(text) in topics), deterministic=True)
                 where += " AND (project_id IS NOT NULL OR category NOT IN ('decision','preference') OR NOT is_shadowed_default(content))"
-        conn.create_function("is_asserted", 1, lambda tags: int(is_asserted(decode(tags, []))), deterministic=True)
         predicate = "is_asserted(tags) AND kind='memory' AND status='active' AND category!='task' AND " + where
         total = conn.execute("SELECT count(*) FROM contents WHERE " + predicate, args).fetchone()[0]
         rows = conn.execute(

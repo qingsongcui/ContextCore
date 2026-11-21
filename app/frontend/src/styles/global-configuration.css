@@ -1,0 +1,9 @@
+.global-config-catalog,.global-config-form { display:grid; gap:16px; min-width:0 }
+.global-config-catalog > .field { max-width:42rem }
+.global-config-catalog .global-asset-heading > div { display:grid; min-width:0; overflow-wrap:anywhere }
+.global-config-form { margin:0; border:0; padding:16px clamp(16px,3vw,30px) 24px }
+.global-host-picker { padding:12px; border:1px solid var(--line); border-radius:var(--r-md); min-width:0 }
+.global-host-picker legend { padding-inline:5px; font-weight:600 }
+.global-checkboxes { margin-top:10px; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(185px,100%),1fr)); gap:3px 8px }
+.global-checkboxes .check-label { min-height:36px; overflow-wrap:anywhere }
+.global-config-form > p { color:var(--secondary) }

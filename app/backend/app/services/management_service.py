@@ -106,12 +106,15 @@ def ensure_schema(conn: sqlite3.Connection | None = None) -> None:
         entity_id TEXT PRIMARY KEY, relative_path TEXT NOT NULL, entry_name TEXT NOT NULL, value_hash TEXT NOT NULL,
         portable_entry INTEGER NOT NULL, was_managed INTEGER NOT NULL DEFAULT 0)""")
     conn.execute('CREATE INDEX IF NOT EXISTS idx_management_native_origins_path ON management_native_origins(relative_path)')
-    from app.services import agent_preferences
+    from app.services import agent_preferences, shared_batches
     agent_preferences.ensure_schema(conn)
+    shared_batches.ensure_schema(conn)
     conn.execute("""CREATE TABLE IF NOT EXISTS management_entities (
         id TEXT PRIMARY KEY, kind TEXT NOT NULL, data TEXT NOT NULL,
         version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL)""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS management_personal_methods (
+        method_id TEXT PRIMARY KEY, asset_id TEXT NOT NULL UNIQUE)""")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_management_kind ON management_entities(kind)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_management_kind_page ON management_entities(kind,created_at,id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_management_asset_kind ON management_entities(kind,json_extract(data,'$.kind'),created_at,id)")
@@ -196,6 +199,22 @@ def configuration_locked(fn):
         with configuration_lock:
             return fn(*args, **kwargs)
     return guarded
+
+
+def store_definition(conn, kind, entity_id, value, prior_version, timestamp):
+    """Write a validated definition and its history in the caller's transaction."""
+    data = canonical(value)
+    if prior_version:
+        changed = conn.execute(
+            "UPDATE management_entities SET data=?,version=version+1,updated_at=? WHERE id=? AND kind=? AND version=?",
+            (data, timestamp, entity_id, kind, prior_version),
+        )
+        if changed.rowcount != 1:
+            raise ConfigurationError("Object changed concurrently")
+    else:
+        conn.execute("INSERT INTO management_entities VALUES(?,?,?,1,?,?)", (entity_id, kind, data, timestamp, timestamp))
+    if kind == "asset":
+        conn.execute("INSERT INTO management_asset_versions VALUES(?,?,?,?)", (entity_id, prior_version + 1, data, timestamp))
 
 
 class ManagementService:
@@ -761,14 +780,7 @@ class ManagementService:
             # Recheck references while holding the write claim; a concurrent
             # provider/account deletion cannot leave a dangling new binding.
             self._validate(kind, merged, entity_id=entity_id)
-            if old:
-                changed = conn.execute("UPDATE management_entities SET data=?,version=version+1,updated_at=? WHERE id=? AND kind=? AND version=?", (canonical(value), now, entity_id, kind, expected_version))
-                if changed.rowcount != 1:
-                    raise ConfigurationError("Object changed concurrently")
-            else:
-                conn.execute("INSERT INTO management_entities VALUES(?,?,?,1,?,?)", (entity_id, kind, canonical(value), now, now))
-            if kind == "asset":
-                conn.execute("INSERT INTO management_asset_versions VALUES(?,?,?,?)", (entity_id, old["version"] + 1 if old else 1, canonical(value), now))
+            store_definition(conn, kind, entity_id, value, expected_version if old else 0, now)
         return self._public(self.get(kind, entity_id))
 
     def _store_secret(self, value: str) -> str:
@@ -1917,10 +1929,17 @@ class ManagementService:
             raise ConfigurationError("Skill installation is unsupported for this host", 422)
         folder, files = native_skill(asset, host_id) if operation == "install" else (owner, asset["files"])
         skill_root = self.home / host["skill_dir"]
-        target_root = skill_root / folder
         with self.connect() as conn:
             owned = conn.execute("SELECT path FROM management_owned WHERE owner=? AND item_key LIKE 'file:%'", (owner,)).fetchall()
         owned_paths = {item["path"] for item in owned if Path(item["path"]).is_relative_to(skill_root)}
+        if host_id in ("codex", "codex-desktop") and owned_paths:
+            # Older CLI and Desktop renderers chose different folder names for
+            # the same physical library. Keep the installed location on upgrade.
+            installed = sorted({path.parent.name for raw in owned_paths if (path := Path(raw)).name == "SKILL.md"
+                                and path.parent.parent == skill_root})
+            if installed and folder not in installed:
+                folder = installed[0]
+        target_root = skill_root / folder
         descriptor = {"mode": asset.get("install_mode", "copy"), "source_version": asset["version"]}
         if operation == "uninstall":
             if not owned_paths:

@@ -185,6 +185,29 @@ with tempfile.TemporaryDirectory(prefix='senrelay-desktop-check-') as tmp:
             })
             assert delete('/api/manage/assets/' + large_skill['id'] + '?expected_version=' + str(large_skill['version']))['deleted']
             assert (home / '.codex/config.toml').read_bytes() == native_before
+            # Exercise the global library through the frozen service and inspect each
+            # installation in the temporary host home independently of the API receipts.
+            body = ('---\nname: packaged-sharing-fixture\ndescription: Check local sharing from the packaged app.\n'
+                    '---\n\n# Verify packaged sharing\nReview the embedded workspace fixture.')
+            skill = post('/api/manage/assets', {'name': 'packaged-sharing-fixture', 'kind': 'skill',
+                                                'files': {'SKILL.md': body}, 'install_mode': 'copy'})
+            target_ids = ['codex', 'claude-code']
+            targets = [{'host_id': host, 'asset_versions': {skill['id']: skill['version']}} for host in target_ids]
+            batch = post('/api/manage/shared-batches', {'operation': 'install', 'targets': targets})
+            assert batch['status'] == 'planned'
+            applied = post('/api/manage/shared-batches/' + batch['id'] + '/apply',
+                           {'confirmed': True, 'expected_version': batch['version']})
+            assert applied['status'] == 'applied' and applied['counts']['applied'] == len(target_ids)
+            with opener.open(base + '/api/manage/shared-batches/' + batch['id']) as response:
+                saved_receipt = json.load(response)
+            assert all(target['file_readback'] == 'verified' for target in saved_receipt['targets'])
+            with opener.open(base + '/api/manage/shared-resource-matrix?scope=global&kind=skill&host_ids=codex,claude-code') as response:
+                matrix = json.load(response)
+            row = next(item for item in matrix['items'] if item['id'] == skill['id'])
+            assert all(row['cells'][host]['status'] == 'verified' for host in target_ids)
+            for config_dir in ('.codex', '.claude'):
+                entries = (home/config_dir/'skills').glob('*/SKILL.md')
+                assert sum(entry.read_text() == body for entry in entries) == 1
             status = subprocess.run([str(service), '-m', 'app.cli', 'status', '--data-dir', str(root / 'data'), '--json'], capture_output=True, text=True, timeout=10)
             assert status.returncode == 0, status.stderr
             assert json.loads(status.stdout)['running'], status.stdout
@@ -193,7 +216,7 @@ with tempfile.TemporaryDirectory(prefix='senrelay-desktop-check-') as tmp:
                 [str(service), '-m', 'app.cli', 'serve', '--data-dir', str(root / 'data'), '--port', str(port)],
                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=8)
             assert duplicate.returncode != 0, duplicate.stderr
-            print(json.dumps({'health': True, 'release': release, 'static_assets': len(assets), 'no_demo_projects': True, 'capture_disabled': True, 'duplicate_rejected': True, 'packaged_management_apply_readback': True, 'packaged_native_preview_and_quota_cache': True, 'packaged_logical_ledger_and_export': True, 'packaged_nonactivating_project_bundle_keeps_selection': True, 'packaged_legacy_bundle_selection_readback': True, 'packaged_reference_guard_and_delete': True, 'packaged_independent_routing_guard': True, 'packaged_metadata_only_large_skill_delete': True, 'packaged_host_mode_preview_and_unconfirmed_apply_refusal': True}, indent=2))
+            print(json.dumps({'health': True, 'release': release, 'static_assets': len(assets), 'no_demo_projects': True, 'capture_disabled': True, 'duplicate_rejected': True, 'packaged_management_apply_readback': True, 'packaged_global_share_configurations': True, 'packaged_native_preview_and_quota_cache': True, 'packaged_logical_ledger_and_export': True, 'packaged_nonactivating_project_bundle_keeps_selection': True, 'packaged_legacy_bundle_selection_readback': True, 'packaged_reference_guard_and_delete': True, 'packaged_independent_routing_guard': True, 'packaged_metadata_only_large_skill_delete': True, 'packaged_host_mode_preview_and_unconfirmed_apply_refusal': True}, indent=2))
         finally:
             if process.poll() is None:
                 process.terminate()

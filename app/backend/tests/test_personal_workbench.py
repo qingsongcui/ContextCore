@@ -131,3 +131,11 @@ def test_discussion_stays_searchable_outside_current_memory(projects):
         assert conn.execute("SELECT COUNT(*) FROM conversations WHERE project_id=?", (projects[0],)).fetchone()[0] == 1
     assert not workbench_service.reading_page(projects[0], 0, 20)["items"]
     assert not retrieval_service.bootstrap_working_memory(project_id=projects[0])["relevant_lessons"]
+
+
+def test_unconfirmed_project_rule_cannot_shadow_a_personal_preference(projects):
+    personal = content_service.create_content(kind="memory", category="preference", title="Language",
+        content="我的所有项目以后都用中文写结论", tags=["personal"])
+    content_service.create_content(project_id=projects[0], kind="memory", category="decision", title="Proposed",
+        content="本项目所有报告默认使用英文", tags=["stance:suggestion"])
+    assert [item["id"] for item in workbench_service.reading_page(projects[0], 0, 40)["items"]] == [personal["id"]]

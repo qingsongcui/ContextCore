@@ -39,10 +39,10 @@ function Workbench() {
   const assistantDrafts = useRef(new Map());
   const [location, setLocation] = useState(locationState);
   useEffect(() => {
-    const titles = { home: '工作台', exchange: '协作', projects: '项目', personal: ({ memory: '个人记忆', assets: '能力与作品', profile: 'Agent 名片' })[location.section] || '个人记忆', agents: 'Agent 管理', usage: '用量与性能', settings: '设置', conflicts: '待确认', audit: '变更记录', connections: '接入与权限' };
+    const titles = { home: '工作台', exchange: '协作', projects: '项目', personal: ({ memory: '个人记忆', assets: '能力与作品', profile: 'Agent 名片' })[location.section] || '个人记忆', agents: location.section === 'library' && !location.agent ? '全局资源库' : 'Agent 管理', usage: '用量与性能', settings: '设置', conflicts: '待确认', audit: '变更记录', connections: '接入与权限' };
     const label = titles[location.page];
     document.title = label ? 'Senrelay — ' + t(label) : t('Senrelay · 续境 — 项目工作台');
-  }, [location.page, location.section, lang]);
+  }, [location.page, location.section, location.agent, lang]);
   const pageRef = useRef(location.page);
   pageRef.current = location.page;
   const [revision, setRevision] = useState(0);
@@ -158,7 +158,8 @@ function Workbench() {
           navigate={go} loading={projects.loading} error={projects.error} />;
       case 'agents':
         return <AgentManagementPage revision={revision} onChanged={changed} projects={projectList}
-          agentId={location.agent} section={location.section} navigate={go} draftStore={assistantDrafts}
+          agentId={location.agent} section={location.section} libraryView={location.view} libraryRecord={location.record}
+          navigate={go} draftStore={assistantDrafts}
           onAgentChange={(agent, section) => go({ page: 'agents', agent, section })} />;
       case 'usage':
         return <UsagePage projects={projectList} projectId={location.project} agentId={location.agent}
@@ -176,7 +177,7 @@ function Workbench() {
           navigate={go} managementAvailable={managementState === 'ready'} />;
     }
   }
-  return <ObjectRefreshContext.Provider value={objectRefresh}><a href="#main-content" className="skip-link">{t("跳到主要内容")}</a><Shell lang={lang} page={location.page} section={location.section} navigate={go} projects={projects.data || []} selectedProject={location.project} onProject={project => go({page: 'projects', project, section: 'memory'})} status={activeStatus} statusLoading={status.loading} managementState={managementState}>
+  return <ObjectRefreshContext.Provider value={objectRefresh}><a href="#main-content" className="skip-link">{t("跳到主要内容")}</a><Shell lang={lang} agent={location.agent} page={location.page} section={location.section} navigate={go} projects={projects.data || []} selectedProject={location.project} onProject={project => go({page: 'projects', project, section: 'memory'})} status={activeStatus} statusLoading={status.loading} managementState={managementState}>
     {import.meta.env.VITE_ISOLATED_PREVIEW ? <div className="connection-note" role="status">{t('隔离开发验收环境：此处合成记录仅用于测试，不代表真实会话、模型调用或生产配置。')}</div> : null}
     {managementState === 'upgrade_required' && !needsManagement ? <div className="connection-note" role="status"><span>{t('新增管理功能需要更新本机服务；现有项目和 Agent 接入仍可使用。')}</span><Button onClick={management.reload}>{t('重新检查服务')}</Button></div> : null}
     {status.error ? <div className="service-banner" role="alert"><AlertCircle size={18} /><div><strong>{t("本机服务暂未连接")}</strong><p>{t(status.error.message)}</p></div><Button icon={RefreshCw} onClick={changed}>{t("重试")}</Button></div> : !connected && status.data ? <div className="connection-note" role="status">{t("实时更新正在重连，当前内容可能不是最新。")}<button onClick={changed}>{t("刷新")}</button></div> : null}

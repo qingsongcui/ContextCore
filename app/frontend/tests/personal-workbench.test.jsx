@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryReader } from "../src/pages/MemoryReader.jsx";
 import { PersonalPage } from "../src/pages/PersonalPage.jsx";
+import * as api from "../src/lib/api.js";
 import { setLang } from "../src/lib/i18n.jsx";
 
 const data = vi.hoisted(() => ({ reader: null, profile: null }));
@@ -93,6 +94,10 @@ it("exports only the explicitly authored private method fields in a Skill draft"
       },
     ],
   };
+  const call = vi.spyOn(api, "mutate").mockResolvedValue({
+    content: "---\nname: method-a\n---\nCompare totals",
+    state: "new", review_token: "test-token",
+  });
   let file;
   vi.stubGlobal(
     "URL",
@@ -123,6 +128,7 @@ it("exports only the explicitly authored private method fields in a Skill draft"
     );
     expect(button.disabled).toBe(false);
     await act(() => button.click());
+    expect(call).toHaveBeenCalledWith("/api/workbench/methods/preview", "POST", {asset_id: "a", profile_revision: 1});
     const content = await file.text();
     expect(content).toContain("name: method-a");
     expect(content).toContain("Compare totals");

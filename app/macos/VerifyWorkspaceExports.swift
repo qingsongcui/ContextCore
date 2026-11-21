@@ -27,6 +27,9 @@ extension Desktop {
           const input = document.querySelector('.exchange-fields textarea');
           Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input,'Native delivery fixture');
           input.dispatchEvent(new Event('input',{bubbles:true}));
+          const save = await wait(()=>document.querySelector('.exchange-fields .toolbar-actions button:not(:disabled)'));
+          save.click();
+          await wait(()=>document.querySelector('.exchange-library .exchange-draft-row') && !document.querySelector('.exchange-fields')?.disabled);
         }
         await wait(()=>!button.disabled && button.getBoundingClientRect().height > 0);
         button.click();

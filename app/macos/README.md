@@ -11,16 +11,18 @@ app/backend/.venv/bin/python app/macos/build.py --from-source --local-workbench-
 For this branch’s redesigned workbench, select its own test identity and output directory.
 
 ```sh
-app/backend/.venv/bin/python app/macos/build.py --from-source --workspace-design-test --build-number 6 --output-dir ../workspace-design-test
+app/backend/.venv/bin/python app/macos/build.py --from-source --workspace-design-test --build-number 7 --output-dir ../workspace-design-test
 ```
 
 This build runs at `127.0.0.1:19436` and keeps its data and service home in `~/Library/Application Support/SenrelayWorkspaceDesignTest`. Its workspace, personal Agent and management sections share navigation with the local browser UI. Project data belongs to the local service and persists when the window closes. The native shell supports Chinese and English, initially follows the system/app preference, and follows language changes in the workbench. Startup errors provide a reconnect action; interrupted page processes and failed downloads have visible recovery messages.
+
+The optional `使用本机Agent配置.command` launcher opens the same local web workspace against the current user's actual Agent configuration roots. Run it next to the app, or open the copy inside `Senrelay.app/Contents/Resources` in the ZIP distribution. Type START, then open the printed local URL in a browser. The foreground process uses port 19446 and its own state directory `~/Library/Application Support/SenrelayHostWorkspaceTest`. The regular test workspace uses its separate test home. Export and import selected definitions to transfer them between the two workspaces. Preview target paths before applying changes and stop the optional service with Ctrl-C.
 
 ## Menu bar and keyboard navigation
 
 Open the Senrelay menu bar icon to see favorite and recent agents. Each agent submenu reads the current provider, model and configuration file status from the workbench service. Choose the agent’s models, change history or usage to open that screen. Account quotas shows saved readings and their observation times. Open the full quota screen to authorize a refresh.
 
-The **Go** menu opens the Agent card and provides ⌘0 for the workbench home, ⌘1 for projects, ⌘2 for all agents, ⌘3 for the usage overview and ⌥⌘3 for account quotas. These shortcuts work while the app is active. Navigation keeps the existing workbench document and supports Back.
+The **Go** menu opens the global resource library and Agent card and provides ⌘0 for the workbench home, ⌘1 for projects, ⌘2 for all agents, ⌘3 for the usage overview and ⌥⌘3 for account quotas. These shortcuts work while the app is active. Navigation keeps the existing workbench document and supports Back.
 
 ## Build a candidate from source
 
@@ -55,7 +57,9 @@ app/backend/.venv/bin/python app/macos/verify_native.py --bundle /absolute/path/
 
 The bundle smoke runs from an unrelated temporary directory with a clean environment and synthetic data. It checks health, matching release identity, built assets, no embedded projects, initially disabled capture, duplicate-start refusal and graceful shutdown.
 
-Native verification starts the bundled service with a temporary data/home directory and renders the app's own WKWebView in a hidden verification mode. Chinese and English runs check the nine sidebar destinations, label bounds, the compact navigation drawer and native menu language. Evidence includes JSON and full native workspace snapshots. The export fixture exercises the three UI download actions, saves their WKDownload output to an isolated directory and compares the files with the selected profile and private markers. Its nonpersistent WebKit store does not reuse the user's browsing/session state. Extended verification also covers window sizes, themes, page headings, startup failure, wrong-port recovery and controlled service upgrade. The standard verifier injects WebView failure callbacks. A separate hidden `soak_native.py --terminate-webkit` scenario verifies actual, uniquely attributed WebContent termination and reconnection. These checks do not establish all-page usability or clean-Mac distribution acceptance.
+Supply `--previous-bundle /path/to/previous/Senrelay.app` to run the upgrade scenario against the earlier frozen service and check its synthetic project, memory, saved profile and provider after upgrade.
+
+Native verification starts the bundled service with a temporary data/home directory and renders the app's own WKWebView in a hidden verification mode. Chinese and English runs check the ten sidebar destinations, label bounds, the compact navigation drawer and native menu language. Evidence includes JSON and full native workspace snapshots. The export fixture exercises the three UI download actions, saves their WKDownload output to an isolated directory and compares the files with the selected profile and private markers. Its nonpersistent WebKit store does not reuse the user's browsing/session state. Extended verification also covers window sizes, themes, page headings, startup failure, wrong-port recovery and controlled service upgrade. The standard verifier injects WebView failure callbacks. A separate hidden `soak_native.py --terminate-webkit` scenario verifies actual, uniquely attributed WebContent termination and reconnection. These checks do not establish all-page usability or clean-Mac distribution acceptance.
 
 ## Lifecycle and data
 

@@ -21,12 +21,22 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--bundle', type=Path, default=here / 'dist/Senrelay.app')
 parser.add_argument('--output-dir', type=Path, default=here / 'build/native-verification')
 parser.add_argument('--language', choices=['zh', 'en', 'both'], default='both')
+parser.add_argument('--previous-bundle', type=Path,
+                    help='Start the previous packaged service in a temporary workspace for the upgrade scenario')
 args = parser.parse_args()
 bundle, out = args.bundle.resolve(), args.output_dir.resolve()
 out.mkdir(parents=True, exist_ok=True)
 expected = json.loads((bundle / 'Contents/Resources/desktop-release.json').read_text())
 bundled_service = bundle / 'Contents/Resources/service/senrelay-service'
 app_binary = bundle / 'Contents/MacOS/Senrelay'
+previous_release = None
+legacy_service = sys.executable
+if args.previous_bundle:
+    previous_resources = args.previous_bundle.resolve() / 'Contents/Resources'
+    previous_release = json.loads((previous_resources/'desktop-release.json').read_text())
+    if previous_release['release_id'] == expected['release_id']:
+        parser.error('--previous-bundle must identify a different release')
+    legacy_service = str(previous_resources/'service/senrelay-service')
 
 
 def free_port() -> int:
@@ -71,7 +81,7 @@ def assert_common_ui(receipt: dict, language: str) -> None:
     assert receipt['live_language_sync']['ok'] is True
     assert [(item['page'], item['section']) for item in receipt['pagesVisited']] == [
         ('home', ''), ('projects', ''), ('personal', 'memory'), ('personal', 'assets'),
-        ('personal', 'profile'), ('exchange', ''), ('agents', ''), ('usage', ''), ('settings', ''),
+        ('personal', 'profile'), ('exchange', ''), ('agents', ''), ('agents', 'library'), ('usage', ''), ('settings', ''),
     ]
     assert all(page['heading'] and not page['hasErrorBanner'] for page in receipt['pagesVisited'])
     assert receipt['window_resize_checks']['min_800x560'] == {'width': 800, 'height': 560}
@@ -126,8 +136,13 @@ with tempfile.TemporaryDirectory(prefix='senrelay-native-') as temporary:
                 body = (export_dir / name).read_text()
                 assert all(marker in body for marker in markers), name
                 assert 'PRIVATE_FIXTURE_NOTE' not in body and 'UNSELECTED_FIXTURE_ASSET' not in body, name
+            with httpx.Client(base_url=f'http://127.0.0.1:{port}', trust_env=False) as client:
+                drafts = client.get('/api/workbench/briefs').json()
+                assert drafts['total'] == 1
+                saved_brief = client.get('/api/workbench/briefs/' + drafts['items'][0]['id']).json()
+                assert saved_brief['deliverable'] == 'Native delivery fixture' and saved_brief['revision'] == 1
             (out / 'native-exports.json').write_text(json.dumps({'verified_files': list(expected_exports),
-                'native_download': True, 'destination': 'temporary fixture directory', 'private_markers_excluded': True}, indent=2))
+                'native_download': True, 'saved_brief_readback': True, 'destination': 'temporary fixture directory', 'private_markers_excluded': True}, indent=2))
             results = []
             languages = ['zh', 'en'] if args.language == 'both' else [args.language]
             for language in languages:
@@ -214,7 +229,7 @@ with tempfile.TemporaryDirectory(prefix='senrelay-native-') as temporary:
         mismatch_port = free_port()
         with (mismatch_dir / 'legacy-service.log').open('w') as legacy_log:
             legacy_proc = subprocess.Popen(
-                [sys.executable, '-m', 'app.cli', 'serve', '--data-dir', str(mismatch_data), '--port', str(mismatch_port)],
+                [legacy_service, '-m', 'app.cli', 'serve', '--data-dir', str(mismatch_data), '--port', str(mismatch_port)],
                 stdout=legacy_log,
                 stderr=legacy_log,
                 env={
@@ -229,11 +244,23 @@ with tempfile.TemporaryDirectory(prefix='senrelay-native-') as temporary:
                     wait_ready(client, legacy_proc, 'Legacy service for version mismatch test')
                     legacy_release = client.get('/api/release').json()
                     assert legacy_release['release_id'] != expected['release_id']
+                    if previous_release:
+                        assert legacy_release == previous_release
                     csrf = client.get('/api/session').json()['csrf_token']
                     headers = {'X-CSRF-Token': csrf, 'Origin': f'http://127.0.0.1:{mismatch_port}'}
                     proj = client.post('/api/projects', json={'name': f'Upgrade preserved project ({language})'}, headers=headers)
                     proj.raise_for_status()
                     project_id = proj.json()['id']
+                    # Test both private and shareable fields across a real local upgrade.
+                    old_profile = None
+                    previous_profile = client.get('/api/workbench/profile')
+                    if previous_profile.status_code != 404:
+                        previous_profile.raise_for_status()
+                        profile = {'revision': previous_profile.json()['revision'], 'name': 'Upgrade fixture',
+                                   'assets': [{'id': 'sample', 'title': 'Retained sample',
+                                               'notes': 'Private fixture', 'selected': True}]}
+                        client.put('/api/workbench/profile', json=profile, headers=headers).raise_for_status()
+                        old_profile = client.get('/api/workbench/profile').json()
                     client.post(
                         '/api/content',
                         json={
@@ -348,6 +375,11 @@ with tempfile.TemporaryDirectory(prefix='senrelay-native-') as temporary:
                 # Verify upgraded service is now running expected release and preserved project + memory + provider.
                 with httpx.Client(base_url=f'http://127.0.0.1:{mismatch_port}', trust_env=False, timeout=2) as client:
                     assert client.get('/api/release').json() == expected
+                    if old_profile is not None:
+                        upgraded_profile = client.get('/api/workbench/profile').json()
+                        assert upgraded_profile['name'] == old_profile['name']
+                        assert all(any(all(asset.get(key) == value for key, value in old_asset.items())
+                                       for asset in upgraded_profile['assets']) for old_asset in old_profile['assets'])
                     projects = client.get('/api/projects').json()
                     assert any(p['id'] == project_id and p['name'] == f'Upgrade preserved project ({language})' for p in projects)
                     memories = client.get(f'/api/content/index?project_id={project_id}&limit=50&offset=0').json()
@@ -357,7 +389,8 @@ with tempfile.TemporaryDirectory(prefix='senrelay-native-') as temporary:
                     provider_items = providers.get('items', providers) if isinstance(providers, dict) else providers
                     assert any(p['name'] == f'Upgrade preserved provider ({language})' for p in provider_items)
                 mismatch_results.append({'language': language, 'error_state': err_state,
-                    'preserved_project_id': project_id,
+                    'preserved_project_id': project_id, 'preserved_profile': old_profile is not None,
+                    'previous_release_id': legacy_release['release_id'], 'used_previous_bundle': bool(previous_release),
                     'rejected_update_preserved_original': True,
                     'bounded_helper_timeouts': ['preflight', 'stop']})
             finally:

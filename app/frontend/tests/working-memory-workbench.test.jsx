@@ -164,7 +164,7 @@ describe('Memory Workbench — Short-Term Working Tasks vs Governed Long-Term Me
       </Shell>
     );
     const navButtons = Array.from(container.querySelectorAll('.main-nav button')).map(btn => btn.textContent.trim());
-    expect(navButtons).toEqual(['工作台', '项目', '协作', '个人记忆', '能力与作品', 'Agent 名片', 'Agent 管理', '用量与性能', '设置']);
+    expect(navButtons).toEqual(['工作台', '项目', '协作', '个人记忆', '能力与作品', 'Agent 名片', 'Agent 管理', '全局资源库', '用量与性能', '设置']);
 
     h.data[activeTasksSummaryPath] = [
       { id: 'tsk_1', project_id: 'p', title: 'Task 1', status: 'in_progress', execution_mode: 'approved' },

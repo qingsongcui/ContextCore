@@ -246,17 +246,17 @@ describe('consumer frontend regression tests for audit findings', () => {
     await render(<Shell lang="zh" page="projects" navigate={navigate} projects={[]} status={null} managementState="ready"><div /></Shell>);
     const nav = container.querySelector('.main-nav');
     const entries = Array.from(nav.querySelectorAll('button'));
-    expect(entries.map(item => item.textContent)).toEqual(['工作台', '项目', '协作', '个人记忆', '能力与作品', 'Agent 名片', 'Agent 管理', '用量与性能', '设置']);
+    expect(entries.map(item => item.textContent)).toEqual(['工作台', '项目', '协作', '个人记忆', '能力与作品', 'Agent 名片', 'Agent 管理', '全局资源库', '用量与性能', '设置']);
     for (const entry of entries) await click(entry);
     expect(navigate.mock.calls.map(call => call[0])).toEqual(['home', { page: 'projects', project: null, section: null }, 'exchange',
-      ...['memory', 'assets', 'profile'].map(section => ({ page: 'personal', section })), 'agents', 'usage', 'settings']);
+      ...['memory', 'assets', 'profile'].map(section => ({ page: 'personal', section })), 'agents', {page:'agents', section:'library', agent:null}, 'usage', 'settings']);
     expect(nav.querySelectorAll('.studio-nav-group')).toHaveLength(3);
     expect(container.querySelector('.secondary-nav')).toBeNull();
 
     // When pending_conflicts > 0, "待确认" appears in main-nav with count badge
     await render(<Shell lang="zh" page="projects" navigate={navigate} projects={[]} status={{ ok: true, counts: { pending_conflicts: 2 } }} managementState="ready"><div /></Shell>);
     const conflictEntries = Array.from(container.querySelector('.main-nav').querySelectorAll('button'));
-    expect(conflictEntries.map(item => item.textContent)).toEqual(['工作台', '项目', '协作', '待确认2', '个人记忆', '能力与作品', 'Agent 名片', 'Agent 管理', '用量与性能', '设置']);
+    expect(conflictEntries.map(item => item.textContent)).toEqual(['工作台', '项目', '协作', '待确认2', '个人记忆', '能力与作品', 'Agent 名片', 'Agent 管理', '全局资源库', '用量与性能', '设置']);
   });
 
   it('keeps agents nav item disabled with honest indicator when management is not ready', async () => {

@@ -211,12 +211,13 @@ def test_multi_file_failure_has_durable_recovery_and_preserves_external_edit(man
     persisted = manager.transactions.get(plan["id"])
     assert persisted["status"] == "recovery_required"
     first = manager.home / ".codex/skills" / skill["id"] / "SKILL.md"
+    applied_bytes = first.read_bytes()
     first.write_text("external edit after failure")
     monkeypatch.setattr(manager.transactions, "_atomic", real_atomic)
     with pytest.raises(ConfigurationError, match="externally edited"):
         manager.transactions.recover(plan["id"], True)
     assert first.read_text() == "external edit after failure"
-    first.write_text("# Skill")
+    first.write_bytes(applied_bytes)
     recovered = manager.transactions.recover(plan["id"], True)
     assert recovered["status"] == "recovered"
     assert not first.exists()
@@ -327,7 +328,7 @@ def test_local_skill_source_update_removes_only_owned_obsolete_files(manager, tm
     update = manager.import_objects({"format": "skill-local", "data": str(source), "target_id": asset["id"], "expected_version": asset["version"]})["imported"][0]
     plan = manager.plan({"host_id": "codex", "asset_ids": [update["id"]]})
     manager.apply(plan["id"], 1, True)
-    assert (target / "SKILL.md").read_text() == "# Second"
+    assert (target / "SKILL.md").read_text().split("---\n\n", 1)[1] == "# Second"
     assert not (target / "obsolete.md").exists()
     uninstall = manager.plan({"host_id": "codex", "asset_ids": [asset["id"]], "operation": "uninstall"})
     manager.apply(uninstall["id"], 1, True)

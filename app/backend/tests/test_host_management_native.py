@@ -510,3 +510,52 @@ def test_shadowed_omp_owned_files_remain_visible_as_conflicts_not_success(env, s
     assert external.read_bytes() == external_bytes
     assert (manager.home / ".omp/agent/models.yaml").read_bytes() == original_models
     assert (manager.home / ".omp/agent/config.yaml").read_bytes() == original_config
+
+
+@pytest.mark.parametrize("first, second", [("codex", "codex-desktop"), ("codex-desktop", "codex")])
+@pytest.mark.parametrize("mode", ["copy", "symlink"])
+def test_codex_shared_skill_uses_identical_entry_from_either_surface(env, first, second, mode):
+    manager, client = env
+    asset = post(client, "assets", {"name": "A shared method", "kind": "skill", "install_mode": mode,
+                                    "files": {"SKILL.md": "# Procedure", "notes.md": "Plain supporting file"}})
+    plan = preview(client, first, asset_ids=[asset["id"]])
+    apply(client, plan)
+    folder = manager.home / ".codex/skills" / asset["id"]
+    entry = folder / "SKILL.md"
+    expected = ("---\nname: " + asset["id"].replace("_", "-") +
+                '\ndescription: "A shared method"\n---\n\n# Procedure')
+    assert entry.read_text() == expected and entry.is_symlink() == (mode == "symlink")
+    apply(client, preview(client, second, asset_ids=[asset["id"]]))
+    assert list(folder.parent.glob("*/SKILL.md")) == [entry]
+    assert entry.read_text() == expected and (folder / "notes.md").read_text() == "Plain supporting file"
+    assert manager.get("asset", asset["id"])["files"]["SKILL.md"] == "# Procedure"
+    apply(client, preview(client, second, asset_ids=[asset["id"]], operation="uninstall"))
+    assert not entry.exists() and not entry.is_symlink()
+
+
+def test_codex_keeps_legacy_desktop_folder_when_applying_from_cli(env):
+    manager, client = env
+    asset = post(client, "assets", {"name": "Legacy folder", "kind": "skill", "files": {"SKILL.md": "# New body"}})
+    legacy = manager.home / ".codex/skills" / asset["id"].replace("_", "-") / "SKILL.md"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("Old body")
+    from app.integrations.config_transactions import canonical, digest
+    with manager.connect() as conn:
+        conn.execute("INSERT INTO management_owned VALUES(?,?,?,?)",
+                     (str(legacy), 'file:"file"', digest(canonical("Old body").encode()), asset["id"]))
+    apply(client, preview(client, "codex", asset_ids=[asset["id"]]))
+    assert list(legacy.parent.parent.glob("*/SKILL.md")) == [legacy]
+    assert legacy.read_text().startswith("---\n") and legacy.read_text().endswith("# New body")
+
+
+@pytest.mark.parametrize("host", ["codex", "codex-desktop"])
+def test_codex_preserves_authored_skill_and_rejects_ambiguous_frontmatter(env, host):
+    manager, client = env
+    text = "---\nname: authored-method\ndescription: Explicit constraints.\ncustom: retained\n---\n# Steps"
+    asset = post(client, "assets", {"name": "Authored", "kind": "skill", "files": {"SKILL.md": text}})
+    apply(client, preview(client, host, asset_ids=[asset["id"]]))
+    entry = manager.home / ".codex/skills/authored-method/SKILL.md"
+    assert entry.read_text() == text
+    bad = post(client, "assets", {"name": "Invalid", "kind": "skill", "files": {"SKILL.md": "---\nname: incomplete\n---\n# Steps"}})
+    res = client.post("/api/manage/plans", json={"host_id": host, "asset_ids": [bad["id"]]})
+    assert res.status_code == 422 and entry.read_text() == text
