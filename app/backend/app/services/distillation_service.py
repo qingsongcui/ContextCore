@@ -7,6 +7,9 @@ from fastapi import HTTPException
 from app.database import db, now_iso, new_id, row_to_dict, log_audit, encode, decode, get_app_setting
 
 
+from app.services.memory_rules import is_explicit_change, personal_declaration, rule_topic
+
+
 VALID_CATEGORIES = {"preference", "background", "decision", "task", "lesson", "knowledge"}
 MEMORY_STANCES = {"fact", "preference", "decision", "suggestion", "assumption", "negation", "quote"}
 # These are recorded and labeled, but they are not an active user decision.
@@ -252,6 +255,7 @@ def apply_distilled_memories(
         # Every entry point (model queue, structured submission and automatic
         # checkpoints) uses the same stance and provenance boundary.
         m = dict(m)
+        project_id = conv["project_id"]
         stance = str(m.get("stance") or "").strip().lower()
         tags = m.get("tags") if isinstance(m.get("tags"), list) else []
         tags = [tag for tag in tags if isinstance(tag, str) and not tag.strip().casefold().startswith(
@@ -437,7 +441,51 @@ def apply_distilled_memories(
             ):
                 continue
 
+        if user_confirmed and cat == "preference" and personal_declaration(quote):
+            project_id = None
+            c_hash = compute_content_hash(None, cat, m_title, m_content)
+            if _has_content_tombstone(conn, None, cat, m_title, m_content):
+                continue
+
         supersedes = m.get("supersedes")
+        if conv_id and user_confirmed and cat in {"preference", "decision"}:
+            # Replaying a conversation must never reinstall its retired rule.
+            seen = conn.execute(
+                """SELECT 1 FROM contents c JOIN content_sources s ON s.content_id=c.id
+                   WHERE s.source_id=? AND s.quote=? AND c.status!='active' AND c.category=?
+                   AND c.project_id IS ? AND c.content=? LIMIT 1""",
+                (conv_id, quote, cat, project_id, m_content),
+            ).fetchone()
+            if seen:
+                continue
+        topic = rule_topic(m_content) if user_confirmed else None
+        if topic and cat in {"decision", "preference"} and not supersedes and not m.get("_archive_only"):
+            candidates = conn.execute(
+                """SELECT id,version,content,applicability FROM contents WHERE kind='memory'
+                   AND status='active' AND category=? AND project_id IS ?""", (cat, project_id),
+            )
+            conditions = governance_guardrails.normalize_applicability(m.get("applicability"))
+            matches = [r for r in candidates if rule_topic(r["content"]) == topic and r["content"] != m_content
+                       and decode(r["applicability"], {}) == conditions]
+            if matches:
+                target = matches[0]
+                latest_source = conn.execute(
+                    """SELECT max(v.started_at) FROM content_sources s JOIN conversations v ON v.id=s.source_id
+                       WHERE s.content_id=? AND s.deleted=0 AND s.source_kind='conversation'""", (target["id"],),
+                ).fetchone()[0]
+                ordered = not latest_source or (conv.get("started_at") or "") >= latest_source
+                if len(matches) != 1 or not is_explicit_change(quote) or not ordered:
+                    _record_conflict(conn, project_id, target["id"], m_title, m_content, cat,
+                                     m["tags"], quote, "Overlapping conventions need clarification", actor, now)
+                    continue
+                if cat == "preference":
+                    created_ids.append(_retire_and_replace(
+                        conn, project_id, target["id"], cat, m_title, m_content, m["tags"], actor, quote,
+                        conv_id, conv_title, conv.get("agent") or actor, now, applicability=conditions,
+                    ))
+                    continue
+                supersedes = {"id": target["id"], "expected_version": target["version"],
+                              "confidence": "explicit_confirmed", "evidence_quote": quote}
 
         if isinstance(supersedes, dict):
             target_id = supersedes.get("id")
@@ -476,7 +524,7 @@ def apply_distilled_memories(
                 mid = new_id("cnt")
                 # Atomically retire old active decision
                 cursor = conn.execute(
-                    "UPDATE contents SET status = 'historical', superseded_by_id = ?, updated_at = ? WHERE id = ? AND version = ? AND status = 'active'",
+                    "UPDATE contents SET status = 'historical', version=version+1, superseded_by_id = ?, updated_at = ? WHERE id = ? AND version = ? AND status = 'active'",
                     (mid, now, target_id, expected_ver),
                 )
                 if cursor.rowcount == 0:
@@ -490,6 +538,8 @@ def apply_distilled_memories(
                     _record_conflict(conn, project_id, target_id, m_title, m_content, cat, m.get("tags") or [], quote, race_reason, actor, now)
                     continue
 
+                from app.services.content_service import _record_current_version_snapshot
+                _record_current_version_snapshot(conn, target_id, actor, now)
                 log_audit(actor=actor, action="content.supersede", target=target_id, conn=conn)
 
                 # Insert new active decision with provenance link
@@ -1107,7 +1157,7 @@ def extract_implicit_memories_from_messages(
                 continue
 
             for category, label_prefix, pattern in _IMPLICIT_SIGNAL_PATTERNS:
-                if pattern.search(seg):
+                if pattern.search(seg) or (category == "preference" and (rule_topic(clean_seg) or "").startswith("language:")):
                     stance = category if category in {"decision", "preference"} else "fact"
                     if re.search(r"引用|转述|^\s*>|\bquoted?\b", text, re.IGNORECASE):
                         stance = "quote"
@@ -1658,9 +1708,12 @@ def auto_summarize_memory(
             if mem.get("supersedes_id") and not mem.get("supersedes"):
                 # An identifier alone is not evidence of a user's change of mind.
                 mem["supersedes"] = {"id": mem["supersedes_id"], "confidence": "ambiguous"}
+            dedupe_pid = eff_pid
+            if cat == "preference" and personal_declaration(mem.get("quote")):
+                dedupe_pid = None
             existing = conn.execute(
                 "SELECT id,version FROM contents WHERE project_id IS ? AND category=? AND title=? AND content=? AND status='active'",
-                (eff_pid, cat, mem["title"], mem["content"]),
+                (dedupe_pid, cat, mem["title"], mem["content"]),
             ).fetchone()
             if existing:
                 saved_items.append({"id": existing["id"], "category": cat, "title": mem["title"], "content": mem["content"],

@@ -2,6 +2,12 @@
 
 Senrelay uses an AppKit window and WKWebView for the current workbench. The bundle contains a frozen Python runtime, the backend, frontend and required resources. Running the app does not require a source checkout, Node or a separate Python installation.
 
+For the local personal-workspace test build, run the following inside the locked backend build environment. The resulting app has its own bundle identifier, loopback port 19426, service data in `~/Library/Application Support/SenrelayLocalTest`, and a separate service home beneath that directory. First launch opens an empty workspace. Use synthetic projects or explicitly choose material to import.
+
+```sh
+app/backend/.venv/bin/python app/macos/build.py --from-source --local-workbench-test --build-number 5 --output-dir ../local-workbench-test
+```
+
 The streamlined three-entry primary navigation (`项目工作台`, `Agent 管理`, `用量与性能`, plus conditional `待确认` when conflicts are pending) and compact desktop controls are retained. Project data belongs to the local service and persists when the window closes. The native shell supports Chinese and English, initially follows the system/app preference, and follows language changes in the workbench. Startup errors provide a reconnect action; interrupted page processes and failed downloads have visible recovery messages.
 
 ## Menu bar and keyboard navigation

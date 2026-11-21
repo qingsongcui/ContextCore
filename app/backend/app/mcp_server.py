@@ -109,6 +109,7 @@ def _fallback_bootstrap_working_memory(
         }
 
     # 1. Applicable constraints (project + global active decisions & preferences)
+    from app.services.memory_rules import current_rules, is_asserted
     applicable_constraints: list[dict[str, Any]] = []
     seen_cids: set[str] = set()
     for category in ("decision", "preference"):
@@ -124,10 +125,12 @@ def _fallback_bootstrap_working_memory(
             ),
         ]
         for item in gather:
-            if item["id"] in seen_cids:
+            if item["id"] in seen_cids or not is_asserted(item.get("tags")):
                 continue
             seen_cids.add(item["id"])
             applicable_constraints.append(_projection(item))
+
+    applicable_constraints = current_rules(applicable_constraints)
 
     # 2. Active working tasks, task selection and the shared execution gate
     active_tasks: list[dict[str, Any]] = []
@@ -197,9 +200,9 @@ def _fallback_bootstrap_working_memory(
                     lesson_candidates.append(item)
     relevant_lessons = [
         _projection(item)
-        for item in lesson_candidates[:8]
-        if item.get("status") == "active" and item["id"] not in seen_cids
-    ]
+        for item in lesson_candidates
+        if is_asserted(item.get("tags")) and item.get("status") == "active" and item["id"] not in seen_cids
+    ][:8]
 
     # 4. Pending conflicts (whole entries; budget drops them with a counter)
     pending_conflicts = (

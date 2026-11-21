@@ -7,6 +7,7 @@ from app.services.handoff_service import invalidate_handoffs
 from app.services import governance_guardrails, telemetry_service
 from app.database import db, now_iso, new_id, row_to_dict, log_audit, encode, decode
 from app.date_filters import upper_date_bound
+from app.services.memory_rules import reading_title
 
 VALID_CONTENT_STATUSES = ("active", "outdated", "historical")
 VALID_CONTENT_CATEGORIES = ("preference", "background", "decision", "task", "lesson", "knowledge")
@@ -17,6 +18,8 @@ def _enrich_content_item(
     usage_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     tags = item.get("tags") if isinstance(item.get("tags"), list) else []
+    if item.get("kind") == "memory":
+        item["heading"] = reading_title(item["title"], item.get("content") or item.get("content_preview"), tags)
     item["pinned"] = "pinned" in tags
     item["scope"] = "global" if not item.get("project_id") else "project"
     if "source_count" not in item or item["source_count"] is None:
@@ -2056,6 +2059,8 @@ def export_memory_handbook(project_id: str | None = None, include_global: bool =
         ).fetchall()
         items = [_enrich_content_item(row_to_dict(r)) for r in rows]
 
+    from app.services.memory_rules import current_rules
+    items = current_rules(items)
     pinned_items = [it for it in items if it.get("pinned")]
     unpinned = [it for it in items if not it.get("pinned")]
 

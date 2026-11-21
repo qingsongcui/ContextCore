@@ -246,16 +246,16 @@ describe('consumer frontend regression tests for audit findings', () => {
     await render(<Shell lang="zh" page="projects" navigate={navigate} projects={[]} status={null} managementState="ready"><div /></Shell>);
     const nav = container.querySelector('.main-nav');
     const entries = Array.from(nav.querySelectorAll('button'));
-    expect(entries.map(item => item.textContent)).toEqual(['项目工作台', 'Agent 管理', '用量与性能']);
+    expect(entries.map(item => item.textContent)).toEqual(['项目工作台', '我的', 'Agent 管理', '用量与性能']);
     for (const entry of entries) await click(entry);
-    expect(navigate.mock.calls.map(call => call[0])).toEqual(['projects', 'agents', 'usage']);
+    expect(navigate.mock.calls.map(call => call[0])).toEqual(['projects', 'personal', 'agents', 'usage']);
     expect(nav.compareDocumentPosition(container.querySelector('.sidebar-projects')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(container.querySelector('.secondary-nav')).toBeNull();
 
     // When pending_conflicts > 0, "待确认" appears in main-nav with count badge
     await render(<Shell lang="zh" page="projects" navigate={navigate} projects={[]} status={{ ok: true, counts: { pending_conflicts: 2 } }} managementState="ready"><div /></Shell>);
     const conflictEntries = Array.from(container.querySelector('.main-nav').querySelectorAll('button'));
-    expect(conflictEntries.map(item => item.textContent)).toEqual(['项目工作台', 'Agent 管理', '用量与性能', '待确认2']);
+    expect(conflictEntries.map(item => item.textContent)).toEqual(['项目工作台', '我的', 'Agent 管理', '用量与性能', '待确认2']);
   });
 
   it('keeps agents nav item disabled with honest indicator when management is not ready', async () => {

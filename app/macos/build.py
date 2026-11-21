@@ -19,7 +19,7 @@ app = here.parent
 repo = app.parent
 # Target macOS 14.0+ (Sonoma and later) on Apple Silicon (arm64).
 minimum_macos = '14.0'
-python = app / 'backend/.venv/bin/python'
+python = Path(sys.executable)
 output = here / 'dist'
 build = here / 'build'
 build.mkdir(exist_ok=True)
@@ -37,7 +37,10 @@ mode.add_argument('--release-manifest', type=Path)
 mode.add_argument('--from-source', action='store_true', help='Build a fresh matched candidate from this checkout; never activate the daily service')
 parser.add_argument('--output-dir', type=Path, help='Candidate output directory (defaults to app/macos/dist)')
 parser.add_argument('--build-number', default=normalize_ci_build_number(os.environ.get('GITHUB_RUN_NUMBER', '1')))
+parser.add_argument('--local-workbench-test', action='store_true', help='Package a side-by-side test workspace with independent storage and port')
 args = parser.parse_args()
+if args.local_workbench_test and not (args.from_source and args.output_dir):
+    parser.error('--local-workbench-test requires --from-source and --output-dir')
 if args.output_dir:
     output = args.output_dir.expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -120,6 +123,9 @@ info = {'CFBundleName': 'Senrelay', 'CFBundleDisplayName': 'Senrelay · 续境',
     'SenrelayReleaseVersion': version,
     'NSHighResolutionCapable': True, 'NSAppTransportSecurity': {'NSAllowsLocalNetworking': True},
     'LSApplicationCategoryType': 'public.app-category.productivity'}
+if args.local_workbench_test:
+    info.update(CFBundleIdentifier='com.senrelay.local-workbench-test', CFBundleDisplayName='Senrelay · 本地测试',
+                SenrelayLocalWorkbenchTest=True)
 with (contents / 'Info.plist').open('wb') as stream: plistlib.dump(info, stream)
 shutil.copy(backend / 'THIRD_PARTY_NOTICES.md', resources)
 shutil.copy(backend / 'LICENSE', resources)

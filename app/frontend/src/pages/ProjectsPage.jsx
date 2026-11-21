@@ -6,6 +6,7 @@ import { useResource } from '../lib/useResource.js';
 import { AGENTS, Badge, Button, EmptyState, ErrorNotice, PageHeader, ResourceState, SectionHeading, SegmentedTabs, formatTime } from '../components/ui.jsx';
 import { ProjectDialog } from '../components/ProjectDialog.jsx';
 import { isDiscussionOnlyTask, taskStatusLabel } from '../components/WorkingTasksPanel.jsx';
+import { MemoryReader } from './MemoryReader.jsx';
 import { KnowledgePage, ContentDetail } from './KnowledgePage.jsx';
 import { ConversationsPage } from './ConversationsPage.jsx';
 const TABS = [['overview', '概览'], ['conversations', '聊天'], ['memory', '记忆'], ['document', '资料']];
@@ -88,11 +89,12 @@ function Overview({
   const rawTasks = Array.isArray(taskResource.data) ? taskResource.data : (taskResource.data?.items || []);
   const tasks = rawTasks.slice(0, 4);
   const activeTaskCount = project.counts?.tasks ?? (taskResource.data ? rawTasks.length : undefined);
-  return <div className="overview"><section className="project-intro"><div><h2>{t("每一步，都有来处。")}</h2><p>{project.description || t("项目的背景、进度和经验都在这儿。新 Agent 不用从头认识它。")}</p></div><CelestialOrbitArt /></section><div className="overview-counts">{[['conversations', t("原始对话"), project.counts?.conversations, '', ''], ['memory', t("项目记忆"), project.counts?.memories, '', 'long_term'], ['document', t("知识资料"), project.counts?.documents, '', ''], ['memory', t("当前任务"), activeTaskCount, 'task', 'tasks']].map(([tab, label, count, category, section]) => <button key={`${tab}-${label}`} onClick={() => onTab(tab, null, category, section)}><strong>{count ?? '—'}</strong><span>{label}<ArrowRight size={14} /></span></button>)}</div><div className="overview-columns"><section className="group"><SectionHeading title={t("当前工作")} action={<Button onClick={() => onTab('memory', null, 'task', 'tasks')}>{t("查看全部")}</Button>} /><ResourceState resource={taskResource}>{tasks.length ? tasks.map(item => <button className="overview-item" key={item.id} onClick={() => onTab('memory', null, 'task', 'tasks', item.id)}><span className="small-orbit" /><div><div className="meta-line"><span>{taskStatusLabel(item.status)}</span>{isDiscussionOnlyTask(item) ? <Badge className="badge-guard-discussion">{t("仅讨论方案 · 未授权改代码")}</Badge> : null}{item.last_agent ? <span>{AGENTS[item.last_agent] || item.last_agent}</span> : null}{item.git_branch ? <code className="overview-branch-chip">{item.git_branch}</code> : null}</div><h3>{item.title}</h3><p>{item.current_state || item.goal || item.content_preview || t("点击查看任务详情与下一步")}</p><small>{formatTime(item.updated_at)}</small></div><ChevronRight className="row-chevron" size={15} aria-hidden="true" /></button>) : <p className="section-empty">{t("还没有任务进度记录。")}</p>}</ResourceState></section><section className="group"><SectionHeading title={t("重要决定")} action={<Button onClick={() => onTab('memory', null, '', 'long_term')}>{t("查看记忆")}</Button>} /><ResourceState resource={decisionResource}>{decisions.length ? decisions.map(item => <button className="overview-item" key={item.id} onClick={() => onContent(item.id)}><div><h3>{item.title}</h3><p>{item.content_preview}</p></div><ChevronRight className="row-chevron" size={15} aria-hidden="true" /></button>) : <p className="section-empty">{t("经过确认的决定会在这里留下依据。")}</p>}</ResourceState></section></div><section className="group"><SectionHeading title={t("最近协作")} action={<Button onClick={() => onTab('conversations')}>{t("全部聊天")}</Button>} /><ResourceState resource={conversations}>{conversations.data?.items?.length ? conversations.data.items.map(item => <button className="recent-conversation" key={item.id} onClick={() => onTab('conversations', item.id)}><span className="agent-monogram">{item.agent?.slice(0, 1).toUpperCase()}</span><div><strong>{item.title}</strong><small>{AGENTS[item.agent] || item.agent} · {formatTime(item.updated_at)}</small></div><Badge>{item.processing_status === 'processed' ? t("已处理") : item.processing_status === 'error' ? t("处理失败") : t("待整理")}</Badge><ChevronRight className="row-chevron" size={15} aria-hidden="true" /></button>) : <p className="section-empty">{t("这个项目还没有聊天记录。")}</p>}</ResourceState></section></div>;
+  return <div className="overview"><section className="project-intro"><div><h2>{t("每一步，都有来处。")}</h2><p>{project.description || t("项目的背景、进度和经验都在这儿。新 Agent 不用从头认识它。")}</p></div><CelestialOrbitArt /></section><div className="overview-counts">{[['conversations', t("原始对话"), project.counts?.conversations, '', ''], ['memory', t("项目记忆"), project.counts?.memories, '', 'long_term'], ['document', t("知识资料"), project.counts?.documents, '', ''], ['memory', t("当前任务"), activeTaskCount, 'task', 'tasks']].map(([tab, label, count, category, section]) => <button key={`${tab}-${label}`} onClick={() => onTab(tab, null, category, section)}><strong>{count ?? '—'}</strong><span>{label}<ArrowRight size={14} /></span></button>)}</div><div className="overview-columns"><section className="group"><SectionHeading title={t("当前工作")} action={<Button onClick={() => onTab('memory', null, 'task', 'tasks')}>{t("查看全部")}</Button>} /><ResourceState resource={taskResource}>{tasks.length ? tasks.map(item => <button className="overview-item" key={item.id} onClick={() => onTab('memory', null, 'task', 'tasks', item.id)}><span className="small-orbit" /><div><div className="meta-line"><span>{taskStatusLabel(item.status)}</span>{isDiscussionOnlyTask(item) ? <Badge className="badge-guard-discussion">{t("仅讨论方案 · 未授权改代码")}</Badge> : null}{item.last_agent ? <span>{AGENTS[item.last_agent] || item.last_agent}</span> : null}{item.git_branch ? <code className="overview-branch-chip">{item.git_branch}</code> : null}</div><h3>{item.title}</h3><p>{item.current_state || item.goal || item.content_preview || t("点击查看任务详情与下一步")}</p><small>{formatTime(item.updated_at)}</small></div><ChevronRight className="row-chevron" size={15} aria-hidden="true" /></button>) : <p className="section-empty">{t("还没有任务进度记录。")}</p>}</ResourceState></section><section className="group"><SectionHeading title={t("重要决定")} action={<Button onClick={() => onTab('memory', null, '', 'long_term')}>{t("查看记忆")}</Button>} /><ResourceState resource={decisionResource}>{decisions.length ? decisions.map(item => <button className="overview-item" key={item.id} onClick={() => onContent(item.id)}><div><h3>{item.heading || item.title}</h3>{!item.tags?.includes("implicit_auto") && item.content_preview !== item.title && <p>{item.content_preview}</p>}</div><ChevronRight className="row-chevron" size={15} aria-hidden="true" /></button>) : <p className="section-empty">{t("经过确认的决定会在这里留下依据。")}</p>}</ResourceState></section></div><section className="group"><SectionHeading title={t("最近协作")} action={<Button onClick={() => onTab('conversations')}>{t("全部聊天")}</Button>} /><ResourceState resource={conversations}>{conversations.data?.items?.length ? conversations.data.items.map(item => <button className="recent-conversation" key={item.id} onClick={() => onTab('conversations', item.id)}><span className="agent-monogram">{item.agent?.slice(0, 1).toUpperCase()}</span><div><strong>{item.title}</strong><small>{AGENTS[item.agent] || item.agent} · {formatTime(item.updated_at)}</small></div><Badge>{item.processing_status === 'processed' ? t("已处理") : item.processing_status === 'error' ? t("处理失败") : t("待整理")}</Badge><ChevronRight className="row-chevron" size={15} aria-hidden="true" /></button>) : <p className="section-empty">{t("这个项目还没有聊天记录。")}</p>}</ResourceState></section></div>;
 }
 export function ProjectsPage({
   projects,
   selectedId,
+  route,
   onSelect,
   revision,
   onChanged,
@@ -100,14 +102,14 @@ export function ProjectsPage({
   loading,
   error
 }) {
-  const [tab, setTab] = useState('overview');
+  const [localTab, setTab] = useState('overview');
   const [memoryCategory, setMemoryCategory] = useState('');
   const [memorySection, setMemorySection] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [archived, setArchived] = useState(false);
   const [organize, setOrganize] = useState(null);
   const [menu, setMenu] = useState(false);
-  const [contentId, setContentId] = useState(null);
+  const [localContentId, setLocalContentId] = useState(null);
   const [conversationId, setConversationId] = useState(null);
   const [operationError, setOperationError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -115,6 +117,14 @@ export function ProjectsPage({
   const [globalConvScope, setGlobalConvScope] = useState('all');
   const [globalQuery, setGlobalQuery] = useState('');
   const [creating, setCreating] = useState(false);
+  const tab = route ? (TABS.find(([id]) => id === route.section)?.[0] || 'overview') : localTab;
+  const contentId = route ? (tab === 'conversations' ? null : route.record) : localContentId;
+  function setContentId(id) {
+    setLocalContentId(id);
+    if (route) navigate({record: id});
+  }
+  const activeView = route ? route.view : memorySection;
+  const isManaged = tab === 'document' || (tab === 'memory' && ['tasks', 'manage'].includes(activeView));
   const menuRef = useRef(null);
   useEffect(() => {
     if (!menu) return;
@@ -150,7 +160,7 @@ export function ProjectsPage({
     setMemoryCategory('');
     setMemorySection('');
     setSelectedTaskId(null);
-    setContentId(null);
+    setLocalContentId(null);
     setConversationId(null);
   }
   function chooseTab(next, id, category = '', section = '', taskId = null) {
@@ -158,8 +168,9 @@ export function ProjectsPage({
     setMemoryCategory(category === 'task' ? '' : (category || ''));
     setMemorySection(section || (category === 'task' ? 'tasks' : ''));
     setSelectedTaskId(taskId || null);
-    setContentId(null);
+    setLocalContentId(null);
     setConversationId(id || null);
+    if (route) navigate({section: next, record: id || null, view: section || (category === 'task' ? 'tasks' : '')});
   }
   async function archiveProject() {
     setBusy(true);
@@ -202,7 +213,7 @@ export function ProjectsPage({
   </>;
   return <>
     <div className="breadcrumb"><Button icon={ArrowLeft} onClick={() => select(null)}>{t("所有项目")}</Button><span>/</span><span>{project.name}</span>{project.status === 'archived' ? <Badge>{t("已归档 · 仍可检索")}</Badge> : null}</div>
-    <PageHeader title={project.name} description={project.directories?.length ? t("{count} 个关联目录 · 记忆全项目共享", { count: project.directories.length }) : t("按主题管理，不必绑定某个目录")} actions={<>
+    <PageHeader title={project.name} description={project.description || (project.directories?.length ? t("{count} 个关联目录 · 记忆全项目共享", { count: project.directories.length }) : undefined)} actions={<>
       <div className="popover-anchor" ref={menuRef} onBlur={event => {
         if (!event.currentTarget.contains(event.relatedTarget)) setMenu(false);
       }}>
@@ -222,7 +233,7 @@ export function ProjectsPage({
     <ErrorNotice error={operationError || error} />
     <SegmentedTabs label={t("项目内容")}>{TABS.map(([id, label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => chooseTab(id)}>{t(label)}</button>)}</SegmentedTabs>
     <div className="tab-content" key={`${project.id}-${tab}`}>
-      {contentId ? <ContentDetail key={contentId} id={contentId} projects={projects} revision={revision} onProject={select} onBack={() => setContentId(null)} onChanged={onChanged} /> : tab === 'overview' ? <Overview project={project} revision={revision} onTab={chooseTab} onContent={setContentId} /> : tab === 'conversations' ? <ConversationsPage projectId={project.id} projects={projects} revision={revision} onProject={select} onChanged={onChanged} initialId={conversationId} onCloseInitial={() => setConversationId(null)} /> : <KnowledgePage key={`${project.id}-${tab}-${memoryCategory}-${memorySection}`} projectId={project.id} projects={projects} kind={tab} initialCategory={tab === 'memory' ? memoryCategory : ''} initialSection={tab === 'memory' ? memorySection : ''} initialTaskId={tab === 'memory' ? selectedTaskId : null} revision={revision} onChanged={onChanged} onProject={select} />}
+      {contentId && !isManaged ? <ContentDetail key={contentId} id={contentId} projects={projects} revision={revision} onProject={select} onBack={() => setContentId(null)} onChanged={onChanged} /> : tab === 'overview' ? <Overview project={project} revision={revision} onTab={chooseTab} onContent={setContentId} /> : tab === 'conversations' ? <ConversationsPage projectId={project.id} projects={projects} revision={revision} onProject={select} onChanged={onChanged} initialId={route ? route.record : conversationId} onCloseInitial={() => {setConversationId(null); if (route) navigate({record: null});}} /> : tab === 'memory' && !isManaged ? <MemoryReader projectId={project.id} revision={revision} onOpen={setContentId} onManage={() => chooseTab('memory', null, '', 'manage')} onTasks={() => chooseTab('memory', null, '', 'tasks')} /> : <KnowledgePage rememberList={Boolean(route)} recordId={contentId} onRecordChange={route ? setContentId : undefined} onSectionChange={route ? next => navigate({view:next === 'tasks' ? 'tasks' : 'manage', record:null}) : undefined} key={`${project.id}-${tab}-${memoryCategory}-${memorySection}`} projectId={project.id} projects={projects} kind={tab} initialCategory={tab === 'memory' ? memoryCategory : ''} initialSection={tab === 'memory' ? (activeView === 'manage' ? 'long_term' : activeView) : ''} initialTaskId={tab === 'memory' ? selectedTaskId : null} revision={revision} onChanged={onChanged} onProject={select} />}
     </div>
     {organize ? <ProjectDialog project={project} projects={projects} revision={revision} mode={organize} onClose={() => setOrganize(null)} onSaved={saved => {
       onChanged();

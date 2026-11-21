@@ -157,14 +157,14 @@ afterEach(async () => {
 });
 
 describe('Memory Workbench — Short-Term Working Tasks vs Governed Long-Term Memory', () => {
-  it('keeps Shell top-level navigation untouched and splits Project Memory cleanly into Active Tasks and Long-Term Memory', async () => {
+  it('includes the personal workspace in top-level navigation and splits Project Memory cleanly into Active Tasks and Long-Term Memory', async () => {
     await render(
       <Shell page="projects" managementState="ready" projects={projects} selectedProject="p" onProject={vi.fn()} navigate={vi.fn()} status={{ ok: true, counts: {} }}>
         <div>Workspace</div>
       </Shell>
     );
     const navButtons = Array.from(container.querySelectorAll('.main-nav button')).map(btn => btn.textContent.trim());
-    expect(navButtons).toEqual(['项目工作台', 'Agent 管理', '用量与性能']);
+    expect(navButtons).toEqual(['项目工作台', '我的', 'Agent 管理', '用量与性能']);
 
     h.data[activeTasksSummaryPath] = [
       { id: 'tsk_1', project_id: 'p', title: 'Task 1', status: 'in_progress', execution_mode: 'approved' },

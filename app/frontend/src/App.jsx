@@ -4,6 +4,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Shell } from './components/Shell.jsx';
 import { Button, PageHeader } from './components/ui.jsx';
+import { PersonalPage } from './pages/PersonalPage.jsx';
 import { ProjectsPage } from './pages/ProjectsPage.jsx';
 import { ConsolePage } from './pages/ConsolePage.jsx';
 import { InboxPage } from './pages/InboxPage.jsx';
@@ -16,12 +17,14 @@ import { I18nProvider, useI18n } from './lib/i18n.jsx';
 import { useResource } from './lib/useResource.js';
 import { ObjectRefreshContext } from './lib/objectRefresh.js';
 import { backendCompatibility } from './lib/management.js';
-const PAGES = new Set(['projects', 'connections', 'conflicts', 'audit', 'settings', 'agents', 'usage']);
+const PAGES = new Set(['projects', 'personal', 'connections', 'conflicts', 'audit', 'settings', 'agents', 'usage']);
 function locationState() {
   const params = new URLSearchParams(window.location.search);
   return {
     page: PAGES.has(params.get('page')) ? params.get('page') : 'projects',
     project: params.get('project') || null,
+    record: params.get('record') || null,
+    view: params.get('view') || null,
     agent: params.get('agent') || null,
     request: params.get('request') || null,
     section: params.get('section') || null
@@ -29,10 +32,11 @@ function locationState() {
 }
 function Workbench() {
   const { lang } = useI18n();
+  const personalDraft = useRef(null);
   const assistantDrafts = useRef(new Map());
   const [location, setLocation] = useState(locationState);
   useEffect(() => {
-    const titles = { agents: 'Agent 管理', usage: '用量与性能', settings: '设置', conflicts: '待确认', audit: '变更记录', connections: '接入与权限' };
+    const titles = { personal: '我的', agents: 'Agent 管理', usage: '用量与性能', settings: '设置', conflicts: '待确认', audit: '变更记录', connections: '接入与权限' };
     const label = titles[location.page];
     document.title = label ? 'Senrelay — ' + t(label) : t('Senrelay · 续境 — 项目工作台');
   }, [location.page, lang]);
@@ -115,9 +119,16 @@ function Workbench() {
     const value = nextLocation(location, next, options);
     const params = new URLSearchParams();
     params.set('page', value.page);
+    if (value.page === location.page && value.project === location.project && value.section === location.section && value.view === location.view) {
+      for (const [key, val] of new URLSearchParams(window.location.search)) {
+        if (key.startsWith('filter_')) params.set(key, val);
+      }
+    }
     if (value.project) params.set('project', value.project);
     if (value.agent) params.set('agent', value.agent);
     if (value.section) params.set('section', value.section);
+    if (value.record) params.set('record', value.record);
+    if (value.view) params.set('view', value.view);
     if (value.request) params.set('request', value.request);
     window.history.pushState(null, '', `?${params}`);
     setLocation(value);
@@ -139,7 +150,7 @@ function Workbench() {
         })}>{t("查看待确认")}</Button></div> : null}
     {needsManagement && wasReady.current && managementState === 'unavailable' ? <div className="connection-note" role="status"><span>{t('暂时无法确认新功能是否可用')}</span><Button onClick={management.reload} busy={management.loading}>{t('重新检查服务')}</Button></div> : null}
     <div className="page-surface" key={`${location.page}:${location.project || ''}`}><Suspense fallback={<div className="skeleton-stack" aria-busy="true" aria-label={t('正在读取')}><span /><span /><span /></div>}>
-      {needsManagement && (managementState === 'upgrade_required' || (!wasReady.current && managementState !== 'ready')) ? <><PageHeader title={managementState === 'upgrade_required' ? t('需要更新本机服务') : managementState === 'checking' ? t('正在检查服务能力') : t('暂时无法确认新功能是否可用')} description={t('当前后台尚未提供可用的管理接口。新页面已暂停加载，不会发起配置写入；原有项目与接入页面继续可用。')} /><div className="toolbar-actions"><Button onClick={management.reload} busy={management.loading}>{t('重新检查服务')}</Button><Button onClick={() => go({ page: 'projects' })}>{t('返回项目工作台')}</Button><Button onClick={() => go({ page: 'connections' })}>{t('打开现有 Agent 接入')}</Button></div></> : location.page === 'projects' ? <ProjectsPage projects={projects.data || []} selectedId={location.project} onSelect={project => go({
+      {needsManagement && (managementState === 'upgrade_required' || (!wasReady.current && managementState !== 'ready')) ? <><PageHeader title={managementState === 'upgrade_required' ? t('需要更新本机服务') : managementState === 'checking' ? t('正在检查服务能力') : t('暂时无法确认新功能是否可用')} description={t('当前后台尚未提供可用的管理接口。新页面已暂停加载，不会发起配置写入；原有项目与接入页面继续可用。')} /><div className="toolbar-actions"><Button onClick={management.reload} busy={management.loading}>{t('重新检查服务')}</Button><Button onClick={() => go({ page: 'projects' })}>{t('返回项目工作台')}</Button><Button onClick={() => go({ page: 'connections' })}>{t('打开现有 Agent 接入')}</Button></div></> : location.page === 'personal' ? <PersonalPage route={location} navigate={go} projects={projects.data || []} revision={revision} onChanged={changed} draftStore={personalDraft} /> : location.page === 'projects' ? <ProjectsPage route={location} projects={projects.data || []} selectedId={location.project} onSelect={project => go({
           project
         })} revision={revision} onChanged={changed} navigate={go} loading={projects.loading} error={projects.error} /> : location.page === 'agents' ? <AgentManagementPage revision={revision} onChanged={changed} projects={projects.data || []} agentId={location.agent} section={location.section} onAgentChange={(agent, section) => go({ page: 'agents', agent, section })} navigate={go} draftStore={assistantDrafts} /> : location.page === 'usage' ? <UsagePage projects={projects.data || []} projectId={location.project} agentId={location.agent} section={location.section} requestId={location.request} navigate={go} onSectionChange={section => go({ page: 'usage', agent: location.agent, project: location.project, section })} /> : location.page === 'connections' ? <ConsolePage key={location.agent || 'all'} agentId={location.agent} navigate={go} revision={revision} onChanged={changed} managementAvailable={managementState === 'ready'} /> : location.page === 'conflicts' ? <InboxPage revision={revision} onChanged={changed} /> : location.page === 'audit' ? <AuditPage revision={revision} /> : <SettingsPage revision={revision} status={activeStatus} onChanged={changed} navigate={go} managementAvailable={managementState === 'ready'} />}
     </Suspense></div>

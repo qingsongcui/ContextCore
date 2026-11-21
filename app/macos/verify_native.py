@@ -69,7 +69,7 @@ def assert_common_ui(receipt: dict, language: str) -> None:
     assert ('窗口' if language == 'zh' else 'Window') in receipt['native_menu_titles']
     assert receipt['themeSwitchOk'] is True
     assert receipt['live_language_sync']['ok'] is True
-    assert len(receipt['pagesVisited']) == 4
+    assert [page['page'] for page in receipt['pagesVisited']] == ['projects', 'personal', 'agents', 'usage', 'settings']
     assert all(page['heading'] and not page['hasErrorBanner'] for page in receipt['pagesVisited'])
     assert receipt['window_resize_checks']['min_800x560'] == {'width': 800, 'height': 560}
     assert receipt['window_resize_checks']['medium_1080x700'] == {'width': 1080, 'height': 700}

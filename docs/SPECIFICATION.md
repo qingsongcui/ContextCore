@@ -44,6 +44,10 @@ D037 prefers reusing the active connected Agent rather than requiring an indepen
 
 Authorized Agents have uniform shared-memory access (D041). Raw transcript credentials are retained as written, with explicit disclosure of storage and possible model-provider disclosure risks (D042). This does **not** authorize copying secrets into audit logs, public artifacts, management exports or new credential stores. The macOS user account is the primary boundary; no separate app lock is required (D043). The implementation uses loopback networking, browser session/CSRF checks, Agent credentials and independent routing credentials; those are engineering controls, not claims that the source decisions specified every mechanism. See [security policy](../SECURITY.md).
 
+### Local personal workspace
+
+The test branch adds Personal alongside Projects, Agents and Usage. Explicit cross-project preferences retain their source conversation. The project reader, working-memory bootstrap and exported rulebook apply scoped defaults and project exceptions. A change backed by an explicit source keeps its predecessor available as history. The personal workspace links capabilities to versioned project evidence and lets the user maintain a local introduction. Profile exports include only the display name, introduction and selected descriptions. Private method drafts and notes have separate export boundaries.
+
 ## 5. Model and tool management (D060, D061)
 
 The confirmed management scope covers multi-host configuration and resource management while retaining the browser/macOS topology. It includes:

@@ -85,6 +85,7 @@ class Content(BaseModel):
     kind: Literal["memory", "document"] = "memory"
     category: Literal["preference", "background", "decision", "task", "lesson", "knowledge"] = "knowledge"
     title: str
+    heading: str | None = None
     content: str
     tags: list[str] = []
     pinned: bool = False

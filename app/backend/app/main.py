@@ -14,6 +14,7 @@ from app.routers import (
     session,
     status,
     projects,
+    workbench,
     content,
     conversations,
     connections,
@@ -178,6 +179,7 @@ register_exception_handlers(app)
 app.include_router(session.router)
 app.include_router(status.router)
 app.include_router(projects.router)
+app.include_router(workbench.router)
 app.include_router(content.router)
 app.include_router(conversations.router)
 app.include_router(connections.router)

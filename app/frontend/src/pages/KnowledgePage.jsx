@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Archive,
   ArrowLeft,
@@ -701,7 +701,7 @@ function ContentRecord({
       <div className="detail-toolbar">
         <Button icon={ArrowLeft} onClick={onBack}>{backLabel}</Button>
         {item ? (
-          <div>
+          <details className="memory-actions"><summary>{t("管理操作")}</summary><div>
             {item.kind !== 'document' ? (
               <Button icon={Pin} disabled={unavailable || busy} onClick={togglePinDetail} aria-pressed={itemPinned}>
                 {itemPinned ? t('已常驻核心') : t('设为常驻')}
@@ -750,7 +750,7 @@ function ContentRecord({
               }}
               aria-label={t('永久删除内容')}
             />
-          </div>
+          </div></details>
         ) : null}
       </div>
 
@@ -807,7 +807,7 @@ function ContentRecord({
                 </div>
               ) : null}
 
-              <h2>{item.title}</h2>
+              <h2>{item.heading || item.title}</h2>
               <p>
                 {AGENTS[item.agent] || item.agent || t('人工维护')} {t('· 创建于')} {formatTime(item.created_at)}{' '}
                 {t('· 更新于')} {formatTime(item.updated_at)} {t('· 版本')} {item.version}
@@ -822,11 +822,12 @@ function ContentRecord({
               ) : null}
 
               <div className="tags">
-                {item.tags?.filter(tag => tag !== 'pinned').map(tag => <span key={tag}>#{tag}</span>)}
+                {item.tags?.filter(tag => !/^(?:pinned$|implicit_auto$|role:|message_index:|source_version:|stance:)/.test(tag)).map(tag => <span key={tag}>#{tag}</span>)}
               </div>
             </div>
 
-            <Markdown>{item.content}</Markdown>
+            {!(item.tags?.includes('implicit_auto') && item.sources?.some(source => source.quote === item.content)) &&
+              <Markdown>{item.content}</Markdown>}
 
             {item.kind !== 'document' ? (
               <section className="usage-receipt-section">
@@ -1074,23 +1075,40 @@ export function KnowledgePage({
   initialSection = '',
   initialTaskId = null,
   initialQuery = '',
+  rememberList = false,
+  recordId,
+  onRecordChange,
+  onSectionChange,
   revision,
   onChanged,
   onProject
 }) {
-  const [memorySection, setMemorySection] = useState(() => (
+  const [restored] = useState(() => {
+    if (!rememberList) return {};
+    const query = new URLSearchParams(window.location.search);
+    return Object.fromEntries(Object.keys(EMPTY_FILTERS).filter(key => query.has('filter_' + key)).map(key => [key, query.get('filter_' + key)]));
+  });
+  const previousCategory = useRef(initialCategory);
+  const [memorySection, setLocalSection] = useState(() => (
     initialSection || (initialCategory === 'task' ? 'tasks' : 'long_term')
   ));
   const [focusedTaskId, setFocusedTaskId] = useState(initialTaskId);
   const [filters, setFilters] = useState(() => ({
     ...EMPTY_FILTERS,
     category: initialCategory && initialCategory !== 'task' ? initialCategory : '',
-    query: initialQuery || ''
+    query: initialQuery || '',
+    ...restored
   }));
   const [scopeMode, setScopeMode] = useState(projectId ? 'project' : 'all');
   const [viewMode, setViewMode] = useState('list');
   const [copiedHandbook, setCopiedHandbook] = useState(false);
-  const [selectedId, setSelectedId] = useState(null);
+  const [localRecord, setLocalRecord] = useState(null);
+  const selectedId = onRecordChange ? recordId : localRecord;
+  const setSelectedId = onRecordChange || setLocalRecord;
+  function setMemorySection(next) {
+    setLocalSection(next);
+    onSectionChange?.(next);
+  }
   const [selected, setSelected] = useState([]);
   const [editing, setEditing] = useState(false);
   const [correctingItem, setCorrectingItem] = useState(null);
@@ -1105,11 +1123,11 @@ export function KnowledgePage({
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState('');
   const [offset, setOffset] = useState(0);
-  const [appliedQuery, setAppliedQuery] = useState(initialQuery || '');
+  const [appliedQuery, setAppliedQuery] = useState(restored.query || initialQuery || '');
 
   useEffect(() => {
-    if (initialSection) setMemorySection(initialSection);
-    else if (initialCategory === 'task') setMemorySection('tasks');
+    if (initialSection) setLocalSection(initialSection);
+    else if (initialCategory === 'task') setLocalSection('tasks');
   }, [initialSection, initialCategory]);
 
   useEffect(() => {
@@ -1117,6 +1135,18 @@ export function KnowledgePage({
   }, [initialTaskId]);
 
   useEffect(() => {
+    if (!rememberList) return;
+    const url = new URL(window.location.href);
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) url.searchParams.set('filter_' + key, String(value));
+      else url.searchParams.delete('filter_' + key);
+    }
+    window.history.replaceState(window.history.state, '', url);
+  }, [filters, rememberList]);
+
+  useEffect(() => {
+    if (previousCategory.current === initialCategory) return;
+    previousCategory.current = initialCategory;
     setFilters(previous => ({
       ...previous,
       category: initialCategory && initialCategory !== 'task' ? initialCategory : ''

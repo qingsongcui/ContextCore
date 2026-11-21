@@ -866,3 +866,20 @@
   .badge.badge-status-historical { background: var(--surface-soft); color: var(--muted); border-color: var(--line); }
   .badge.badge-provenance { background: var(--surface); color: var(--secondary); border-color: var(--line-strong); }
 }
+
+.memory-reader,.personal-form{max-width:62rem;margin:1.25rem 0}
+.reader-heading,.profile-columns{display:flex;align-items:flex-start;gap:1.5rem;justify-content:space-between}
+.reader-heading p,.personal-form>p{max-width:48em;margin:.4rem 0 1rem}
+.reader-group,.personal-asset,.profile-preview{border:1px solid var(--border,#9996);border-radius:12px;padding:1.2rem 1.45rem;margin:1rem 0}
+.reader-item{border-top:1px solid var(--border,#9995);padding:.85rem 0;overflow-wrap:anywhere}
+.reader-item summary,.asset-picker summary{cursor:pointer;font-weight:600}
+.reader-item blockquote{margin:.8rem 0;padding:.7rem 1rem;background:var(--surface-subtle,rgba(128,128,128,.08));border-radius:6px}
+.reader-item blockquote p,.profile-preview p{white-space:pre-wrap;overflow-wrap:anywhere}
+.personal-form{border:0;padding:0;min-width:0}
+.personal-form label:not(.check-label){display:grid;gap:.35rem;margin:.8rem 0}
+.personal-form textarea{min-height:5rem;resize:vertical}
+.personal-form :is(input:not([type=checkbox]),textarea,select){width:100%;color:inherit;background:transparent;border:1px solid var(--border,#9998);border-radius:7px;padding:.55rem;font:inherit}
+.asset-picker{padding:.7rem 0}.asset-picker button{margin:.25rem}
+.profile-columns>*{flex:1;min-width:0}.profile-preview{margin:0}
+@media(max-width:750px){.reader-heading,.profile-columns{flex-direction:column}.profile-columns>*{width:100%}.reader-group,.personal-asset{padding:1rem}}
+.memory-actions summary{cursor:pointer;padding:.45rem .7rem}.memory-actions>div{display:flex;flex-wrap:wrap;gap:.4rem}

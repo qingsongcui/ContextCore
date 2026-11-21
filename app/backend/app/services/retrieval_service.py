@@ -1243,6 +1243,7 @@ def bootstrap_working_memory(
                 """
             ).fetchall()
 
+        from app.services.memory_rules import current_rules, is_asserted
         raw_constraints: list[dict[str, Any]] = []
         constraint_ids_set: set[str] = set()
         for r in constraint_rows:
@@ -1250,6 +1251,8 @@ def bootstrap_working_memory(
             if item is None or item.get("category") == "task":
                 continue
             tags = _tags_for_item(item)
+            if not is_asserted(tags):
+                continue
             app_dict, app_warn = _extract_applicability(item)
             constraint_ids_set.add(item["id"])
             raw_constraints.append(
@@ -1268,6 +1271,8 @@ def bootstrap_working_memory(
                     "evidence_id": evidence_id(item["id"], item["version"]),
                 }
             )
+
+        raw_constraints = current_rules(raw_constraints)
 
         # 2. Layer 2: Active working_tasks (strictly active/in_progress/blocked)
         active_tasks: list[dict[str, Any]] = []
@@ -1367,6 +1372,8 @@ def bootstrap_working_memory(
                 continue
             item = _valid_content(conn, r["id"])
             if item is None:
+                continue
+            if not is_asserted(_tags_for_item(item)):
                 continue
             haystack = f"{item['title']} {item['content']}".lower()
             if q_terms:

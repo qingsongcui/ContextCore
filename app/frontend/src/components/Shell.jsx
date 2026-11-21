@@ -1,5 +1,5 @@
 import { t } from "../lib/i18n.jsx";
-import { BarChart3, ArrowUpRight, CircleDot, Command, FolderOpen, Menu, Monitor, Moon, Plug, Settings2, Sun, X } from 'lucide-react';
+import { BarChart3, ArrowUpRight, CircleDot, Command, FolderOpen, UserRound, Menu, Monitor, Moon, Plug, Settings2, Sun, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTheme } from '../lib/theme.js';
 import { Button } from './ui.jsx';
@@ -7,6 +7,7 @@ import { BrandIdentity } from './BrandIdentity.jsx';
 import { LanguageSwitch } from './LanguageSwitch.jsx';
 const NAV = [
   { id: 'projects', label: '项目工作台', icon: FolderOpen },
+  { id: 'personal', label: '我的', icon: UserRound },
   { id: 'agents', label: 'Agent 管理', icon: Plug },
   { id: 'usage', label: '用量与性能', icon: BarChart3 }
 ];

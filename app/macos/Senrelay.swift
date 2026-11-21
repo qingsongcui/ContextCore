@@ -74,21 +74,26 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
     lazy var expectedRelease: [String: Any] = {
         guard let url = Bundle.main.url(forResource: "desktop-release", withExtension: "json"), let data = try? Data(contentsOf: url), let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }; return value
     }()
+    static var isLocalTest: Bool {
+        Bundle.main.object(forInfoDictionaryKey: "SenrelayLocalWorkbenchTest") as? Bool == true
+    }
     let origin: URL = {
         let args = CommandLine.arguments
         if args.contains("--verify-ui"), let index = args.firstIndex(of: "--verify-port"), args.count > index + 1, let port = Int(args[index + 1]), (1024...65535).contains(port) {
             return URL(string: "http://127.0.0.1:\(port)")!
         }
+        if Desktop.isLocalTest { return URL(string: "http://127.0.0.1:19426")! }
         return URL(string: "http://127.0.0.1:8420")!
     }()
     var serviceDataDir: URL {
         if let dir = verifyDataDirectory { return dir }
         if let verifyDir = verificationDirectory { return verifyDir.appendingPathComponent("data", isDirectory: true) }
-        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/ContextCore", isDirectory: true)
+        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(Desktop.isLocalTest ? "Library/Application Support/SenrelayLocalTest" : "Library/Application Support/ContextCore", isDirectory: true)
     }
     var serviceHomeDir: URL {
         if let dir = verifyHomeDirectory { return dir }
         if let verifyDir = verificationDirectory { return verifyDir.appendingPathComponent("home", isDirectory: true) }
+        if Desktop.isLocalTest { return serviceDataDir.appendingPathComponent("home", isDirectory: true) }
         return FileManager.default.homeDirectoryForCurrentUser
     }
     var serviceExecutable: URL {
@@ -97,7 +102,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
     }
     var serviceLogsDir: URL {
         if let verifyDir = verificationDirectory { return verifyDir.appendingPathComponent("logs", isDirectory: true) }
-        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Senrelay", isDirectory: true)
+        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(Desktop.isLocalTest ? "Library/Logs/SenrelayLocalTest" : "Library/Logs/Senrelay", isDirectory: true)
     }
 
     lazy var language: String = {
@@ -381,7 +386,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
                 return
             }
             var portClearedBySignal = false
-            if self.isLocalPortOpen(targetPort) {
+            if !Desktop.isLocalTest && self.isLocalPortOpen(targetPort) {
                 var signaledAny = false
                 for pid in self.listeningPidsOnPort(targetPort) where self.isOwnedContextCoreProcess(pid) {
                     if Darwin.kill(pid, SIGTERM) == 0 {
@@ -487,7 +492,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         process.executableURL = serviceExecutable
         try FileManager.default.createDirectory(at: serviceHomeDir, withIntermediateDirectories: true)
         var arguments = ["-m", "app.cli", "serve", "--data-dir", serviceDataDir.path]
-        if verificationDirectory != nil, let port = origin.port {
+        if let port = origin.port {
             arguments += ["--port", "\(port)"]
         }
         process.arguments = arguments
@@ -594,7 +599,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         const controls = [...document.querySelectorAll('.sidebar-controls > *')];
         const sidebar = document.querySelector('.sidebar');
         const serviceOnline = Boolean(document.querySelector('.local-status .status-dot.online'));
-        if (!sidebar || nav.length !== 3 || nav.some(x => x.disabled) || !serviceOnline) return null;
+        if (!sidebar || nav.length !== 4 || nav.some(x => x.disabled) || !serviceOnline) return null;
         const sleep = ms => new Promise(r => setTimeout(r, ms));
         const waitPage = async () => {
           for (let i = 0; i < 60; i++) {
@@ -606,7 +611,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
           return '';
         };
         const pagesVisited = [];
-        for (const index of [0, 1, 2]) {
+        for (const index of [0, 1, 2, 3]) {
           const btn = document.querySelectorAll('.main-nav button')[index];
           btn.click();
           await sleep(40);
@@ -649,13 +654,13 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
           return {name:span.textContent,height:r.height,width:r.width,textWidth:range.getBoundingClientRect().width,lines:range.getClientRects().length,rowHeight:x.getBoundingClientRect().height};
         });
         const language = document.documentElement.lang.startsWith('zh') ? 'zh' : 'en';
-        const expectedPages = ['projects','agents','usage','settings'];
+        const expectedPages = ['projects','personal','agents','usage','settings'];
         const navHeight = navAfter[0].getBoundingClientRect().height;
         const allPagesOk = JSON.stringify(pagesVisited.map(p=>p.page)) === JSON.stringify(expectedPages) && pagesVisited.every(p => p.heading.length > 0 && !p.hasErrorBanner);
         const sidebarBounds = sidebar.getBoundingClientRect();
         const footerFits = rects.every((r,i)=>r.height>=24 && r.width>=24 && r.x>=sidebarBounds.x && r.x+r.width<=sidebarBounds.right+1 && r.y>=0 && r.y+r.height<=innerHeight && (i===0 || r.x>=rects[i-1].x+rects[i-1].width));
         const navigationFits = labels.every(x=>x.rowHeight>=24 && x.height<=x.rowHeight && x.lines===1 && x.textWidth<=x.width+1);
-        const labelsLocalized = names.every(name=>name.trim().length>0 && (language!=='en' || !/[一-鿿]/.test(name))) && new Set(names).size===3;
+        const labelsLocalized = names.every(name=>name.trim().length>0 && (language!=='en' || !/[一-鿿]/.test(name))) && new Set(names).size===4;
         const ok = labelsLocalized && controlsAfter.length === 3 && Math.max(...rects.map(x=>x.y))-Math.min(...rects.map(x=>x.y)) < 1 && footerFits && navigationFits && !document.querySelector('.secondary-nav') && allPagesOk && themeSwitchOk;
         return {ok,names,labels,language,serviceOnline,serviceLabel:document.querySelector('.local-status').textContent.trim(),controls:rects,navHeight,sidebarWidth:sidebar.getBoundingClientRect().width,viewport:{width:innerWidth,height:innerHeight},url:location.href,pagesVisited,themeSwitchOk};
         """
@@ -819,7 +824,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         } catch { fail(error.localizedDescription); return }
         if complete { NSApp.terminate(nil); return }
         let script = """
-        const pages = ['projects','agents','usage','settings'];
+        const pages = ['projects','personal','agents','usage','settings'];
         const index = cycle % pages.length;
         const button = index === 3 ? document.querySelector('.sidebar-controls > button') : document.querySelectorAll('.main-nav button')[index];
         if (!button || button.disabled) throw new Error('Navigation unavailable');

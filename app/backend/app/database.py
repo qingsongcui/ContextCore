@@ -340,6 +340,10 @@ def create_schema(db_path: Path | None = None) -> None:
         # 1. Core new tables
         conn.executescript(
             """
+            CREATE TABLE IF NOT EXISTS personal_workspace (
+                id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL,
+                payload TEXT NOT NULL, updated_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -804,6 +808,9 @@ def create_schema(db_path: Path | None = None) -> None:
         from app.services.telemetry_service import ensure_schema as ensure_telemetry
         ensure_working_memory(conn)
         ensure_telemetry(conn)
+
+        from app.services.memory_rules import migrate_beta4_rules
+        migrate_beta4_rules(conn)
 
         # 6. Seal schema version
         set_app_setting("schema_version", settings.schema_version, conn=conn)
