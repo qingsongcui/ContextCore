@@ -1,0 +1,15 @@
+export default {
+  '管理本机助手的读取权限、模型账号与工具。': 'Manage local assistants, their access to conversations, model accounts and tools.',
+  '常用助手': 'Favorites',
+  '重置筛选': 'Reset filters',
+  '按项目和助手查看调用记录、费用与性能。': 'Review requests, costs and performance by project or assistant.',
+  '此范围还没有用量记录': 'No usage recorded in this scope',
+  '调整时间范围，或查看助手已授权的采集来源。': 'Change the date range or review the sources your assistants can read.',
+  '助手筛选': 'Filter assistants',
+  '输入助手名称': 'Enter an assistant name',
+  '未授权读取聊天': 'Chat access off',
+  '读取权限未知': 'Chat access unknown',
+  '查看 {name} 的读取权限': 'Review chat access for {name}',
+  '切换筛选条件或搜索其他名称。': 'Try another filter or search for a different name.',
+  '接入与授权': 'Connection & access',
+};

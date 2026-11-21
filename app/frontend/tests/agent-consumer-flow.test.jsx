@@ -1500,3 +1500,17 @@ it('uses the quick-switch route and reads back the chosen provider before showin
   expect(dialog().textContent).toContain('检查本次更改');
   expect(h.mutate.mock.calls.filter(([path]) => path.endsWith('/apply'))).toHaveLength(0);
 });
+
+it('shows paused, unauthorized and unknown chat access separately and enters the right assistant', async () => {
+  h.data['/api/manage/hosts'] = [{ id: 'codex' }, { id: 'cursor' }, { id: 'omp' }];
+  h.data['/api/connections'] = [{ id: 'codex', enabled: true, paused: true }, { id: 'cursor', enabled: false }];
+  const choose = vi.fn();
+  await act(async () => root.render(<AgentManagementPage onAgentChange={choose} />));
+
+  const permissions = [...container.querySelectorAll('.ops-source-link')];
+  expect(permissions.map(node => node.textContent)).toEqual(['采集已暂停', '未授权读取聊天', '读取权限未知']);
+  await click('已授权读取聊天');
+  expect(container.querySelectorAll('.agent-directory-row')).toHaveLength(1);
+  await click('采集已暂停');
+  expect(choose).toHaveBeenCalledWith('codex', 'connections');
+});

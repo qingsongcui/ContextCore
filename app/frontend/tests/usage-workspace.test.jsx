@@ -149,3 +149,16 @@ it('uses shared native log identity for a desktop menu link and keeps the deskto
   await click(button('Account quotas'));
   expect(endpoint('account-quotas').searchParams.get('host_id')).toBe('codex-desktop');
 });
+
+it('offers source coverage for an empty reporting scope and preserves snapshot-only reports', async () => {
+  h.rows.summary = { attempts: 0, logical_requests: 0, unattributed_samples: 0 };
+  await act(async () => root.render(<UsagePage />));
+  expect(container.querySelector('.ops-empty-report')).toBeTruthy();
+  expect(container.querySelector('.metrics-grid')).toBeNull();
+  await click(container.querySelector('.ops-empty-report button'));
+  expect(container.querySelector('.usage-nav button[aria-current]').textContent).toBe('Sources and pricing');
+  h.rows.summary.unattributed_samples = 2;
+  await click(button('Overview'));
+  expect(container.querySelector('.metrics-grid')).toBeTruthy();
+  expect(container.querySelector('.ops-empty-report')).toBeNull();
+});

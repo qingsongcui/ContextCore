@@ -132,3 +132,158 @@ it("exports only the explicitly authored private method fields in a Skill draft"
     vi.unstubAllGlobals();
   }
 });
+
+it("opens the requested card in preview and includes only selected public fields during editing", async () => {
+  data.profile = {
+    revision: 3,
+    name: "Alpha studio",
+    bio: "A local studio",
+    assets: [
+      {
+        id: "one",
+        title: "Study one",
+        excerpt: "First outcome",
+        selected: true,
+        notes: "private source text",
+      },
+      {
+        id: "two",
+        title: "Study two",
+        excerpt: "Second outcome",
+        selected: false,
+        notes: "sensitive note",
+      },
+    ],
+  };
+  const navigate = vi.fn();
+  await act(() =>
+    root.render(
+      <PersonalPage
+        route={{}}
+        initialTab="profile"
+        projects={[]}
+        revision={0}
+        onChanged={vi.fn()}
+        navigate={navigate}
+        draftStore={{ current: null }}
+      />,
+    ),
+  );
+  const card = () => container.querySelector("article.profile-preview");
+  expect(card().textContent).toContain("Study one");
+  expect(card().textContent).not.toContain("Study two");
+  expect(container.querySelector("textarea")).toBeNull();
+  const draftBrief = () =>
+    [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "起草协作说明",
+    );
+  await act(() => draftBrief().click());
+  expect(navigate).toHaveBeenCalledWith({ page: "exchange" });
+  const edit = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === "编辑名片",
+  );
+  await act(() => edit.click());
+  const includeSecond = container.querySelectorAll('input[type="checkbox"]')[1];
+  await act(() => includeSecond.click());
+  expect(draftBrief()).toBeUndefined();
+  expect(card().textContent).toContain("Second outcome");
+  expect(card().textContent).not.toContain("sensitive note");
+  expect(container.querySelector('[data-export-kind="profile"]').disabled).toBe(
+    true,
+  );
+});
+
+it("selects the requested project for evidence and puts an adopted suggestion directly into its editor", async () => {
+  const api = await import("../src/lib/api.js");
+  const read = vi.spyOn(api, "mutate").mockResolvedValue({
+    items: [
+      {
+        topic: "charts",
+        projects: 1,
+        samples: 1,
+        evidence: [
+          {
+            id: "ev1",
+            project_id: "proj1",
+            title: "Design charts",
+            version: 4,
+          },
+        ],
+      },
+    ],
+    more: false,
+  });
+  data.profile = {
+    revision: 2,
+    name: "",
+    bio: "",
+    assets: [{ id: "other", title: "Older work", excerpt: "", notes: "" }],
+  };
+  const store = { current: null };
+  const navigate = vi.fn();
+  await act(() =>
+    root.render(
+      <PersonalPage
+        route={{ section: "assets", project: "proj1" }}
+        projects={[{ id: "proj1", name: "Studio" }]}
+        revision={0}
+        onChanged={vi.fn()}
+        navigate={navigate}
+        draftStore={store}
+      />,
+    ),
+  );
+  expect(read).toHaveBeenCalledWith("/api/workbench/candidates", "POST", {
+    project_ids: ["proj1"],
+    offset: 0,
+  });
+  const details = container.querySelector("details.studio-suggestions");
+  expect(details.open).toBe(true);
+  await act(() =>
+    [...details.querySelectorAll("button")]
+      .find((button) => button.textContent === "采用为能力草稿")
+      .click(),
+  );
+  expect(container.querySelector(".studio-asset-editor input").value).toBe(
+    "Design charts",
+  );
+  expect(store.current.assets[1].evidence[0].version).toBe(4);
+  await act(() =>
+    [...container.querySelectorAll(".studio-asset-editor button")]
+      .find((button) => button.textContent === "Design charts")
+      .click(),
+  );
+  expect(navigate).toHaveBeenCalledWith({ section: "assets", record: "ev1" });
+});
+
+it.each([
+  { assets: [] },
+  {
+    assets: [
+      {
+        id: "private",
+        title: "Personal work",
+        notes: "Private",
+        selected: false,
+      },
+    ],
+  },
+])(
+  "keeps an empty or unselected portfolio out of collaboration",
+  async ({ assets }) => {
+    data.profile = { revision: 2, name: "Private studio", bio: "", assets };
+    await act(() =>
+      root.render(
+        <PersonalPage
+          route={{ section: "profile" }}
+          projects={[]}
+          revision={0}
+          onChanged={vi.fn()}
+          navigate={vi.fn()}
+          draftStore={{ current: null }}
+        />,
+      ),
+    );
+    expect(container.textContent).not.toContain("起草协作说明");
+  },
+);

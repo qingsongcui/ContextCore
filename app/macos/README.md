@@ -8,13 +8,19 @@ For the local personal-workspace test build, run the following inside the locked
 app/backend/.venv/bin/python app/macos/build.py --from-source --local-workbench-test --build-number 5 --output-dir ../local-workbench-test
 ```
 
-The streamlined three-entry primary navigation (`项目工作台`, `Agent 管理`, `用量与性能`, plus conditional `待确认` when conflicts are pending) and compact desktop controls are retained. Project data belongs to the local service and persists when the window closes. The native shell supports Chinese and English, initially follows the system/app preference, and follows language changes in the workbench. Startup errors provide a reconnect action; interrupted page processes and failed downloads have visible recovery messages.
+For this branch’s redesigned workbench, select its own test identity and output directory.
+
+```sh
+app/backend/.venv/bin/python app/macos/build.py --from-source --workspace-design-test --build-number 6 --output-dir ../workspace-design-test
+```
+
+This build runs at `127.0.0.1:19436` and keeps its data and service home in `~/Library/Application Support/SenrelayWorkspaceDesignTest`. Its workspace, personal Agent and management sections share navigation with the local browser UI. Project data belongs to the local service and persists when the window closes. The native shell supports Chinese and English, initially follows the system/app preference, and follows language changes in the workbench. Startup errors provide a reconnect action; interrupted page processes and failed downloads have visible recovery messages.
 
 ## Menu bar and keyboard navigation
 
 Open the Senrelay menu bar icon to see favorite and recent agents. Each agent submenu reads the current provider, model and configuration file status from the workbench service. Choose the agent’s models, change history or usage to open that screen. Account quotas shows saved readings and their observation times. Open the full quota screen to authorize a refresh.
 
-The **Go** menu provides ⌘1 for projects, ⌘2 for all agents, ⌘3 for the usage overview and ⌥⌘3 for account quotas. These shortcuts work while the app is active. Navigation keeps the existing workbench document and supports Back.
+The **Go** menu opens the Agent card and provides ⌘0 for the workbench home, ⌘1 for projects, ⌘2 for all agents, ⌘3 for the usage overview and ⌥⌘3 for account quotas. These shortcuts work while the app is active. Navigation keeps the existing workbench document and supports Back.
 
 ## Build a candidate from source
 
@@ -49,11 +55,11 @@ app/backend/.venv/bin/python app/macos/verify_native.py --bundle /absolute/path/
 
 The bundle smoke runs from an unrelated temporary directory with a clean environment and synthetic data. It checks health, matching release identity, built assets, no embedded projects, initially disabled capture, duplicate-start refusal and graceful shutdown.
 
-Native verification starts the bundled service with a temporary data/home directory and renders the app's own WKWebView in a hidden verification mode. Chinese and English runs check navigation order, every text label's bounds, compact row sizes, footer alignment and native menu language. Evidence includes JSON and native snapshots. Its nonpersistent WebKit store does not reuse the user's browsing/session state. Extended verification also covers window sizes, themes, page headings, startup failure, wrong-port recovery and controlled service upgrade. The standard verifier injects WebView failure callbacks. A separate hidden `soak_native.py --terminate-webkit` scenario verifies actual, uniquely attributed WebContent termination and reconnection. These checks do not establish all-page usability or clean-Mac distribution acceptance.
+Native verification starts the bundled service with a temporary data/home directory and renders the app's own WKWebView in a hidden verification mode. Chinese and English runs check the nine sidebar destinations, label bounds, the compact navigation drawer and native menu language. Evidence includes JSON and full native workspace snapshots. The export fixture exercises the three UI download actions, saves their WKDownload output to an isolated directory and compares the files with the selected profile and private markers. Its nonpersistent WebKit store does not reuse the user's browsing/session state. Extended verification also covers window sizes, themes, page headings, startup failure, wrong-port recovery and controlled service upgrade. The standard verifier injects WebView failure callbacks. A separate hidden `soak_native.py --terminate-webkit` scenario verifies actual, uniquely attributed WebContent termination and reconnection. These checks do not establish all-page usability or clean-Mac distribution acceptance.
 
 ## Lifecycle and data
 
-- Normal launches connect only to `127.0.0.1:8420`, requiring API contract 2 and exactly the bundled release/frontend identity. Another service or version produces a recoverable error. Only explicit hidden verification accepts another port.
+- The daily build connects only to `127.0.0.1:8420`, requiring API contract 2 and exactly the bundled release/frontend identity. Another service or version produces a recoverable error. The side-by-side builds use the independent ports listed above. Only hidden verification can override a build’s port.
 - If no service listens, the app starts its bundled service with `~/Library/Application Support/ContextCore`. The package embeds no runtime database, projects, accounts or history.
 - Closing the window or quitting the app keeps the background service running. Explicit service stop remains in Settings. Existing LaunchAgent configuration is preserved; packaging does not install one.
 - App-started service logs: `~/Library/Logs/Senrelay/service.log`.
@@ -92,7 +98,7 @@ The default duration is 24 hours at 60-second intervals. Observe the existing pr
 
 `soak_native.py` launches an exact candidate through LaunchServices with a hidden
 verification window, its own frozen service, fresh HOME/data and 100 synthetic
-records. It rotates four pages (`projects`, `agents`, `usage`, `settings`) and records independently attributed WebKit
+records. It rotates seven pages (`home`, `projects`, `personal`, `exchange`, `agents`, `usage`, `settings`) and records independently attributed WebKit
 resources. A new output directory is required:
 
 ```bash

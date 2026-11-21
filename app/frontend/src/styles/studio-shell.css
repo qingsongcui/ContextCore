@@ -1,0 +1,87 @@
+/* Workspace frame. Page styles use these same semantic colors in both themes. */
+:root {
+  --canvas: #fafaf7;
+  --sidebar: #f0f2ed;
+  --surface: #fffefa;
+  --surface-raised: #fffefa;
+  --surface-soft: #f0f2ed;
+  --ink: #202c29;
+  --secondary: #4e605a;
+  --muted: #65736c;
+  --line: #dadfd7;
+  --line-strong: #bdc8bf;
+  --accent: #246457;
+  --accent-ink: #fff;
+  --accent-tint: #dfebe3;
+  --accent-ring: #6c998b;
+  --selection: #dce8e0;
+  --primary-bg: #265f52;
+  --primary-bg-hover: #1a4c40;
+  --shadow-btn: none;
+  --shadow-card: none;
+  --font-editorial: 'Iowan Old Style', 'Palatino Linotype', 'Songti SC', Georgia, serif;
+}
+:root.dark {
+  --canvas: #181e1c;
+  --sidebar: #202824;
+  --surface: #202723;
+  --surface-soft: #29332e;
+  --surface-raised: #29332e;
+  --ink: #e8ede6;
+  --secondary: #b6c6bc;
+  --muted: #a3b3a9;
+  --line: #38443b;
+  --line-strong: #516255;
+  --accent: #a2d2b9;
+  --accent-ink: #152b20;
+  --accent-tint: #31483d;
+  --accent-ring: #92bba5;
+  --selection: #344a3f;
+  --primary-bg: #a2d2b9;
+  --primary-bg-hover: #b7dfca;
+}
+.studio-shell .sidebar {
+  width: 232px;
+  padding: 22px 16px 18px;
+  background: var(--sidebar);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  scrollbar-width: thin;
+}
+.studio-brand-row { display:flex; align-items:center; justify-content:space-between; margin:0 4px 23px }
+.studio-brand-row .drawer-close { margin:0; padding:5px }
+.studio-shell .brand-wordmark { font-family: var(--font-editorial); font-size: 27px; font-weight: 600 }
+.studio-shell .brand-chinese { font-family: var(--font); font-size: 12px }
+.studio-shell .main-nav { display:grid; gap:18px }
+.studio-nav-group { display:grid; gap:2px }
+.studio-shell .nav-label { margin:0 0 4px; padding:0 10px; font-size:11px; font-weight:600; letter-spacing:.045em }
+.studio-shell .main-nav button { height:auto; min-height:35px; padding:6px 10px; border:0; background:none; color:var(--secondary); border-radius:6px; box-shadow:none }
+.studio-shell .main-nav button:hover:not(:disabled) { background:var(--hover); color:var(--ink) }
+.studio-shell .main-nav button.active { background:var(--selection); color:var(--accent); font-weight:650; box-shadow:none }
+.studio-shell .main-nav svg { stroke-width:1.7 }
+.studio-shell .sidebar-projects { flex:none; overflow:visible; margin-top:20px; border-top:1px solid var(--line); padding-top:16px }
+.studio-shell .sidebar-projects button { padding-inline:10px; gap:10px; color:var(--secondary) }
+.studio-shell .sidebar-projects svg { flex:none }
+.studio-shell .sidebar-bottom { padding-top:18px }
+.studio-shell .local-status { padding:10px 2px; color:var(--secondary) }
+.studio-shell .status-dot.online { background:var(--accent) }
+.studio-shell .sidebar-controls { justify-content:flex-start; gap:10px }
+.studio-shell .page-surface { max-width:1250px }
+.studio-shell .main-content { padding:22px 18px 72px }
+.studio-shell .mobile-header { background:var(--sidebar) }
+.studio-shell .mobile-header .language-switch { margin-left:auto }
+@media (min-width: 640px) {
+  .studio-shell .main-content { padding:30px clamp(24px,4vw,60px) 74px }
+}
+@media (min-width: 1024px) {
+  .studio-shell .main-content { margin-left:232px; padding-top:clamp(34px,4vw,60px) }
+}
+@media (max-width: 1023px) {
+  .studio-shell .sidebar { width:min(288px,85vw) }
+  .studio-shell .main-nav button, .studio-shell .sidebar-projects button { min-height:44px }
+  .studio-shell .brand-wordmark { font-size:22px }
+  .studio-shell .mobile-header { padding:8px 16px }
+}
+/* WKWebView can suspend animations in a background window. Content must be visible on first paint. */
+.studio-shell .page-surface, .studio-shell .tab-content { animation:none }

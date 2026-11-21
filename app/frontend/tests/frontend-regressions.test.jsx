@@ -7,7 +7,7 @@ vi.mock('../src/lib/useResource.js', async original => ({ ...await original(), u
 vi.mock('../src/lib/api.js', async original => ({ ...await original(), request: h.request, mutate: h.mutate }));
 import { KnowledgePage, ContentDetail, ContentEditor } from '../src/pages/KnowledgePage.jsx';
 import { InboxPage } from '../src/pages/InboxPage.jsx';
-import { ConversationDetail } from '../src/pages/ConversationsPage.jsx';
+import { ConversationDetail, ConversationsPage } from '../src/pages/ConversationsPage.jsx';
 import { ProjectsPage } from '../src/pages/ProjectsPage.jsx';
 import { ProjectDialog } from '../src/components/ProjectDialog.jsx';
 import { AccountOperation } from '../src/components/agent-management/AccountOperation.jsx';
@@ -246,16 +246,17 @@ describe('consumer frontend regression tests for audit findings', () => {
     await render(<Shell lang="zh" page="projects" navigate={navigate} projects={[]} status={null} managementState="ready"><div /></Shell>);
     const nav = container.querySelector('.main-nav');
     const entries = Array.from(nav.querySelectorAll('button'));
-    expect(entries.map(item => item.textContent)).toEqual(['项目工作台', '我的', 'Agent 管理', '用量与性能']);
+    expect(entries.map(item => item.textContent)).toEqual(['工作台', '项目', '协作', '个人记忆', '能力与作品', 'Agent 名片', 'Agent 管理', '用量与性能', '设置']);
     for (const entry of entries) await click(entry);
-    expect(navigate.mock.calls.map(call => call[0])).toEqual(['projects', 'personal', 'agents', 'usage']);
-    expect(nav.compareDocumentPosition(container.querySelector('.sidebar-projects')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(navigate.mock.calls.map(call => call[0])).toEqual(['home', { page: 'projects', project: null, section: null }, 'exchange',
+      ...['memory', 'assets', 'profile'].map(section => ({ page: 'personal', section })), 'agents', 'usage', 'settings']);
+    expect(nav.querySelectorAll('.studio-nav-group')).toHaveLength(3);
     expect(container.querySelector('.secondary-nav')).toBeNull();
 
     // When pending_conflicts > 0, "待确认" appears in main-nav with count badge
     await render(<Shell lang="zh" page="projects" navigate={navigate} projects={[]} status={{ ok: true, counts: { pending_conflicts: 2 } }} managementState="ready"><div /></Shell>);
     const conflictEntries = Array.from(container.querySelector('.main-nav').querySelectorAll('button'));
-    expect(conflictEntries.map(item => item.textContent)).toEqual(['项目工作台', '我的', 'Agent 管理', '用量与性能', '待确认2']);
+    expect(conflictEntries.map(item => item.textContent)).toEqual(['工作台', '项目', '协作', '待确认2', '个人记忆', '能力与作品', 'Agent 名片', 'Agent 管理', '用量与性能', '设置']);
   });
 
   it('keeps agents nav item disabled with honest indicator when management is not ready', async () => {
@@ -734,3 +735,24 @@ it('renders five-field handoff_page in ConversationDetail when ready and hides i
   expect(container.textContent).toContain('Next steps');
 });
 
+
+it('uses the conversation route for drill-down and restores source filters on browser back', async () => {
+  const routeChange = vi.fn();
+  const listPath = '/api/conversations/index?project_id=p&agent=codex&limit=50&offset=0';
+  const record = { id: 'c-route', title: 'Original project decision', agent: 'codex', project_id: 'p' };
+  h.data[listPath] = { total: 1, items: [record] };
+  h.data['/api/conversations/c-route?include_messages=false'] = record;
+  h.data['/api/conversations/c-route/messages?limit=30&offset=0'] = { total: 0, items: [] };
+  const page = id => <ConversationsPage {...props} initialId={id} onRecordChange={routeChange} />;
+  await render(page(null));
+  await change(container.querySelector('select[aria-label="聊天来源"]'), 'codex');
+  await click(container.querySelector('.conversation-row'));
+  expect(routeChange).toHaveBeenCalledWith('c-route');
+  await render(page('c-route'));
+  expect(container.querySelector('.reading-heading h2')?.textContent).toBe(record.title);
+  await click(button('返回聊天列表'));
+  expect(routeChange).toHaveBeenCalledWith(null);
+  await render(page(null));
+  expect(container.querySelector('select[aria-label="聊天来源"]').value).toBe('codex');
+  expect(container.querySelector('.conversation-row h3')?.textContent).toBe(record.title);
+});

@@ -53,8 +53,8 @@ SCENARIOS = {
     "unreachable-port-recover": {
         "kind": "disconnect_reconnect",
         "status": {
-            "zh": "本机服务未能就绪。请查看 ~/Library/Logs/Senrelay/service.log，然后点击“重新连接”重试。",
-            "en": "The local service did not become ready. Review ~/Library/Logs/Senrelay/service.log, then click Reconnect.",
+            "zh": "本机服务未能就绪。请查看 {log_path}，然后点击“重新连接”重试。",
+            "en": "The local service did not become ready. Review {log_path}, then click Reconnect.",
         },
         "retry_visible": True,
         "upgrade_visible": False,
@@ -89,9 +89,9 @@ def webview_fault_messages(language: str) -> list[str]:
     return [item[language] for item in WEBVIEW_FAULTS]
 
 
-def scenario_status_text(scenario_id: str, language: str) -> str:
+def scenario_status_text(scenario_id: str, language: str, *, log_path: str = "~/Library/Logs/Senrelay/service.log") -> str:
     status = SCENARIOS[scenario_id]["status"]
-    return status[language]
+    return status[language].format(log_path=log_path)
 
 
 def all_user_visible_strings() -> list[str]:

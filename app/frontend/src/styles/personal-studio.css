@@ -1,0 +1,417 @@
+.personal-studio {
+  container-type: inline-size;
+  max-width: 78rem;
+  color: var(--ink);
+}
+.personal-studio .page-header {
+  margin-bottom: 14px;
+}
+.studio-tabs {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 0 14px;
+  border-bottom: 1px solid var(--line-strong);
+  margin-bottom: clamp(18px, 3vw, 34px);
+}
+.studio-tabs button,
+.studio-asset-list button,
+.studio-next {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.studio-tabs button {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  padding: 11px 2px;
+  min-height: 44px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-weight: 530;
+}
+.studio-tabs button[aria-current] {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.studio-tabs button:hover,
+.studio-next:hover {
+  color: var(--accent);
+}
+.personal-studio .personal-form {
+  max-width: none;
+  margin: 0;
+}
+.personal-studio .memory-reader {
+  max-width: none;
+}
+.studio-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 20px;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+}
+.studio-section-heading h2 {
+  font-size: clamp(18px, 2.2vw, 24px);
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+}
+.studio-section-heading p,
+.studio-suggestions > p {
+  font-size: 0.9rem;
+  color: var(--secondary);
+  margin: 5px 0 0;
+  line-height: 1.65;
+  max-width: 52em;
+}
+.studio-suggestions {
+  margin: 0 0 20px;
+  padding: 7px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+.studio-suggestions[open] {
+  padding-bottom: 13px;
+}
+.studio-suggestions summary,
+.studio-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 44px;
+  color: var(--ink);
+}
+.studio-suggestions summary::after,
+.studio-disclosure > summary::after {
+  content: "";
+  display: block;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  margin-right: 2px;
+  border-bottom: 1.5px solid var(--secondary);
+  border-right: 1.5px solid var(--secondary);
+  transform: rotate(45deg);
+}
+.studio-suggestions[open] > summary::after,
+.studio-disclosure[open] > summary::after {
+  transform: rotate(225deg);
+}
+.studio-suggestions summary::-webkit-details-marker,
+.studio-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.studio-project-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 20px;
+  padding: 10px 0;
+}
+.studio-project-choices .check-label {
+  min-height: 32px;
+}
+.studio-project-choices small {
+  color: var(--secondary);
+}
+.studio-suggestions .personal-asset {
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  padding: 12px 0;
+  margin: 0;
+}
+.studio-suggestions .personal-asset p {
+  color: var(--secondary);
+  padding: 4px 0 8px;
+}
+.studio-suggestions .button + .button {
+  margin-left: 6px;
+}
+.studio-library,
+.studio-profile-layout {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+  min-width: 0;
+}
+.studio-asset-list {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+}
+.studio-asset-list button {
+  display: flex;
+  align-items: center;
+  text-align: start;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border-radius: 5px;
+}
+.studio-asset-list button[aria-current],
+.studio-asset-list button:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+.studio-asset-list button span {
+  flex: 1;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.studio-asset-list button svg {
+  flex: none;
+}
+.studio-asset-list strong,
+.studio-asset-list small {
+  display: block;
+}
+.studio-asset-list strong {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.studio-asset-list small {
+  color: var(--secondary);
+  margin-top: 3px;
+}
+.studio-asset-editor,
+.studio-card-editor {
+  min-width: 0;
+}
+.personal-studio .personal-form .studio-asset-editor > label:first-child,
+.personal-studio .personal-form .studio-card-editor > label:first-child {
+  margin-top: 0;
+}
+.personal-studio .personal-form label:not(.check-label) {
+  font-weight: 550;
+  font-size: 0.88rem;
+}
+.personal-studio
+  .personal-form
+  :is(input:not([type="checkbox"]), textarea, select) {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  padding: 9px 11px;
+  font-weight: 400;
+  color: var(--ink);
+}
+.studio-disclosure {
+  border-top: 1px solid var(--line);
+}
+.studio-disclosure > p,
+.studio-disclosure li {
+  overflow-wrap: anywhere;
+  font-size: 0.89rem;
+}
+.studio-disclosure .asset-picker {
+  margin: 8px 0;
+}
+.studio-editor-actions {
+  margin: 12px 0 0;
+}
+.studio-blank {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  text-align: center;
+  padding: clamp(30px, 6vw, 70px) 20px;
+  border-block: 1px solid var(--line);
+  color: var(--secondary);
+}
+.studio-blank p {
+  max-width: 30em;
+  line-height: 1.7;
+}
+.studio-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 550;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 0;
+}
+.personal-studio .studio-card {
+  min-width: 0;
+  width: 100%;
+  max-width: 48rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  margin: 0;
+  padding: clamp(24px, 5.3cqw, 58px);
+  background: var(--surface);
+  color: var(--ink);
+}
+.studio-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: clamp(24px, 4cqw, 42px);
+}
+.studio-card-top > span:last-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 550;
+  font-size: 0.8rem;
+  color: var(--secondary);
+}
+.studio-mark {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  background: var(--accent-tint);
+  color: var(--accent);
+  border-radius: 12px;
+  font-size: 26px;
+  font-family: Georgia, "Songti SC", serif;
+}
+.personal-studio .studio-card h2 {
+  font:
+    550 clamp(28px, 4.7cqw, 54px)/1.13 Georgia,
+    "Songti SC",
+    "STSong",
+    serif;
+  overflow-wrap: anywhere;
+  letter-spacing: -0.035em;
+}
+.studio-bio,
+.studio-placeholder {
+  margin: 14px 0 0;
+  line-height: 1.68;
+  color: var(--secondary);
+}
+.studio-showcase {
+  margin-top: 26px;
+  padding-top: 17px;
+  border-top: 1px solid var(--line-strong);
+}
+.studio-showcase h3 {
+  margin-bottom: 13px;
+  font-size: 0.8rem;
+  color: var(--secondary);
+}
+.studio-showcase section + section {
+  margin-top: 14px;
+}
+.studio-showcase h4 {
+  margin: 0;
+  font-size: 1.03rem;
+  overflow-wrap: anywhere;
+}
+.studio-showcase p {
+  margin: 4px 0 0;
+  color: var(--secondary);
+  line-height: 1.6;
+}
+.studio-card-editor {
+  padding: 18px 0 0;
+  border-top: 1px solid var(--line);
+}
+.studio-card-editor h3 {
+  font-size: 1rem;
+  margin: 18px 0 10px;
+}
+.studio-card-editor .check-label {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  padding: 7px 0;
+  overflow-wrap: anywhere;
+}
+.studio-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 22px 0 0;
+  padding: 15px 0 4px;
+  border-top: 1px solid var(--line-strong);
+}
+.studio-save small {
+  color: var(--secondary);
+}
+@container (min-width: 660px) {
+  .studio-library {
+    grid-template-columns: minmax(155px, 0.62fr) minmax(0, 1.5fr);
+    gap: clamp(22px, 4cqw, 48px);
+  }
+  .studio-asset-list {
+    border: 0;
+  }
+  .studio-profile-layout.is-editing {
+    grid-template-columns: minmax(0, 1.03fr) minmax(0, 0.97fr);
+    gap: clamp(24px, 4cqw, 54px);
+  }
+  .studio-card-editor {
+    padding: 0;
+    border: 0;
+  }
+}
+@container (max-width: 480px) {
+  .studio-tabs {
+    gap: 0 8px;
+  }
+  .studio-tabs button {
+    gap: 4px;
+    font-size: 0.85rem;
+  }
+  .studio-tabs button svg {
+    width: 14px;
+  }
+  .studio-profile-layout.is-editing .studio-card-editor {
+    order: -1;
+  }
+  .studio-project-choices .check-label,
+  .studio-card-editor .check-label,
+  .personal-studio .button {
+    min-height: 44px;
+  }
+  .personal-studio
+    .personal-form
+    :is(input:not([type="checkbox"]), textarea, select) {
+    font-size: 16px;
+  }
+}
+
+.studio-suggestions .studio-examples {
+  margin: 3px 0 11px;
+}
+.studio-suggestions .studio-examples > summary {
+  font-size: 0.88rem;
+  font-weight: 500;
+  min-height: 36px;
+  color: var(--secondary);
+}
+.studio-examples ul {
+  margin: 0;
+  padding: 0 0 8px 16px;
+  line-height: 1.65;
+}
+.studio-examples li small {
+  margin-left: 8px;
+  color: var(--secondary);
+}
+
+@media (min-width: 1024px) {
+  .studio-shell .studio-tabs {
+    display: none;
+  }
+  .studio-shell .personal-studio .page-header {
+    margin-bottom: 26px;
+  }
+}

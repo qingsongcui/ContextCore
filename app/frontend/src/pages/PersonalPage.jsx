@@ -1,11 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  ArrowRight,
+  BookOpen,
+  BriefcaseBusiness,
+  Check,
+  ChevronRight,
+  CircleUserRound,
+  FileText,
+  FolderOpen,
+  GalleryVerticalEnd,
+  IdCard,
+  Link2,
+  PencilLine,
+  Plus,
+} from "lucide-react";
+import "../styles/personal-studio.css";
 import {
   Button,
   ErrorNotice,
   PageHeader,
   ResourceState,
-  SegmentedTabs,
 } from "../components/ui.jsx";
+import { downloadText } from "../lib/downloadText.js";
 import { mutate, request } from "../lib/api.js";
 import { t } from "../lib/i18n.jsx";
 import { queryString, useResource } from "../lib/useResource.js";
@@ -14,9 +30,9 @@ import { MemoryReader } from "./MemoryReader.jsx";
 import { ContentDetail } from "./KnowledgePage.jsx";
 
 const tabs = [
-  ["memory", "个人记忆"],
-  ["assets", "能力与作品"],
-  ["profile", "简介草稿"],
+  ["memory", "个人记忆", BookOpen],
+  ["assets", "能力与作品", BriefcaseBusiness],
+  ["profile", "Agent 名片", IdCard],
 ];
 const emptyAsset = () => ({
   id: crypto.randomUUID(),
@@ -102,36 +118,68 @@ function EvidencePicker({ projects, onPick, revision }) {
 }
 
 function Preview({ profile }) {
+  const selected = profile.assets.filter((asset) => asset.selected);
+  const initial = Array.from(profile.name.trim())[0];
   return (
-    <article className="profile-preview">
+    <article className="studio-card profile-preview" aria-label={t("名片预览")}>
+      <div className="studio-card-top">
+        <span className="studio-mark" aria-hidden="true">
+          {initial || <CircleUserRound size={25} />}
+        </span>
+        <span>
+          <IdCard size={15} aria-hidden="true" />
+          {t("Agent 名片")}
+        </span>
+      </div>
       <h2>{profile.name || t("我的工作简介")}</h2>
-      {profile.bio && <p>{profile.bio}</p>}
-      {profile.assets
-        .filter((a) => a.selected)
-        .map((a) => (
-          <section key={a.id}>
-            <h3>{a.title}</h3>
-            <p>{a.excerpt}</p>
-          </section>
-        ))}
+      {profile.bio ? (
+        <p className="studio-bio">{profile.bio}</p>
+      ) : (
+        <p className="studio-placeholder">
+          {t("写下你和 Agent 擅长完成的工作。")}
+        </p>
+      )}
+      {selected.length > 0 && (
+        <div className="studio-showcase">
+          <h3>{t("选入简介的作品")}</h3>
+          {selected.map((asset) => (
+            <section key={asset.id}>
+              <h4>{asset.title}</h4>
+              {asset.excerpt && <p>{asset.excerpt}</p>}
+            </section>
+          ))}
+        </div>
+      )}
     </article>
   );
 }
 
-function downloadText(filename, body) {
-  const url = URL.createObjectURL(
-    new Blob([body], { type: "text/plain;charset=utf-8" }),
+function AssetTextField({ label, asset, field, maxLength, onChange }) {
+  return (
+    <label>
+      {label}
+      <textarea
+        maxLength={maxLength}
+        value={asset[field] || ""}
+        onChange={(event) =>
+          onChange(asset.id, { [field]: event.target.value })
+        }
+      />
+    </label>
   );
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-function ProfileEditor({ section, projects, revision, draftStore }) {
+function ProfileEditor({
+  section,
+  projects,
+  revision,
+  draftStore,
+  navigate,
+  onChanged,
+  sourceProject,
+  selectedAssetId,
+  setSelectedAssetId,
+}) {
   const result = useResource("/api/workbench/profile", revision);
   const [draft, setDraft] = useState(draftStore.current);
   const [saved, setSaved] = useState(null);
@@ -141,6 +189,24 @@ function ProfileEditor({ section, projects, revision, draftStore }) {
   const base =
     (saved?.revision || 0) > (result.data?.revision || 0) ? saved : result.data;
   const profile = draft || base;
+  const [editing, setEditing] = useState(false);
+  const unnamedAsset = draft?.assets.find((asset) => !asset.title.trim());
+  const assetEditor = useRef(null);
+  const focusNewAsset = useRef(false);
+  const activeAsset =
+    profile?.assets.find((asset) => asset.id === selectedAssetId) ||
+    profile?.assets[0];
+  useEffect(() => {
+    if (focusNewAsset.current && assetEditor.current) {
+      assetEditor.current.focus();
+      focusNewAsset.current = false;
+    }
+  }, [activeAsset?.id, section]);
+  function addAsset(asset) {
+    focusNewAsset.current = true;
+    setSelectedAssetId(asset.id);
+    change({ ...profile, assets: [...profile.assets, asset] });
+  }
   useEffect(() => {
     if (!draft) return;
     const warn = (event) => {
@@ -169,6 +235,7 @@ function ProfileEditor({ section, projects, revision, draftStore }) {
       setSaved(next);
       change(null);
       result.reload();
+      onChanged?.();
       setNotice(t("已保存到本机"));
     } catch (failure) {
       setError(failure);
@@ -209,298 +276,394 @@ function ProfileEditor({ section, projects, revision, draftStore }) {
         <fieldset disabled={busy} className="personal-form">
           {section === "assets" ? (
             <>
-              <div className="reader-heading">
+              <div className="studio-section-heading">
                 <div>
-                  <h2>{t("能力与作品")}</h2>
+                  <h2>{t("作品集")}</h2>
                   <p>{t("记下你能交付什么，关联项目里的作品或经验。")}</p>
                 </div>
                 <Button
-                  onClick={() =>
-                    change({
-                      ...profile,
-                      assets: [...profile.assets, emptyAsset()],
-                    })
-                  }
+                  variant="primary"
+                  icon={Plus}
+                  disabled={profile.assets.length >= 200}
+                  onClick={() => addAsset(emptyAsset())}
                 >
                   {t("添加能力或作品")}
                 </Button>
               </div>
               <CapabilitySuggestions
+                key={sourceProject || "all"}
+                sourceProject={sourceProject}
                 projects={projects}
                 profile={profile}
                 change={change}
                 makeAsset={emptyAsset}
+                onAdopt={addAsset}
+                onProjects={() => navigate({ page: "projects" })}
               />
               {!profile.assets.length && (
-                <p>{t("从一个完成的项目开始，记录你的贡献和交付结果。")}</p>
+                <div className="studio-blank">
+                  <GalleryVerticalEnd size={26} aria-hidden="true" />
+                  <p>{t("从一个完成的项目开始，记录你的贡献和交付结果。")}</p>
+                </div>
               )}
-              {profile.assets.map((a, i) => (
-                <section className="personal-asset" key={a.id}>
-                  <label>
-                    {t("能力或作品名称")}
-                    <input
-                      maxLength={200}
-                      value={a.title}
-                      onChange={(e) =>
-                        changeAsset(a.id, { title: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    {t("可展示的说明")}
-                    <textarea
+              {activeAsset && (
+                <div className="studio-library">
+                  <nav className="studio-asset-list" aria-label={t("作品集")}>
+                    {profile.assets.map((asset) => (
+                      <button
+                        key={asset.id}
+                        type="button"
+                        aria-current={
+                          activeAsset.id === asset.id ? "true" : undefined
+                        }
+                        onClick={() => setSelectedAssetId(asset.id)}
+                      >
+                        <FileText size={16} aria-hidden="true" />
+                        <span>
+                          <strong>{asset.title || t("未命名作品")}</strong>
+                          {asset.selected && <small>{t("已选入名片")}</small>}
+                        </span>
+                        <ChevronRight size={14} aria-hidden="true" />
+                      </button>
+                    ))}
+                  </nav>
+
+                  <section className="studio-asset-editor" key={activeAsset.id}>
+                    <label>
+                      {t("能力或作品名称")}
+                      <input
+                        ref={assetEditor}
+                        maxLength={200}
+                        value={activeAsset.title}
+                        onChange={(e) =>
+                          changeAsset(activeAsset.id, { title: e.target.value })
+                        }
+                      />
+                    </label>
+                    <AssetTextField
+                      label={t("可展示的说明")}
+                      field="excerpt"
+                      asset={activeAsset}
                       maxLength={4000}
-                      value={a.excerpt}
-                      onChange={(e) =>
-                        changeAsset(a.id, { excerpt: e.target.value })
-                      }
+                      onChange={changeAsset}
                     />
-                  </label>
-                  <label>
-                    {t("私人笔记")}
-                    <textarea
-                      maxLength={8000}
-                      value={a.notes}
-                      onChange={(e) =>
-                        changeAsset(a.id, { notes: e.target.value })
-                      }
-                    />
-                  </label>
-                  <details className="asset-picker">
-                    <summary>{t("可复用的方法")}</summary>
-                    <label>
-                      {t("需要的输入")}
-                      <textarea
-                        maxLength={2000}
-                        value={a.inputs || ""}
-                        onChange={(e) =>
-                          changeAsset(a.id, { inputs: e.target.value })
-                        }
-                      />
-                    </label>
-                    <label>
-                      {t("执行步骤")}
-                      <textarea
+                    <details className="studio-disclosure">
+                      <summary>
+                        <PencilLine size={16} aria-hidden="true" />
+                        {t("贡献与私人笔记")}
+                      </summary>
+                      <AssetTextField
+                        label={t("私人笔记")}
+                        field="notes"
+                        asset={activeAsset}
                         maxLength={8000}
-                        value={a.steps || ""}
-                        onChange={(e) =>
-                          changeAsset(a.id, { steps: e.target.value })
-                        }
+                        onChange={changeAsset}
                       />
-                    </label>
-                    <label>
-                      {t("预期交付")}
-                      <textarea
+                      <AssetTextField
+                        label={t("本人和 Agent 的分工")}
+                        field="contribution"
+                        asset={activeAsset}
                         maxLength={2000}
-                        value={a.outputs || ""}
-                        onChange={(e) =>
-                          changeAsset(a.id, { outputs: e.target.value })
-                        }
+                        onChange={changeAsset}
                       />
-                    </label>
-                    <label>
-                      {t("新样例的验证记录")}
-                      <textarea
+                    </details>
+                    <details className="studio-disclosure">
+                      <summary>
+                        <FolderOpen size={16} aria-hidden="true" />
+                        {t("可复用的方法")}
+                      </summary>
+                      <AssetTextField
+                        label={t("需要的输入")}
+                        field="inputs"
+                        asset={activeAsset}
                         maxLength={2000}
-                        value={a.verification || ""}
-                        onChange={(e) =>
-                          changeAsset(a.id, { verification: e.target.value })
-                        }
+                        onChange={changeAsset}
                       />
-                    </label>
-                    <Button
-                      disabled={
-                        !!draft ||
-                        !a.inputs?.trim() ||
-                        !a.steps?.trim() ||
-                        !a.outputs?.trim()
-                      }
-                      onClick={() => {
-                        const name =
-                          "method-" +
-                          a.id
-                            .toLowerCase()
-                            .replace(/[^a-z0-9-]/g, "")
-                            .slice(0, 48);
-                        const sections = [
-                          "---",
-                          "name: " + name,
-                          "description: " + JSON.stringify(a.title),
-                          "---",
-                          "# " + a.title,
-                          "## " + t("需要的输入"),
-                          a.inputs,
-                          "## " + t("执行步骤"),
-                          a.steps,
-                          "## " + t("预期交付"),
-                          a.outputs,
-                        ];
-                        if (a.verification)
-                          sections.push(
-                            "## " + t("新样例的验证记录"),
-                            a.verification,
-                          );
-                        downloadText("SKILL.md", sections.join("\n"));
-                      }}
-                    >
-                      {t("导出私有 Skill 草稿")}
-                    </Button>
-                  </details>
-                  {a.source_id && (
-                    <p>
-                      {t("关联依据")} · {a.source_title || t("来源已删除")}
-                      {a.source_current_version !== a.source_version && (
-                        <strong> · {t("请重新核对依据")}</strong>
-                      )}
-                    </p>
-                  )}
-                  <label>
-                    {t("本人和 Agent 的分工")}
-                    <textarea
-                      maxLength={2000}
-                      value={a.contribution || ""}
-                      onChange={(e) =>
-                        changeAsset(a.id, { contribution: e.target.value })
-                      }
-                    />
-                  </label>
-                  {!!a.evidence?.length && (
-                    <ul>
-                      {a.evidence.map((ref) => (
-                        <li key={ref.id}>
-                          {ref.title || t("来源已删除")} · {t("版本")}{" "}
-                          {ref.version}
-                          {ref.current_version !== ref.version && (
+                      <AssetTextField
+                        label={t("执行步骤")}
+                        field="steps"
+                        asset={activeAsset}
+                        maxLength={8000}
+                        onChange={changeAsset}
+                      />
+                      <AssetTextField
+                        label={t("预期交付")}
+                        field="outputs"
+                        asset={activeAsset}
+                        maxLength={2000}
+                        onChange={changeAsset}
+                      />
+                      <AssetTextField
+                        label={t("新样例的验证记录")}
+                        field="verification"
+                        asset={activeAsset}
+                        maxLength={2000}
+                        onChange={changeAsset}
+                      />
+                      <Button
+                        data-export-kind="skill"
+                        disabled={
+                          !!draft ||
+                          !activeAsset.inputs?.trim() ||
+                          !activeAsset.steps?.trim() ||
+                          !activeAsset.outputs?.trim()
+                        }
+                        onClick={() => {
+                          const name =
+                            "method-" +
+                            activeAsset.id
+                              .toLowerCase()
+                              .replace(/[^a-z0-9-]/g, "")
+                              .slice(0, 48);
+                          const sections = [
+                            "---",
+                            "name: " + name,
+                            "description: " + JSON.stringify(activeAsset.title),
+                            "---",
+                            "# " + activeAsset.title,
+                            "## " + t("需要的输入"),
+                            activeAsset.inputs,
+                            "## " + t("执行步骤"),
+                            activeAsset.steps,
+                            "## " + t("预期交付"),
+                            activeAsset.outputs,
+                          ];
+                          if (activeAsset.verification)
+                            sections.push(
+                              "## " + t("新样例的验证记录"),
+                              activeAsset.verification,
+                            );
+                          downloadText("SKILL.md", sections.join("\n"));
+                        }}
+                      >
+                        {t("导出私有 Skill 草稿")}
+                      </Button>
+                    </details>
+                    <details className="studio-disclosure">
+                      <summary>
+                        <Link2 size={16} aria-hidden="true" />
+                        {t("项目依据")}
+                      </summary>
+                      {activeAsset.source_id && (
+                        <p>
+                          {t("关联依据")} ·{" "}
+                          {activeAsset.source_title ? (
+                            <Button
+                              onClick={() =>
+                                navigate({
+                                  section: "assets",
+                                  record: activeAsset.source_id,
+                                })
+                              }
+                            >
+                              {activeAsset.source_title}
+                            </Button>
+                          ) : (
+                            t("来源已删除")
+                          )}
+                          {activeAsset.source_current_version !==
+                            activeAsset.source_version && (
                             <strong> · {t("请重新核对依据")}</strong>
                           )}
+                        </p>
+                      )}
+                      {!!activeAsset.evidence?.length && (
+                        <ul>
+                          {activeAsset.evidence.map((ref) => (
+                            <li key={ref.id}>
+                              {ref.title ? (
+                                <Button
+                                  onClick={() =>
+                                    navigate({
+                                      section: "assets",
+                                      record: ref.id,
+                                    })
+                                  }
+                                >
+                                  {ref.title}
+                                </Button>
+                              ) : (
+                                t("来源已删除")
+                              )}{" "}
+                              · {t("版本")} {ref.version}
+                              {ref.current_version !== ref.version && (
+                                <strong> · {t("请重新核对依据")}</strong>
+                              )}
+                              <Button
+                                onClick={() =>
+                                  changeAsset(activeAsset.id, {
+                                    evidence: activeAsset.evidence.filter(
+                                      (r) => r.id !== ref.id,
+                                    ),
+                                  })
+                                }
+                              >
+                                {t("解除关联")}
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <EvidencePicker
+                        projects={projects}
+                        revision={revision}
+                        onPick={(item) =>
+                          changeAsset(activeAsset.id, {
+                            source_id: item.id,
+                            source_version: item.version,
+                            source_title: item.title,
+                            source_current_version: item.version,
+                            title: activeAsset.title || item.title,
+                          })
+                        }
+                      />
+                      <div className="toolbar-actions">
+                        {activeAsset.source_id && (
                           <Button
                             onClick={() =>
-                              changeAsset(a.id, {
-                                evidence: a.evidence.filter(
-                                  (r) => r.id !== ref.id,
-                                ),
+                              changeAsset(activeAsset.id, {
+                                source_id: "",
+                                source_version: 0,
                               })
                             }
                           >
                             {t("解除关联")}
                           </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <EvidencePicker
-                    projects={projects}
-                    revision={revision}
-                    onPick={(item) =>
-                      changeAsset(a.id, {
-                        source_id: item.id,
-                        source_version: item.version,
-                        source_title: item.title,
-                        source_current_version: item.version,
-                        title: a.title || item.title,
-                      })
-                    }
-                  />
-                  <div className="toolbar-actions">
-                    {a.source_id && (
+                        )}
+                      </div>
+                    </details>
+                    <div className="toolbar-actions studio-editor-actions">
+                      {profile.assets.indexOf(activeAsset) > 0 && (
+                        <Button
+                          onClick={() => {
+                            const assets = [...profile.assets];
+                            const i = assets.indexOf(activeAsset);
+                            [assets[i - 1], assets[i]] = [
+                              assets[i],
+                              assets[i - 1],
+                            ];
+                            change({ ...profile, assets });
+                          }}
+                        >
+                          {t("上移")}
+                        </Button>
+                      )}
                       <Button
                         onClick={() =>
-                          changeAsset(a.id, {
-                            source_id: "",
-                            source_version: 0,
+                          change({
+                            ...profile,
+                            assets: profile.assets.filter(
+                              (it) => it.id !== activeAsset.id,
+                            ),
                           })
                         }
                       >
-                        {t("解除关联")}
+                        {t("移除条目")}
                       </Button>
-                    )}
-                    {i > 0 && (
-                      <Button
-                        onClick={() => {
-                          const assets = [...profile.assets];
-                          [assets[i - 1], assets[i]] = [
-                            assets[i],
-                            assets[i - 1],
-                          ];
-                          change({ ...profile, assets });
-                        }}
-                      >
-                        {t("上移")}
-                      </Button>
-                    )}
-                    <Button
-                      onClick={() =>
-                        change({
-                          ...profile,
-                          assets: profile.assets.filter((it) => it.id !== a.id),
-                        })
-                      }
-                    >
-                      {t("移除条目")}
-                    </Button>
-                  </div>
-                </section>
-              ))}
+                    </div>
+                  </section>
+                </div>
+              )}
+              {profile.assets.length > 0 && (
+                <button
+                  type="button"
+                  className="studio-next"
+                  onClick={() => {
+                    setEditing(true);
+                    navigate({ section: "profile" });
+                  }}
+                >
+                  {t("选择作品制作名片")}{" "}
+                  <ArrowRight size={16} aria-hidden="true" />
+                </button>
+              )}
             </>
           ) : (
             <>
-              <h2>{t("简介草稿")}</h2>
-              <p>{t("选入简介的内容会出现在预览和导出的文本里。")}</p>
-              <div className="profile-columns">
-                <section>
-                  <label>
-                    {t("显示名称")}
-                    <input
-                      maxLength={160}
-                      value={profile.name}
-                      onChange={(e) =>
-                        change({ ...profile, name: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    {t("个人介绍")}
-                    <textarea
-                      maxLength={4000}
-                      value={profile.bio}
-                      onChange={(e) =>
-                        change({ ...profile, bio: e.target.value })
-                      }
-                    />
-                  </label>
-                  <h3>{t("选入简介的作品")}</h3>
-                  {profile.assets.map((a) => (
-                    <label className="check-label" key={a.id}>
+              <div className="studio-section-heading">
+                <div>
+                  <h2>{t("名片预览")}</h2>
+                  <p>{t("选入简介的内容会出现在预览和导出的文本里。")}</p>
+                </div>
+                <Button
+                  icon={PencilLine}
+                  aria-expanded={editing}
+                  onClick={() => setEditing(!editing)}
+                >
+                  {editing ? t("收起编辑") : t("编辑名片")}
+                </Button>
+              </div>
+              <div
+                className={
+                  editing
+                    ? "studio-profile-layout is-editing"
+                    : "studio-profile-layout"
+                }
+              >
+                <Preview profile={profile} />
+                {editing && (
+                  <section className="studio-card-editor">
+                    <label>
+                      {t("显示名称")}
                       <input
-                        type="checkbox"
-                        checked={a.selected}
+                        maxLength={160}
+                        value={profile.name}
                         onChange={(e) =>
-                          changeAsset(a.id, { selected: e.target.checked })
+                          change({ ...profile, name: e.target.value })
                         }
                       />
-                      {a.title}
                     </label>
-                  ))}
-                  <Button
-                    disabled={
-                      !profile.assets.some((a) => a.selected && a.excerpt) ||
-                      !!profile.bio.trim()
-                    }
-                    onClick={() =>
-                      change({
-                        ...profile,
-                        bio: profile.assets
-                          .filter((a) => a.selected && a.excerpt)
-                          .map((a) => a.excerpt)
-                          .join("\n")
-                          .slice(0, 4000),
-                      })
-                    }
-                  >
-                    {t("用已选说明起草介绍")}
-                  </Button>
-                </section>
-                <Preview profile={profile} />
+                    <label>
+                      {t("个人介绍")}
+                      <textarea
+                        maxLength={4000}
+                        value={profile.bio}
+                        onChange={(e) =>
+                          change({ ...profile, bio: e.target.value })
+                        }
+                      />
+                    </label>
+                    <h3>{t("选入简介的作品")}</h3>
+                    {!profile.assets.length && (
+                      <Button
+                        icon={Plus}
+                        onClick={() => navigate({ section: "assets" })}
+                      >
+                        {t("添加能力或作品")}
+                      </Button>
+                    )}
+                    {profile.assets.map((a) => (
+                      <label className="check-label" key={a.id}>
+                        <input
+                          type="checkbox"
+                          checked={a.selected}
+                          onChange={(e) =>
+                            changeAsset(a.id, { selected: e.target.checked })
+                          }
+                        />
+                        {a.title}
+                      </label>
+                    ))}
+                    <Button
+                      disabled={
+                        !profile.assets.some((a) => a.selected && a.excerpt) ||
+                        !!profile.bio.trim()
+                      }
+                      onClick={() =>
+                        change({
+                          ...profile,
+                          bio: profile.assets
+                            .filter((a) => a.selected && a.excerpt)
+                            .map((a) => a.excerpt)
+                            .join("\n")
+                            .slice(0, 4000),
+                        })
+                      }
+                    >
+                      {t("用已选说明起草介绍")}
+                    </Button>
+                  </section>
+                )}
               </div>
             </>
           )}
@@ -517,15 +680,18 @@ function ProfileEditor({ section, projects, revision, draftStore }) {
               {t("放弃本次编辑并读取最新版")}
             </Button>
           )}
-          <div className="toolbar-actions">
-            <Button
-              variant="primary"
-              busy={busy}
-              disabled={!draft || profile.assets.some((a) => !a.title.trim())}
-              onClick={save}
-            >
-              {t("保存到本机")}
-            </Button>
+          <div className="toolbar-actions studio-save">
+            {draft && (
+              <Button
+                variant="primary"
+                icon={Check}
+                busy={busy}
+                disabled={!draft || Boolean(unnamedAsset)}
+                onClick={save}
+              >
+                {t("保存到本机")}
+              </Button>
+            )}
             {draft && (
               <Button
                 onClick={() => {
@@ -538,6 +704,7 @@ function ProfileEditor({ section, projects, revision, draftStore }) {
             )}
             {section === "profile" && (
               <Button
+                variant={draft ? "secondary" : "primary"}
                 disabled={
                   !!draft ||
                   !(
@@ -546,9 +713,40 @@ function ProfileEditor({ section, projects, revision, draftStore }) {
                     profile.assets.some((a) => a.selected)
                   )
                 }
+                data-export-kind="profile"
                 onClick={download}
               >
                 {t("导出当前简介")}
+              </Button>
+            )}
+            {section === "profile" &&
+              !draft &&
+              !result.error &&
+              !result.loading &&
+              profile.assets.some(
+                (asset) => asset.selected && asset.title.trim(),
+              ) && (
+                <Button
+                  icon={ArrowRight}
+                  onClick={() => navigate({ page: "exchange" })}
+                >
+                  {t("起草协作说明")}
+                </Button>
+              )}
+            {unnamedAsset && (
+              <Button
+                onClick={() => {
+                  focusNewAsset.current = true;
+                  setSelectedAssetId(unnamedAsset.id);
+                  if (section !== "assets") navigate({ section: "assets" });
+                  if (
+                    section === "assets" &&
+                    unnamedAsset.id === activeAsset?.id
+                  )
+                    assetEditor.current?.focus();
+                }}
+              >
+                {t("填写作品名称后保存")}
               </Button>
             )}
             <small role="status">{draft ? t("有未保存的编辑") : notice}</small>
@@ -566,10 +764,14 @@ export function PersonalPage({
   revision,
   onChanged,
   draftStore,
+  initialTab = "memory",
 }) {
-  const section = tabs.some(([key]) => key === route.section)
-    ? route.section
-    : "memory";
+  const section =
+    [route.section, initialTab].find((id) =>
+      tabs.some(([key]) => key === id),
+    ) || "memory";
+  const label = tabs.find(([id]) => id === section)[1];
+  const [selectedAssetId, setSelectedAssetId] = useState("");
   const [adding, setAdding] = useState(false);
   const [claim, setClaim] = useState("");
   const [busy, setBusy] = useState(false);
@@ -598,74 +800,79 @@ export function PersonalPage({
     }
   }
   return (
-    <>
-      <PageHeader
-        title={t("我的")}
-        description={t("管理跨项目的工作约定、作品和个人简介。")}
-      />
-      <SegmentedTabs label={t("个人工作台")}>
-        {tabs.map(([id, label]) => (
+    <div className="personal-studio">
+      <PageHeader title={t(label)} />
+      <nav className="studio-tabs" aria-label={t("个人工作台")}>
+        {tabs.map(([id, name, Icon]) => (
           <button
             key={id}
-            className={section === id ? "active" : ""}
+            type="button"
             aria-current={section === id ? "page" : undefined}
             onClick={() => navigate({ section: id })}
           >
-            {t(label)}
+            <Icon size={16} aria-hidden="true" />
+            {t(name)}
           </button>
         ))}
-      </SegmentedTabs>
-      {section === "memory" ? (
-        route.record ? (
-          <ContentDetail
-            key={route.record}
-            id={route.record}
-            projects={projects}
+      </nav>
+      {route.record && (section === "memory" || section === "assets") ? (
+        <ContentDetail
+          key={route.record}
+          id={route.record}
+          projects={projects}
+          revision={revision}
+          onChanged={onChanged}
+          onBack={() => navigate({ record: null })}
+          onProject={(project) => navigate({ page: "projects", project })}
+        />
+      ) : section === "memory" ? (
+        <>
+          {adding && (
+            <form className="personal-form" onSubmit={add}>
+              <label>
+                {t("新的个人约定")}
+                <textarea
+                  required
+                  autoFocus
+                  maxLength={4000}
+                  value={claim}
+                  onChange={(e) => setClaim(e.target.value)}
+                />
+              </label>
+              <ErrorNotice error={error} />
+              <div className="toolbar-actions">
+                <Button type="submit" busy={busy}>
+                  {t("保存到本机")}
+                </Button>
+                <Button disabled={busy} onClick={() => setAdding(false)}>
+                  {t("取消")}
+                </Button>
+              </div>
+            </form>
+          )}
+          <MemoryReader
             revision={revision}
-            onChanged={onChanged}
-            onBack={() => navigate({ record: null })}
-            onProject={(project) => navigate({ page: "projects", project })}
+            onOpen={(record) => navigate({ section: "memory", record })}
+            onAdd={() => setAdding(true)}
           />
-        ) : (
-          <>
-            {adding && (
-              <form className="personal-form" onSubmit={add}>
-                <label>
-                  {t("新的个人约定")}
-                  <textarea
-                    required
-                    autoFocus
-                    maxLength={4000}
-                    value={claim}
-                    onChange={(e) => setClaim(e.target.value)}
-                  />
-                </label>
-                <ErrorNotice error={error} />
-                <div className="toolbar-actions">
-                  <Button type="submit" busy={busy}>
-                    {t("保存到本机")}
-                  </Button>
-                  <Button disabled={busy} onClick={() => setAdding(false)}>
-                    {t("取消")}
-                  </Button>
-                </div>
-              </form>
-            )}
-            <MemoryReader
-              revision={revision}
-              onOpen={(record) => navigate({ section: "memory", record })}
-              onAdd={() => setAdding(true)}
-            />
-          </>
-        )
+        </>
       ) : (
         <ProfileEditor
           section={section}
           projects={projects}
           revision={revision}
           draftStore={draftStore}
+          selectedAssetId={selectedAssetId}
+          setSelectedAssetId={setSelectedAssetId}
+          sourceProject={
+            projects.some((project) => project.id === route.project)
+              ? route.project
+              : ""
+          }
+          navigate={navigate}
+          onChanged={onChanged}
         />
       )}
-    </>
+    </div>
   );
 }

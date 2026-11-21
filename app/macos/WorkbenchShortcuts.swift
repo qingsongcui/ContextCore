@@ -100,7 +100,7 @@ final class WorkbenchShortcuts: NSObject, NSMenuDelegate {
         hostNames.removeAll()
         hostIDs.removeAll()
         menu.removeAllItems()
-        addAction(to: menu, text("打开工作台", "Open Workbench"), .init(page: "projects"))
+        addAction(to: menu, text("打开工作台", "Open Workbench"), .init(page: "home"))
         addAction(to: menu, text("所有助手", "All agents"), .init(page: "agents"))
         menu.addItem(.separator())
         addSection(to: menu, text("常用助手", "Favorite agents"), .hosts("favorite_hosts"))
@@ -111,7 +111,9 @@ final class WorkbenchShortcuts: NSObject, NSMenuDelegate {
     }
 
     func addNavigationKeys(to parent: NSMenu) {
-        addAction(to: parent, text("项目工作台", "Projects"), .init(page: "projects"), key: "1")
+        addAction(to: parent, text("工作台", "Workbench"), .init(page: "home"), key: "0")
+        addAction(to: parent, text("Agent 名片", "Agent card"), .init(page: "personal", section: "profile"))
+        addAction(to: parent, text("项目", "Projects"), .init(page: "projects"), key: "1")
         addAction(to: parent, text("所有助手", "All agents"), .init(page: "agents"), key: "2")
         addAction(to: parent, text("用量与性能", "Usage and performance"), .init(page: "usage", section: "overview"), key: "3")
         let item = addAction(to: parent, text("账号额度", "Account quotas"), .init(page: "usage", section: "accounts"), key: "3")

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { FolderSearch } from "lucide-react";
 import { Button, ErrorNotice } from "./ui.jsx";
 import { mutate } from "../lib/api.js";
 import { t } from "../lib/i18n.jsx";
@@ -8,8 +9,14 @@ export function CapabilitySuggestions({
   profile,
   change,
   makeAsset,
+  onAdopt,
+  sourceProject,
+  onProjects,
 }) {
-  const [selected, setSelected] = useState([]);
+  const [selected, setSelected] = useState(() =>
+    sourceProject ? [sourceProject] : [],
+  );
+  const [open, setOpen] = useState(Boolean(sourceProject));
   const [offset, setOffset] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -40,26 +47,41 @@ export function CapabilitySuggestions({
       !profile.assets.some((a) => a.candidate_topic === item.topic),
   );
   return (
-    <details className="asset-picker">
-      <summary>{t("从项目整理能力线索")}</summary>
+    <details
+      className="studio-suggestions"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>
+        <FolderSearch size={17} aria-hidden="true" />
+        {t("从项目整理能力线索")}
+      </summary>
       <p>{t("选择项目，对照已有作品和经验，再写下你或 Agent 承担的部分。")}</p>
-      {projects.map((p) => (
-        <label key={p.id} className="check-label">
-          <input
-            type="checkbox"
-            checked={selected.includes(p.id)}
-            onChange={(e) => {
-              setOffset(0);
-              setSelected(
-                e.target.checked
-                  ? [...selected, p.id]
-                  : selected.filter((id) => id !== p.id),
-              );
-            }}
-          />
-          {p.name}
-        </label>
-      ))}
+      <div className="studio-project-choices">
+        {!projects.length && (
+          <>
+            <small>{t("加入项目后，可以在这里选择整理范围。")}</small>
+            <Button onClick={onProjects}>{t("打开项目")}</Button>
+          </>
+        )}
+        {projects.map((p) => (
+          <label key={p.id} className="check-label">
+            <input
+              type="checkbox"
+              checked={selected.includes(p.id)}
+              onChange={(e) => {
+                setOffset(0);
+                setSelected(
+                  e.target.checked
+                    ? [...selected, p.id]
+                    : selected.filter((id) => id !== p.id),
+                );
+              }}
+            />
+            {p.name}
+          </label>
+        ))}
+      </div>
       <ErrorNotice error={error} />
       {!!selected.length && !result && !error && (
         <p role="status">{t("正在读取")}</p>
@@ -74,22 +96,33 @@ export function CapabilitySuggestions({
               samples: item.samples,
             })}
           </p>
+          <details className="studio-examples">
+            <summary>{t("查看项目依据")}</summary>
+            <ul>
+              {item.evidence.map((ref) => (
+                <li key={ref.id}>
+                  {ref.title}
+                  <small>
+                    {
+                      projects.find((project) => project.id === ref.project_id)
+                        ?.name
+                    }
+                  </small>
+                </li>
+              ))}
+            </ul>
+          </details>
           <Button
+            disabled={profile.assets.length >= 200}
             onClick={() =>
-              change({
-                ...profile,
-                assets: [
-                  ...profile.assets,
-                  {
-                    ...makeAsset(),
-                    title: item.evidence[0].title.slice(0, 200),
-                    candidate_topic: item.topic,
-                    evidence: item.evidence.map((r) => ({
-                      ...r,
-                      current_version: r.version,
-                    })),
-                  },
-                ],
+              onAdopt({
+                ...makeAsset(),
+                title: item.evidence[0].title.slice(0, 200),
+                candidate_topic: item.topic,
+                evidence: item.evidence.map((ref) => ({
+                  ...ref,
+                  current_version: ref.version,
+                })),
               })
             }
           >

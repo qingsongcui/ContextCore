@@ -69,7 +69,10 @@ def assert_common_ui(receipt: dict, language: str) -> None:
     assert ('窗口' if language == 'zh' else 'Window') in receipt['native_menu_titles']
     assert receipt['themeSwitchOk'] is True
     assert receipt['live_language_sync']['ok'] is True
-    assert [page['page'] for page in receipt['pagesVisited']] == ['projects', 'personal', 'agents', 'usage', 'settings']
+    assert [(item['page'], item['section']) for item in receipt['pagesVisited']] == [
+        ('home', ''), ('projects', ''), ('personal', 'memory'), ('personal', 'assets'),
+        ('personal', 'profile'), ('exchange', ''), ('agents', ''), ('usage', ''), ('settings', ''),
+    ]
     assert all(page['heading'] and not page['hasErrorBanner'] for page in receipt['pagesVisited'])
     assert receipt['window_resize_checks']['min_800x560'] == {'width': 800, 'height': 560}
     assert receipt['window_resize_checks']['medium_1080x700'] == {'width': 1080, 'height': 700}
@@ -98,6 +101,33 @@ with tempfile.TemporaryDirectory(prefix='senrelay-native-') as temporary:
                     json={'name': 'Planning workspace'},
                     headers={'X-CSRF-Token': csrf, 'Origin': f'http://127.0.0.1:{port}'},
                 ).raise_for_status()
+                export_fixture = {
+                    'revision': 0, 'name': 'Native fixture studio', 'bio': 'Public fixture bio',
+                    'assets': [
+                        {'id': 'qa', 'title': 'Native export fixture', 'excerpt': 'Approved public sample',
+                         'notes': 'PRIVATE_FIXTURE_NOTE', 'selected': True, 'inputs': 'Fixture inputs',
+                         'steps': 'Fixture procedure', 'outputs': 'Fixture output'},
+                        {'id': 'other', 'title': 'UNSELECTED_FIXTURE_ASSET'},
+                    ],
+                }
+                client.put('/api/workbench/profile', json=export_fixture,
+                           headers={'X-CSRF-Token': csrf, 'Origin': f'http://127.0.0.1:{port}'}).raise_for_status()
+            export_dir = scratch / 'exports'
+            export_dir.mkdir()
+            subprocess.run([str(app_binary), '--verify-ui', str(export_dir), '--verify-port', str(port),
+                            '--verify-language', 'zh', '--verify-scenario', 'workspace-exports'],
+                           check=True, timeout=45)
+            expected_exports = {
+                'Senrelay-profile-v1.txt': ['Native fixture studio', 'Public fixture bio', 'Approved public sample'],
+                'SKILL.md': ['name: method-qa', 'Fixture inputs', 'Fixture procedure', 'Fixture output'],
+                'Senrelay-collaboration.txt': ['Native fixture studio', 'Approved public sample', 'Native delivery fixture'],
+            }
+            for name, markers in expected_exports.items():
+                body = (export_dir / name).read_text()
+                assert all(marker in body for marker in markers), name
+                assert 'PRIVATE_FIXTURE_NOTE' not in body and 'UNSELECTED_FIXTURE_ASSET' not in body, name
+            (out / 'native-exports.json').write_text(json.dumps({'verified_files': list(expected_exports),
+                'native_download': True, 'destination': 'temporary fixture directory', 'private_markers_excluded': True}, indent=2))
             results = []
             languages = ['zh', 'en'] if args.language == 'both' else [args.language]
             for language in languages:
@@ -421,7 +451,9 @@ with tempfile.TemporaryDirectory(prefix='senrelay-native-') as temporary:
         assert unreachable_err['status_visible'] is True
         assert unreachable_err['retry_visible'] is True
         assert unreachable_err['upgrade_visible'] is False
-        assert unreachable_err['status_text'] == scenario_status_text('unreachable-port-recover', 'en')
+        log_path = unreachable_dir / 'logs' / 'service.log'
+        log_hint = str(log_path).replace(str(Path.home()) + '/', '~/', 1)
+        assert unreachable_err['status_text'] == scenario_status_text('unreachable-port-recover', 'en', log_path=log_hint)
     finally:
         stop_bundled_service(unreachable_data, unreachable_home)
 

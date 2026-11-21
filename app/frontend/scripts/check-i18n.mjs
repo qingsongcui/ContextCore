@@ -23,7 +23,7 @@ const keys = new Set();
 const failures = [];
 for (const file of walk(root)) {
   const rel = path.relative(root, file);
-  if (rel === 'lib/messages.en.js' || rel === 'lib/constants.js') continue;
+  if (/^lib\/messages(?:\.[a-z-]+)*\.en\.js$/.test(rel) || rel === 'lib/constants.js') continue;
   const source = fs.readFileSync(file, 'utf8');
   let ast;
   try {

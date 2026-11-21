@@ -37,10 +37,12 @@ mode.add_argument('--release-manifest', type=Path)
 mode.add_argument('--from-source', action='store_true', help='Build a fresh matched candidate from this checkout; never activate the daily service')
 parser.add_argument('--output-dir', type=Path, help='Candidate output directory (defaults to app/macos/dist)')
 parser.add_argument('--build-number', default=normalize_ci_build_number(os.environ.get('GITHUB_RUN_NUMBER', '1')))
-parser.add_argument('--local-workbench-test', action='store_true', help='Package a side-by-side test workspace with independent storage and port')
+variants = parser.add_mutually_exclusive_group()
+variants.add_argument('--local-workbench-test', action='store_true', help='Package a side-by-side test workspace with independent storage and port')
+variants.add_argument('--workspace-design-test', action='store_true', help='Package the redesigned workspace in its own local sandbox')
 args = parser.parse_args()
-if args.local_workbench_test and not (args.from_source and args.output_dir):
-    parser.error('--local-workbench-test requires --from-source and --output-dir')
+if (args.local_workbench_test or args.workspace_design_test) and not (args.from_source and args.output_dir):
+    parser.error('Side-by-side test packages require --from-source and --output-dir')
 if args.output_dir:
     output = args.output_dir.expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -108,7 +110,7 @@ resources = contents / 'Resources'
 (contents / 'MacOS').mkdir(parents=True)
 resources.mkdir()
 shutil.copytree(build / 'frozen/senrelay-service', resources / 'service')
-run('xcrun', 'swiftc', '-O', '-module-cache-path', build / 'swift-cache', '-target', f'{__import__("platform").machine()}-apple-macosx{minimum_macos}', '-framework', 'Cocoa', '-framework', 'WebKit', here / 'Senrelay.swift', here / 'WorkbenchShortcuts.swift', '-o', contents / 'MacOS/Senrelay')
+run('xcrun', 'swiftc', '-O', '-module-cache-path', build / 'swift-cache', '-target', f'{__import__("platform").machine()}-apple-macosx{minimum_macos}', '-framework', 'Cocoa', '-framework', 'WebKit', here / 'Senrelay.swift', here / 'WorkbenchShortcuts.swift', here / 'VerifyWorkspaceExports.swift', '-o', contents / 'MacOS/Senrelay')
 icons = build / 'AppIcon.iconset'; icons.mkdir(exist_ok=True)
 icon_source = frontend / 'app-icon.png'
 if not icon_source.exists(): icon_source = frontend / 'senrelay-logo-original-v1.png'
@@ -125,7 +127,10 @@ info = {'CFBundleName': 'Senrelay', 'CFBundleDisplayName': 'Senrelay · 续境',
     'LSApplicationCategoryType': 'public.app-category.productivity'}
 if args.local_workbench_test:
     info.update(CFBundleIdentifier='com.senrelay.local-workbench-test', CFBundleDisplayName='Senrelay · 本地测试',
-                SenrelayLocalWorkbenchTest=True)
+                SenrelayLocalWorkbenchTest=True, SenrelayTestPort=19426, SenrelayTestStorage='SenrelayLocalTest')
+elif args.workspace_design_test:
+    info.update(CFBundleIdentifier='com.senrelay.workspace-design-test', CFBundleDisplayName='Senrelay · Agent 工作台测试',
+                SenrelayLocalWorkbenchTest=True, SenrelayTestPort=19436, SenrelayTestStorage='SenrelayWorkspaceDesignTest')
 with (contents / 'Info.plist').open('wb') as stream: plistlib.dump(info, stream)
 shutil.copy(backend / 'THIRD_PARTY_NOTICES.md', resources)
 shutil.copy(backend / 'LICENSE', resources)

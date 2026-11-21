@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Activity, List, RefreshCw, Wallet, Workflow } from 'lucide-react';
 import { t } from '../lib/i18n.jsx';
 import { list, readSavedValue, saveValue } from '../lib/management.js';
 import { dateRange, dimensionKeys, dimensionNames, hostOptions, originName, unattributed, usageParams, usagePath } from '../lib/usageView.js';
@@ -12,7 +12,9 @@ import { UsageLedger, RequestDetails } from '../components/usage/UsageLedger.jsx
 import { UsageOverview } from '../components/usage/UsageOverview.jsx';
 import { UsageSources } from '../components/usage/UsageSources.jsx';
 import '../styles/usage-workspace.css';
+import '../styles/operations-studio.css';
 
+const tabIcons = { overview: Activity, requests: List, accounts: Wallet, sources: Workflow };
 const tabs = { overview: '概览', requests: '请求', accounts: '账号额度', sources: '来源与定价' };
 const allChoices = { host_id: '全部助手', project_id: '全部项目', provider_id: '全部供应商', model: '全部模型', account_id: '全部账号', origin: '全部来源', status: '全部状态', request_status: '全部状态' };
 const periods = { today: '今天', yesterday: '昨天', week: '近 7 天', month: '近 30 天', custom: '自定义日期' };
@@ -114,10 +116,12 @@ function DailyUsage({ projects, agentId, projectId, section, requestId, navigate
   }
   const request = requestId || selected?.id;
   const range = dateRange(filters.period, filters.start, filters.end);
-  return <div className="usage-workspace">
-    <PageHeader title={t('用量与性能')} actions={tab !== 'accounts' ? <Button icon={RefreshCw} onClick={refresh} disabled={summary.loading}>{t('刷新账本')}</Button> : null} />
-    <nav className="usage-nav" aria-label={t('用量视图')}>{Object.entries(tabs).map(([key, label]) =>
-      <button type="button" key={key} aria-current={tab === key ? 'page' : undefined} onClick={() => switchTab(key)}>{t(label)}</button>)}</nav>
+  return <div className="usage-workspace operations-studio">
+    <PageHeader title={t('用量与性能')} description={t('按项目和助手查看调用记录、费用与性能。')} actions={tab !== 'accounts' ? <Button icon={RefreshCw} onClick={refresh} disabled={summary.loading}>{t('刷新账本')}</Button> : null} />
+    <nav className="usage-nav" aria-label={t('用量视图')}>{Object.entries(tabs).map(([key, label]) => {
+      const Icon = tabIcons[key];
+      return <button type="button" key={key} aria-current={tab === key ? 'page' : undefined} onClick={() => switchTab(key)}><Icon size={16} aria-hidden="true" />{t(label)}</button>;
+    })}</nav>
     {tab === 'accounts' ? <>
       <div className="usage-quota-filter"><Field label={t('助手')}><select value={filters.host_id === unattributed ? '' : filters.host_id || ''} onChange={e => update({ host_id: e.target.value })}>
         <option value="">{t('全部助手')}</option>{list(hosts.data).map(item => <option key={item.id} value={item.id}>{item.label || item.name || item.id}</option>)}

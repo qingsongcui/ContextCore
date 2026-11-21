@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { Activity, ChevronRight } from 'lucide-react';
 import { t } from '../../lib/i18n.jsx';
 import { list, number } from '../../lib/management.js';
 import { costText, dimensionKeys, dimensionNames, tokenCount, usagePath } from '../../lib/usageView.js';
 import { useResource } from '../../lib/useResource.js';
-import { Field, ResourceState } from '../ui.jsx';
+import { Button, Field, ResourceState } from '../ui.jsx';
 import { UsageTrend } from '../UsageTrend.jsx';
 
 function Metric({ label, value, note, onClick }) {
@@ -60,7 +60,13 @@ function Distribution({ params, revision, labelFor, currencies, onDrill }) {
 export function UsageOverview({ resource, params, revision, labelFor, onRequests, onDrill, onSources }) {
   const data = resource.data;
   const currencies = Object.keys(data?.cost_by_currency || {}).sort();
-  return <ResourceState resource={resource}>{data && <>
+  const noSamples = data?.attempts === 0 && data?.logical_requests === 0 && data?.unattributed_samples === 0;
+  return <ResourceState resource={resource}>{noSamples ? <section className="ops-empty-report">
+    <Activity size={28} strokeWidth={1.6} aria-hidden="true" />
+    <h2>{t('此范围还没有用量记录')}</h2>
+    <p>{t('调整时间范围，或查看助手已授权的采集来源。')}</p>
+    <Button onClick={onSources}>{t('查看采集覆盖')}</Button>
+  </section> : data && <>
     <div className="metrics-grid"><Metric onClick={onRequests} label={t('已记录请求')} value={number(data.logical_requests)} note={t('{count} 次匹配尝试', { count: number(data.attempts) })} />
       <Metric label={t('已知 Token')} value={number(tokenCount(data))} note={t('{count} 项用量不完整', { count: number(data.unknown_usage_count) })} />
       <Metric label={t('估算费用')} value={costText(data.cost_by_currency)} note={t('{count} 项费用未知', { count: number(data.unknown_cost_count) })} /></div>

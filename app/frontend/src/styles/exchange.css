@@ -1,0 +1,30 @@
+.exchange-workspace { max-width: 68rem; }
+.exchange-layout { display: grid; gap: clamp(1.25rem, 3vw, 3rem); align-items: start; }
+.exchange-editor { min-width: 0; }
+.exchange-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding-block: 1.25rem; border-block-start: 1px solid var(--line-strong); }
+.exchange-heading button { display: inline-flex; align-items: center; gap: .25rem; color: var(--accent); font-weight: 550; font-size: .825rem; }
+.exchange-heading button:hover { text-decoration: underline; text-underline-offset: .2rem; }
+.exchange-fields { border: 0; margin: 0; padding: 0; display: grid; gap: 1.35rem; min-inline-size: 0; }
+.exchange-fields label { display: grid; gap: .45rem; font-size: .85rem; font-weight: 550; color: var(--ink); }
+.exchange-fields :is(textarea,select) { width: 100%; font-size: 1rem; font-weight: 400; }
+.exchange-paper { overflow-wrap: anywhere; display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--line-strong); background: var(--surface); padding: clamp(1.15rem, 3vw, 2.2rem); border-radius: var(--r-md); }
+.exchange-paper-top { display: flex; align-items: center; gap: .5rem; color: var(--secondary); font-size: .78rem; padding-block-end: 1rem; border-block-end: 1px solid var(--line-strong); margin-block-end: 1.5rem; }
+.exchange-paper h2 { font-size: clamp(1.4rem, 2.2vw, 2rem); color: var(--ink); line-height: 1.35; white-space: pre-wrap; }
+.exchange-paper dl { display: grid; gap: 1rem; margin: 1rem 0 1.6rem; }
+.exchange-paper dt { font-weight: 600; font-size: .75rem; margin-block-end: .25rem; color: var(--secondary); }
+.exchange-paper dd { margin: 0; line-height: 1.65; white-space: pre-wrap; }
+.exchange-paper-prompt { color: var(--secondary); margin-block-end: 2.5rem; }
+.exchange-paper-footer { margin-block-start: auto; border-block-start: 1px solid var(--line); padding-block-start: 1rem; display: flex; align-items: center; flex-wrap: wrap; gap: .6rem 1rem; }
+.exchange-empty { border-block: 1px solid var(--line-strong); padding: 2.25rem 0 2.5rem; }
+.exchange-document-icon { color: var(--accent); padding-block-end: .9rem; }
+.exchange-empty p { max-width: 38rem; margin-block: .65rem 1.25rem; color: var(--secondary); }
+.exchange-notice:empty { display: none; }
+.exchange-notice { margin-block: .8rem; color: var(--secondary); }
+@media (min-width: 800px) {
+  .exchange-layout { grid-template-columns: minmax(0,.95fr) minmax(0,1.05fr); }
+  .exchange-fields :is(textarea,select) { font-size: .925rem; }
+  .exchange-paper { min-height: 22rem; }
+}
+@media (max-width: 639px) {
+  .exchange-heading button, .exchange-workspace .button { min-height: 44px; }
+}

@@ -251,7 +251,7 @@ describe('Audit UI regressions (Items 5.1 - 5.6)', () => {
     const convRow = container.querySelector('button.conversation-row');
     await click(convRow);
     await click(buttonByText('打开所属项目', container));
-    expect(container.querySelector('.breadcrumb')?.textContent).toContain('AlphaProj');
+    expect(container.querySelector('.project-room h1')?.textContent).toBe('AlphaProj');
     await click(buttonByText('所有项目', container));
     expect(container.querySelector('.project-card')?.textContent).toContain('AlphaProj');
     expect(buttonByText('返回所有项目', container)).toBeUndefined();

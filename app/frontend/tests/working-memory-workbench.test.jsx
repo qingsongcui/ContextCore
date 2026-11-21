@@ -164,7 +164,7 @@ describe('Memory Workbench — Short-Term Working Tasks vs Governed Long-Term Me
       </Shell>
     );
     const navButtons = Array.from(container.querySelectorAll('.main-nav button')).map(btn => btn.textContent.trim());
-    expect(navButtons).toEqual(['项目工作台', '我的', 'Agent 管理', '用量与性能']);
+    expect(navButtons).toEqual(['工作台', '项目', '协作', '个人记忆', '能力与作品', 'Agent 名片', 'Agent 管理', '用量与性能', '设置']);
 
     h.data[activeTasksSummaryPath] = [
       { id: 'tsk_1', project_id: 'p', title: 'Task 1', status: 'in_progress', execution_mode: 'approved' },
@@ -608,6 +608,26 @@ describe('Memory Workbench — Short-Term Working Tasks vs Governed Long-Term Me
     expect(container.textContent).toContain('默认测试端口改为 5173');
   });
 
+  it('opens a project on its current memory, drills through to the original conversation and returns to the expanded conclusion', async () => {
+    h.data['/api/workbench/memories?project_id=p&offset=0&limit=40'] = {
+      total: 1, items: [{id: 'memory', section: 'decision', heading: '财务周规则',
+        sources: [{id: 'chat', kind: 'conversation', title: '周报口径评审', quote: '以后按财务周统计。'}]}],
+    };
+    h.data['/api/conversations/chat?include_messages=false'] = {id: 'chat', title: '周报口径评审', project_id: 'p', agent: 'codex'};
+    h.data['/api/conversations/chat/messages?limit=30&offset=0'] = {total: 1,
+      items: [{id: 'message', role: 'user', content: '十一月起使用财务周。'}]};
+    await render(<ProjectsPage projects={projects} selectedId="p" onSelect={vi.fn()} revision={0} onChanged={vi.fn()} navigate={vi.fn()}/>);
+    const entry = container.querySelector('.reading-entry');
+    await click(entry.querySelector('summary'));
+    const source = buttonByText('周报口径评审');
+    source.focus();
+    await click(source);
+    expect(container.querySelector('.conversation-detail').textContent).toContain('十一月起使用财务周。');
+    await click(buttonByText('返回项目记忆'));
+    expect(container.querySelector('.reading-entry').open).toBe(true);
+    expect(document.activeElement).toBe(source);
+  });
+
   it('connects Project Overview "当前工作" to /api/working-tasks?active_only=true and deep-links to Memory -> Active Tasks', async () => {
     h.data[activeTasksSummaryPath] = [
       {
@@ -639,6 +659,7 @@ describe('Memory Workbench — Short-Term Working Tasks vs Governed Long-Term Me
       />
     );
 
+    await click(buttonByText('工作进度'));
     expect(h.resources.some(r => r.path === activeTasksSummaryPath)).toBe(true);
     expect(container.textContent).toContain('梳理跨宿主 MCP 自动引导指令');
     expect(container.textContent).toContain('仅讨论方案 · 未授权改代码');
@@ -658,6 +679,7 @@ describe('Memory Workbench — Short-Term Working Tasks vs Governed Long-Term Me
     await render(
       <ProjectsPage projects={projects} selectedId="p" onSelect={vi.fn()} revision={0} onChanged={vi.fn()} navigate={vi.fn()} />
     );
+    await click(buttonByText('工作进度'));
     expect(container.textContent).toContain('还没有任务进度记录。');
 
     // 2. Create working task via WorkingTaskModal

@@ -19,6 +19,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         read: { [unowned self] in self.readMenuJSON($0, completion: $1) },
         navigate: { [unowned self] in self.openWorkspace($0) }
     )
+    var exportStage = 0
     var recoveryStep = 0
     var recoveredFaults: [[String: Any]] = []
     let verificationDirectory: URL? = {
@@ -77,18 +78,24 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
     static var isLocalTest: Bool {
         Bundle.main.object(forInfoDictionaryKey: "SenrelayLocalWorkbenchTest") as? Bool == true
     }
+    static var testStorage: String {
+        Bundle.main.object(forInfoDictionaryKey: "SenrelayTestStorage") as? String ?? "SenrelayLocalTest"
+    }
     let origin: URL = {
         let args = CommandLine.arguments
         if args.contains("--verify-ui"), let index = args.firstIndex(of: "--verify-port"), args.count > index + 1, let port = Int(args[index + 1]), (1024...65535).contains(port) {
             return URL(string: "http://127.0.0.1:\(port)")!
         }
-        if Desktop.isLocalTest { return URL(string: "http://127.0.0.1:19426")! }
+        if Desktop.isLocalTest {
+            let port = Bundle.main.object(forInfoDictionaryKey: "SenrelayTestPort") as? Int ?? 19426
+            return URL(string: "http://127.0.0.1:\(port)")!
+        }
         return URL(string: "http://127.0.0.1:8420")!
     }()
     var serviceDataDir: URL {
         if let dir = verifyDataDirectory { return dir }
         if let verifyDir = verificationDirectory { return verifyDir.appendingPathComponent("data", isDirectory: true) }
-        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(Desktop.isLocalTest ? "Library/Application Support/SenrelayLocalTest" : "Library/Application Support/ContextCore", isDirectory: true)
+        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(Desktop.isLocalTest ? "Library/Application Support/\(Desktop.testStorage)" : "Library/Application Support/ContextCore", isDirectory: true)
     }
     var serviceHomeDir: URL {
         if let dir = verifyHomeDirectory { return dir }
@@ -102,7 +109,11 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
     }
     var serviceLogsDir: URL {
         if let verifyDir = verificationDirectory { return verifyDir.appendingPathComponent("logs", isDirectory: true) }
-        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(Desktop.isLocalTest ? "Library/Logs/SenrelayLocalTest" : "Library/Logs/Senrelay", isDirectory: true)
+        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(Desktop.isLocalTest ? "Library/Logs/\(Desktop.testStorage)" : "Library/Logs/Senrelay", isDirectory: true)
+    }
+
+    var serviceLogPath: String {
+        (serviceLogsDir.appendingPathComponent("service.log").path as NSString).abbreviatingWithTildeInPath
     }
 
     lazy var language: String = {
@@ -381,7 +392,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
                 stopSucceeded = try self.runLocalCommand(stop, timeout: commandTimeout)
             } catch {
                 DispatchQueue.main.async {
-                    self.fail(self.text("未能自动更新本机后台服务。请先停止旧后台或查看 ~/Library/Logs/Senrelay/service.log，再点击“重新连接”。", "Could not automatically update the local service. Stop the older service or check ~/Library/Logs/Senrelay/service.log, then click Reconnect."), allowUpgrade: true)
+                    self.fail(self.text("未能自动更新本机后台服务。请先停止旧后台或查看 \(self.serviceLogPath)，再点击“重新连接”。", "Could not automatically update the local service. Stop the older service or check \(self.serviceLogPath), then click Reconnect."), allowUpgrade: true)
                 }
                 return
             }
@@ -415,7 +426,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
             }
             DispatchQueue.main.async {
                 guard stopSucceeded || portClearedBySignal else {
-                    self.fail(self.text("未能自动更新本机后台服务。请先停止旧后台或查看 ~/Library/Logs/Senrelay/service.log，再点击“重新连接”。", "Could not automatically update the local service. Stop the older service or check ~/Library/Logs/Senrelay/service.log, then click Reconnect."), allowUpgrade: true)
+                    self.fail(self.text("未能自动更新本机后台服务。请先停止旧后台或查看 \(self.serviceLogPath)，再点击“重新连接”。", "Could not automatically update the local service. Stop the older service or check \(self.serviceLogPath), then click Reconnect."), allowUpgrade: true)
                     return
                 }
                 do {
@@ -456,7 +467,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
                         return
                     }
                     if (500...599).contains(http.statusCode) {
-                        self.fail(self.text("本机服务返回内部错误（HTTP \(http.statusCode)）。请查看 ~/Library/Logs/Senrelay/service.log，然后点击“重新连接”重试。", "The local service returned an internal error (HTTP \(http.statusCode)). Review ~/Library/Logs/Senrelay/service.log, then click Reconnect."), allowUpgrade: true); return
+                        self.fail(self.text("本机服务返回内部错误（HTTP \(http.statusCode)）。请查看 \(self.serviceLogPath)，然后点击“重新连接”重试。", "The local service returned an internal error (HTTP \(http.statusCode)). Review \(self.serviceLogPath), then click Reconnect."), allowUpgrade: true); return
                     }
                     self.fail(self.text("本机端口被其他程序占用。请关闭冲突程序后点击“重新连接”；不会停止其他程序。", "Another program is using the local port. Close the conflicting program and click Reconnect. Other programs will not be stopped.")); return
                 }
@@ -480,7 +491,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
                     nextMayStart = false
                 }
                 guard attempt < self.verifyMaxAttempts else {
-                    self.fail(self.text("本机服务未能就绪。请查看 ~/Library/Logs/Senrelay/service.log，然后点击“重新连接”重试。", "The local service did not become ready. Review ~/Library/Logs/Senrelay/service.log, then click Reconnect.")); return
+                    self.fail(self.text("本机服务未能就绪。请查看 \(self.serviceLogPath)，然后点击“重新连接”重试。", "The local service did not become ready. Review \(self.serviceLogPath), then click Reconnect.")); return
                 }
                 let delay = self.verificationDirectory == nil ? 0.5 : 0.15
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { self.probe(attempt: attempt + 1, mayStart: nextMayStart) }
@@ -591,45 +602,42 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
             }
             return
         }
+        if verifyScenario == "workspace-exports" { verifyNextExport(); return }
         verifyRenderedUI(attempt: 0)
     }
     func verifyRenderedUI(attempt: Int) {
         let script = """
-        const nav = [...document.querySelectorAll('.main-nav button')];
-        const controls = [...document.querySelectorAll('.sidebar-controls > *')];
         const sidebar = document.querySelector('.sidebar');
-        const serviceOnline = Boolean(document.querySelector('.local-status .status-dot.online'));
-        if (!sidebar || nav.length !== 4 || nav.some(x => x.disabled) || !serviceOnline) return null;
-        const sleep = ms => new Promise(r => setTimeout(r, ms));
-        const waitPage = async () => {
-          for (let i = 0; i < 60; i++) {
-            const busy = document.querySelector('.skeleton-stack');
-            const heading = document.querySelector('.page-surface h1, .page-surface h2');
-            if (!busy && heading && heading.textContent.trim().length > 0) return heading.textContent.trim();
+        const serviceOnline = Boolean(sidebar?.querySelector('.local-status .status-dot.online'));
+        if (!sidebar || !serviceOnline) return null;
+        const destinations = [
+          ['home'], ['projects'], ['personal','memory'], ['personal','assets'],
+          ['personal','profile'], ['exchange'], ['agents'], ['usage'], ['settings'],
+        ];
+        const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+        const findLink = (page, section) => sidebar.querySelector(
+          '[data-route-page="' + page + '"]' + (section ? '[data-route-section="' + section + '"]' : '')
+        );
+        const waitPage = async (page, section) => {
+          for (let i = 0; i < 80; i++) {
             await sleep(50);
+            const params = new URLSearchParams(location.search);
+            const heading = document.querySelector('.page-surface h1, .page-surface h2')?.textContent.trim();
+            if ((params.get('page') || 'home') === page && (!section || params.get('section') === section)
+                && heading && !document.querySelector('.skeleton-stack')) return heading;
           }
           return '';
         };
         const pagesVisited = [];
-        for (const index of [0, 1, 2, 3]) {
-          const btn = document.querySelectorAll('.main-nav button')[index];
-          btn.click();
-          await sleep(40);
-          const heading = await waitPage();
-          const page = new URLSearchParams(location.search).get('page') || 'projects';
-          pagesVisited.push({page, heading, hasErrorBanner: Boolean(document.querySelector('.service-banner'))});
+        for (const [page, section] of destinations) {
+          const button = findLink(page, section);
+          if (!button || button.disabled) return null;
+          button.click();
+          const heading = await waitPage(page, section);
+          pagesVisited.push({page,section: section || '',heading,hasErrorBanner: Boolean(document.querySelector('.service-banner'))});
         }
-        const settingsBtn = document.querySelector('.sidebar-controls > button');
-        if (settingsBtn) {
-          settingsBtn.click();
-          await sleep(40);
-          const heading = await waitPage();
-          const page = new URLSearchParams(location.search).get('page') || 'settings';
-          pagesVisited.push({page, heading, hasErrorBanner: Boolean(document.querySelector('.service-banner'))});
-        }
-        document.querySelectorAll('.main-nav button')[0].click();
-        await sleep(40);
-        await waitPage();
+        findLink('home').click();
+        await waitPage('home');
         const themeBtns = [...document.querySelectorAll('.theme-switch button')];
         let themeSwitchOk = false;
         if (themeBtns.length === 3) {
@@ -644,25 +652,18 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
           const systemOk = themeBtns[2].getAttribute('aria-pressed') === 'true';
           themeSwitchOk = darkOk && lightOk && systemOk;
         }
-        const navAfter = [...document.querySelectorAll('.main-nav button')];
-        const controlsAfter = [...document.querySelectorAll('.sidebar-controls > *')];
-        const rects = controlsAfter.map(x => {const r=x.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}});
-        const names = navAfter.map(x=>x.querySelector('span').textContent);
-        const labels = navAfter.map(x => {
-          const span=x.querySelector('span'), r=span.getBoundingClientRect(), range=document.createRange();
-          range.selectNodeContents(span);
-          return {name:span.textContent,height:r.height,width:r.width,textWidth:range.getBoundingClientRect().width,lines:range.getClientRects().length,rowHeight:x.getBoundingClientRect().height};
-        });
-        const language = document.documentElement.lang.startsWith('zh') ? 'zh' : 'en';
-        const expectedPages = ['projects','personal','agents','usage','settings'];
-        const navHeight = navAfter[0].getBoundingClientRect().height;
-        const allPagesOk = JSON.stringify(pagesVisited.map(p=>p.page)) === JSON.stringify(expectedPages) && pagesVisited.every(p => p.heading.length > 0 && !p.hasErrorBanner);
         const sidebarBounds = sidebar.getBoundingClientRect();
-        const footerFits = rects.every((r,i)=>r.height>=24 && r.width>=24 && r.x>=sidebarBounds.x && r.x+r.width<=sidebarBounds.right+1 && r.y>=0 && r.y+r.height<=innerHeight && (i===0 || r.x>=rects[i-1].x+rects[i-1].width));
-        const navigationFits = labels.every(x=>x.rowHeight>=24 && x.height<=x.rowHeight && x.lines===1 && x.textWidth<=x.width+1);
-        const labelsLocalized = names.every(name=>name.trim().length>0 && (language!=='en' || !/[一-鿿]/.test(name))) && new Set(names).size===4;
-        const ok = labelsLocalized && controlsAfter.length === 3 && Math.max(...rects.map(x=>x.y))-Math.min(...rects.map(x=>x.y)) < 1 && footerFits && navigationFits && !document.querySelector('.secondary-nav') && allPagesOk && themeSwitchOk;
-        return {ok,names,labels,language,serviceOnline,serviceLabel:document.querySelector('.local-status').textContent.trim(),controls:rects,navHeight,sidebarWidth:sidebar.getBoundingClientRect().width,viewport:{width:innerWidth,height:innerHeight},url:location.href,pagesVisited,themeSwitchOk};
+        const language = document.documentElement.lang.startsWith('zh') ? 'zh' : 'en';
+        const labels = destinations.map(([page, section]) => {
+          const link = findLink(page, section), r = link.getBoundingClientRect();
+          return {name: link.getAttribute('aria-label') || link.textContent.trim(), width:r.width, height:r.height,
+                  fits:r.left>=sidebarBounds.left-1 && r.right<=sidebarBounds.right+1 && r.height>=24};
+        });
+        const names = labels.map(item=>item.name);
+        const labelsLocalized = names.every(name=>name && (language!=='en' || !/[一-鿿]/.test(name)));
+        const allPagesOk = pagesVisited.every(p => p.heading.length > 0 && !p.hasErrorBanner);
+        const ok = labelsLocalized && labels.every(item=>item.fits) && allPagesOk && themeSwitchOk;
+        return {ok,names,labels,language,serviceOnline,serviceLabel:sidebar.querySelector('.local-status').textContent.trim(),sidebarWidth:sidebarBounds.width,viewport:{width:innerWidth,height:innerHeight},url:location.href,pagesVisited,themeSwitchOk};
         """
         web.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { outcome in
             let value = try? outcome.get()
@@ -686,18 +687,41 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         }
     }
     func verifyResizeAndLanguageSync(initialLang: String, baseResult: [String: Any]) {
+        Task { @MainActor in
+            var sizes = [String: [String: Int]]()
+            let script = """
+            const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+            for (let i = 0; i < 30 && Math.abs(innerWidth - target) > 1; i++) await pause(50);
+            const toggle = document.querySelector('.mobile-header [aria-controls="workspace-navigation"]');
+            const drawer = document.getElementById('workspace-navigation');
+            if (!drawer) return 'missing navigation';
+            if (Math.abs(innerWidth - target) > 1 || document.documentElement.scrollWidth > innerWidth + 1) {
+              return 'viewport ' + innerWidth + ', document ' + document.documentElement.scrollWidth;
+            }
+            for (let i = 0; i < 20 && drawer.inert !== (target === 800); i++) await pause(50);
+            if (target === 800) {
+              if (!toggle || !toggle.getClientRects().length || !drawer.inert) return 'compact navigation unavailable';
+              toggle.click(); await pause(150);
+              if (drawer.inert || toggle.getAttribute('aria-expanded') !== 'true') return 'drawer did not open';
+              document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true})); await pause(150);
+              return drawer.inert && toggle.getAttribute('aria-expanded') === 'false' ? 'ok' : 'drawer did not close';
+            }
+            return !drawer.inert ? 'ok' : 'desktop navigation inert';
+            """
+            for (label, width, height) in [("min_800x560", 800, 560), ("medium_1080x700", 1080, 700), ("restored_1240x820", 1240, 820)] {
+                window.setContentSize(NSSize(width: width, height: height))
+                window.layoutIfNeeded()
+                let viewportOk = try? await web.callAsyncJavaScript(script, arguments: ["target": width], in: nil, contentWorld: .page)
+                guard viewportOk as? String == "ok" else { fail("Desktop layout check failed at " + label + ": " + (viewportOk as? String ?? "WebKit unavailable")); return }
+                sizes[label] = ["width": Int(window.contentView!.bounds.width), "height": Int(window.contentView!.bounds.height)]
+            }
+            var result = baseResult
+            result["window_resize_checks"] = sizes
+            verifyLanguageSync(initialLang: initialLang, baseResult: result)
+        }
+    }
+    func verifyLanguageSync(initialLang: String, baseResult: [String: Any]) {
         var result = baseResult
-        window.setContentSize(NSSize(width: 800, height: 560))
-        window.layoutIfNeeded()
-        let compactSize = ["width": Int(window.contentView!.bounds.width), "height": Int(window.contentView!.bounds.height)]
-        window.setContentSize(NSSize(width: 1080, height: 700))
-        window.layoutIfNeeded()
-        let mediumSize = ["width": Int(window.contentView!.bounds.width), "height": Int(window.contentView!.bounds.height)]
-        window.setContentSize(NSSize(width: 1240, height: 820))
-        window.layoutIfNeeded()
-        let restoredSize = ["width": Int(window.contentView!.bounds.width), "height": Int(window.contentView!.bounds.height)]
-        result["window_resize_checks"] = ["min_800x560": compactSize, "medium_1080x700": mediumSize, "restored_1240x820": restoredSize]
-
         let targetLang = initialLang == "zh" ? "en" : "zh"
         let toggleScript = """
         const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -738,13 +762,13 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
                     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
                     try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]).write(to: directory.appendingPathComponent("native-ui.json"))
                 } catch { self.fail(error.localizedDescription); return }
-                guard result["ok"] as? Bool == true else { self.fail("桌面导航或底部布局与参考截图不一致"); return }
+                guard result["ok"] as? Bool == true else { self.fail("桌面导航、页面内容或主题切换未通过验证"); return }
                 let config = WKSnapshotConfiguration()
                 config.afterScreenUpdates = true
-                config.rect = NSRect(x: 0, y: 0, width: 240, height: self.web.bounds.height)
+                config.rect = self.web.bounds
                 self.web.takeSnapshot(with: config) { image, error in
                     guard let image = image, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff), let png = bitmap.representation(using: .png, properties: [:]) else { self.fail("无法保存桌面渲染截图"); return }
-                    do { try png.write(to: directory.appendingPathComponent("native-sidebar.png")) } catch { self.fail(error.localizedDescription); return }
+                    do { try png.write(to: directory.appendingPathComponent("native-workspace.png")) } catch { self.fail(error.localizedDescription); return }
                     print("Native UI verification passed")
                     if self.verifyScenario == "actual-service-interruption" && self.recoveryStep == 0 {
                         self.verifyServiceInterruption(directory: directory)
@@ -824,14 +848,14 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         } catch { fail(error.localizedDescription); return }
         if complete { NSApp.terminate(nil); return }
         let script = """
-        const pages = ['projects','personal','agents','usage','settings'];
+        const pages = ['home','projects','personal','exchange','agents','usage','settings'];
         const index = cycle % pages.length;
-        const button = index === 3 ? document.querySelector('.sidebar-controls > button') : document.querySelectorAll('.main-nav button')[index];
+        const button = document.querySelector('.sidebar [data-route-page="' + pages[index] + '"]');
         if (!button || button.disabled) throw new Error('Navigation unavailable');
         button.click();
         for (let n = 0; n < 60; n++) {
           await new Promise(resolve => setTimeout(resolve, 50));
-          const current = new URLSearchParams(location.search).get('page') || 'projects';
+          const current = new URLSearchParams(location.search).get('page') || 'home';
           const heading = document.querySelector('.page-surface h1, .page-surface h2');
           if (current === pages[index] && heading?.textContent.trim() && !document.querySelector('.skeleton-stack')) {
             const health = await fetch('/health');
@@ -904,7 +928,14 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         alert.beginSheetModal(for: window) { _ in }
     }
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
-        let panel = NSSavePanel(); panel.nameFieldStringValue = URL(fileURLWithPath: suggestedFilename).lastPathComponent
+        let filename = URL(fileURLWithPath: suggestedFilename).lastPathComponent
+        if let directory = verificationDirectory, verifyScenario == "workspace-exports" {
+            guard Self.fixtureExportNames.indices.contains(exportStage), filename == Self.fixtureExportNames[exportStage]
+            else { completionHandler(nil); fail("Unexpected filename for native export"); return }
+            completionHandler(directory.appendingPathComponent(filename))
+            return
+        }
+        let panel = NSSavePanel(); panel.nameFieldStringValue = filename
         panel.beginSheetModal(for: window) { completionHandler($0 == .OK ? panel.url : nil) }
     }
 }

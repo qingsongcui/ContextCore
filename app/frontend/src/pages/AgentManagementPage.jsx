@@ -30,9 +30,10 @@ import { SharedLibrary, CatalogChoice, catalogPath } from '../components/agent-m
 import { ConsolePage } from './ConsolePage.jsx';
 import { agentGroup, agentGroupName, configurationChoices, configurationTarget, configurationVariants, nativeTargetName, primaryAgents } from '../lib/agentGroups.js';
 import '../styles/agent-experience.css';
+import '../styles/operations-studio.css';
 
-const PRIMARY = [['providers', '模型与账号'], ['mcp', '工具'], ['skill', '技能'], ['prompt', '使用规则']];
-const SECONDARY = [['accounts', '账号授权'], ['shared', '共享资源'], ['bundles', '配置方案'], ['plans', '更改记录'], ['connections', '历史采集与来源授权'], ['advanced', '高级管理']];
+const PRIMARY = [['connections', '历史采集与来源授权'], ['providers', '模型与账号'], ['mcp', '工具'], ['skill', '技能'], ['prompt', '使用规则']];
+const SECONDARY = [['accounts', '账号授权'], ['shared', '共享资源'], ['bundles', '配置方案'], ['plans', '更改记录'], ['advanced', '高级管理']];
 const ASSET_KINDS = new Set(['mcp', 'skill', 'prompt']);
 const cacheableDraft = value => value && value.draftValid !== false && JSON.stringify(redactEvidence(value)) === JSON.stringify(value);
 const formatBackendWarning = (detail, fallbackStatus = 409) => {
@@ -91,6 +92,7 @@ export function AgentManagementPage({ agentId = '', section = '', onAgentChange,
   const requestedTab = aliases[section] || section || 'providers';
   const tab = [...PRIMARY, ...SECONDARY, ['library']].some(([id]) => id === requestedTab) ? requestedTab : 'providers';
   const effectiveAgentId = configurationTarget(hostList, agentId, tab);
+  const directoryConnections = useResource(effectiveAgentId ? null : '/api/connections', revision);
   const selected = hostList.find(item => item.id === effectiveAgentId);
   const rootScope = selected?.config_root;
   const scope = `${effectiveAgentId}:${tab}` + (rootScope ? JSON.stringify([rootScope.status, rootScope.path]) : '');
@@ -129,9 +131,9 @@ export function AgentManagementPage({ agentId = '', section = '', onAgentChange,
       setPinBusy(false);
     }
   }
-  return <div className="agent-experience">
+  return <div className="agent-experience operations-studio">
     <ErrorNotice error={shortcutError || preferences.error} />
-    {!effectiveAgentId ? <><PageHeader title={t('Agent 管理')} description={t('选择一个助手，管理它使用的模型、账号和资源。')} actions={<Button icon={RefreshCw} onClick={hosts.reload}>{t('刷新')}</Button>} /><ResourceState resource={hosts}><AgentDirectory hosts={primaryAgents(hostList)} favorites={favorites.map(agentGroup)} recent={recent.map(agentGroup)} nameOf={agentGroupName} onChoose={choose} onPin={pinHost} busy={pinBusy} /></ResourceState></> : <ResourceState resource={hosts}>{selected ? <AgentWorkspace key={scope} host={selected} favorites={favorites.map(agentGroup)} recent={recent.map(agentGroup)} allHosts={list(hosts.data)} tab={tab} revision={revision} onChanged={onChanged} projects={projects} navigate={navigate} choose={choose} scope={scope} scopeRef={scopeRef} drafts={drafts} /> : !hosts.loading && !hosts.error ? <EmptyState title={t('找不到这个助手')} body={t('地址中的助手不在当前列表中，请重新选择。')} action={<Button onClick={() => choose('', '')}>{t('返回助手列表')}</Button>} /> : null}</ResourceState>}
+    {!effectiveAgentId ? <><PageHeader title={t('Agent 管理')} description={t('管理本机助手的读取权限、模型账号与工具。')} actions={<Button icon={RefreshCw} onClick={() => { hosts.reload(); directoryConnections.reload(); }}>{t('刷新')}</Button>} /><ResourceState resource={hosts}><AgentDirectory connections={directoryConnections} hosts={primaryAgents(hostList)} favorites={favorites.map(agentGroup)} recent={recent.map(agentGroup)} nameOf={agentGroupName} onChoose={choose} onPin={pinHost} busy={pinBusy} /></ResourceState></> : <ResourceState resource={hosts}>{selected ? <AgentWorkspace key={scope} host={selected} favorites={favorites.map(agentGroup)} recent={recent.map(agentGroup)} allHosts={list(hosts.data)} tab={tab} revision={revision} onChanged={onChanged} projects={projects} navigate={navigate} choose={choose} scope={scope} scopeRef={scopeRef} drafts={drafts} /> : !hosts.loading && !hosts.error ? <EmptyState title={t('找不到这个助手')} body={t('地址中的助手不在当前列表中，请重新选择。')} action={<Button onClick={() => choose('', '')}>{t('返回助手列表')}</Button>} /> : null}</ResourceState>}
   </div>;
 }
 
@@ -845,9 +847,9 @@ export function AgentWorkspace({ host, favorites = DEFAULT_SHORTCUTS, recent = [
         : <p>{t('请让助手与续境使用主目录下同一个未链接的绝对路径，然后重新启动续境。也可移除自定义设置并使用默认目录。')}</p> : null}
     </section> : null}
     <div className="cc-workspace-nav-bar">
-      <nav className="agent-categories" aria-label={t('助手设置分类')}>{PRIMARY.map(([id, label]) => <Button key={id} disabled={busy} variant={tab === id ? 'primary' : 'secondary'} aria-current={tab === id ? 'page' : undefined} onClick={() => changeScope(hostId, id)}>{t(label)}</Button>)}</nav>
+      <nav className="agent-categories" aria-label={t('助手设置分类')}>{PRIMARY.map(([id, label]) => <Button key={id} disabled={busy} variant={tab === id ? 'primary' : 'secondary'} aria-current={tab === id ? 'page' : undefined} onClick={() => changeScope(hostId, id)}>{id === 'connections' ? t('接入与授权') : t(label)}</Button>)}</nav>
       <div className="cc-workspace-nav-right">
-        <details className="agent-status" onToggle={event => { if (event.currentTarget.open) event.currentTarget.parentElement?.querySelectorAll(':scope > details[open]').forEach(node => { if (node !== event.currentTarget) node.removeAttribute('open'); }); }}><summary>{t('支持范围与验证')}</summary><div className="cc-popover-sheet"><div><strong>{t('配置格式')}</strong><StatusBadge value={host.configuration_status} /></div><div><strong>{t('本机实际加载')}</strong><StatusBadge value={host.verification_status} /></div><p>{t('管理能力与上下文能力分别验证；配置成功不等于已经登录、加载或调用成功。')}</p>{host.configuration_notice && (host.shared_configuration !== false || !['codex', 'codex-desktop'].includes(hostId)) ? <p className="management-host-note" role="status">{hostNotice(hostId, 'configuration', host.configuration_notice)}</p> : null}<div className="toolbar-actions"><Button disabled={busy || tab === 'connections'} onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); changeScope(hostId, 'connections'); }}>{t('历史采集与来源授权')}</Button></div><EvidenceDetails value={host} title={t('此宿主的能力与验证证据')} /></div></details>
+        <details className="agent-status" onToggle={event => { if (event.currentTarget.open) event.currentTarget.parentElement?.querySelectorAll(':scope > details[open]').forEach(node => { if (node !== event.currentTarget) node.removeAttribute('open'); }); }}><summary>{t('支持范围与验证')}</summary><div className="cc-popover-sheet"><div><strong>{t('配置格式')}</strong><StatusBadge value={host.configuration_status} /></div><div><strong>{t('本机实际加载')}</strong><StatusBadge value={host.verification_status} /></div><p>{t('管理能力与上下文能力分别验证；配置成功不等于已经登录、加载或调用成功。')}</p>{host.configuration_notice && (host.shared_configuration !== false || !['codex', 'codex-desktop'].includes(hostId)) ? <p className="management-host-note" role="status">{hostNotice(hostId, 'configuration', host.configuration_notice)}</p> : null}<EvidenceDetails value={host} title={t('此宿主的能力与验证证据')} /></div></details>
         <details className={`agent-secondary ${SECONDARY.some(([id]) => id === tab) || tab === 'library' ? 'is-active' : ''}`} onToggle={event => { if (event.currentTarget.open) event.currentTarget.parentElement?.querySelectorAll(':scope > details[open]').forEach(node => { if (node !== event.currentTarget) node.removeAttribute('open'); }); }}><summary>{t('更多设置与共享资料库')}{SECONDARY.some(([id]) => id === tab) || tab === 'library' ? ` · ${category}` : ''}</summary><div className="toolbar-actions">{SECONDARY.map(([id, label]) => <Button key={id} disabled={busy} onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); changeScope(hostId, id); }} aria-current={tab === id ? 'page' : undefined}>{t(label)}</Button>)}<Button disabled={busy} onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); changeScope(hostId, 'library'); }}>{t('共享资料库')}</Button><Button onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); navigate?.('usage', { agent: host.registry_host_id || hostId }); }}>{t('使用情况')}</Button></div></details>
       </div>
     </div>

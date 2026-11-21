@@ -1,10 +1,11 @@
 import { t } from "../lib/i18n.jsx";
 import { useState } from 'react';
-import { Check, CircleDot, GitCompare } from 'lucide-react';
+import { Check, GitCompare } from 'lucide-react';
 import { mutate } from '../lib/api.js';
 import { useResource } from '../lib/useResource.js';
 import { Badge, Button, EmptyState, ErrorNotice, Field, Modal, PageHeader, ResourceState, formatTime } from '../components/ui.jsx';
 import { Markdown } from '../components/Markdown.jsx';
+import '../styles/operation-preferences.css';
 const RESOLUTIONS = {
   keep: '保留原结论',
   replace: '采用新结论',
@@ -39,7 +40,7 @@ function ConflictItem({
   const [showDiff, setShowDiff] = useState(false);
   const unavailable = !existing.data || existing.loading || !!existing.error;
   const diffOps = existing.data ? computeLineDiff(existing.data.content, item.proposed?.content) : [];
-  return <article className="conflict-panel"><header><div><div className="meta-line"><Badge>{item.status === 'resolved' ? t("已处理") : t("需要你的判断")}</Badge>{existing.data ? <Button icon={GitCompare} onClick={() => setShowDiff(v => !v)}>{showDiff ? t("并排视图") : t("差异对比 (Diff)")}</Button> : null}</div><h2>{item.proposed?.title || t("有一条记忆的更新，需要你确认")}</h2><p>{item.reason}</p></div><time>{formatTime(item.created_at)}</time></header>
+  return <article className="conflict-panel"><header><div><div className="meta-line"><Badge>{item.status === 'resolved' ? t("已处理") : t("需要你的判断")}</Badge>{existing.data ? <Button icon={GitCompare} aria-pressed={showDiff} onClick={() => setShowDiff(v => !v)}>{showDiff ? t("并排视图") : t("差异对比 (Diff)")}</Button> : null}</div><h2>{item.proposed?.title || t("有一条记忆的更新，需要你确认")}</h2><p>{item.reason}</p></div><time dateTime={item.created_at}>{formatTime(item.created_at)}</time></header>
     {showDiff && existing.data ? <div className="conflict-diff-box" aria-label={t("差异对比")}>{diffOps.length ? diffOps.map((op, idx) => <div key={idx} className={`diff-line diff-${op.type}`}><span className="diff-marker">{op.type === 'added' ? '+' : op.type === 'removed' ? '−' : ' '}</span><span>{op.text}</span></div>) : <p className="muted">{t("两份内容行级文本一致。")}</p>}</div> : <div className="conflict-comparison"><section><h3>{item.status === 'resolved' ? t("当前内容") : t("已有内容")}</h3><ResourceState resource={existing}>{existing.data ? <><small>{t("版本")} {existing.data.version}</small><Markdown>{existing.data.content}</Markdown></> : <p>{t("原内容看不到了。先核对来源，再决定怎么处理。")}</p>}</ResourceState></section><section><h3>{t("提出的更新")}</h3><Markdown>{item.proposed?.content || t("没有可显示的新内容")}</Markdown></section></div>}
     {item.status === 'resolved' ? <p className="resolution"><Check size={16} />{t("已按你的选择处理：{resolution}", { resolution: t(RESOLUTIONS[item.resolution] || item.resolution) })}</p> : <footer>{Object.entries(RESOLUTIONS).map(([resolution, label]) => <Button key={resolution} variant={resolution === 'replace' ? 'primary' : 'secondary'} disabled={unavailable} onClick={() => onChoose({
         item,
@@ -115,18 +116,45 @@ export function InboxPage({
   onChanged
 }) {
   const [showResolved, setShowResolved] = useState(false);
+  const [activeId, setActiveId] = useState('');
   const [selection, setSelection] = useState(null);
   const [notice, setNotice] = useState('');
   const resource = useResource('/api/conflicts', revision);
   const rows = (resource.data || []).filter(item => showResolved || item.status === 'pending');
+  const active = rows.find(item => item.id === activeId) || rows[0];
   function changed(message) {
     if (message) setNotice(message);
     resource.reload();
     onChanged();
   }
-  return <><PageHeader title={t("待确认")} description={t("普通记忆会自动生效。这里只处理真的拿不准的冲突，平时不用来批东西。")} actions={<label className="check-label"><input type="checkbox" checked={showResolved} onChange={event => setShowResolved(event.target.checked)} />{t("包含已处理")}</label>} />
-    {notice ? <p className="operation-notice" role="status">{notice}</p> : null}
-    <ResourceState resource={resource}>{rows.length ? <div className="conflicts-list">{rows.map(item => <ConflictItem key={item.id} item={item} revision={revision} onChoose={setSelection} />)}</div> : <EmptyState title={showResolved ? t("还没有冲突记录") : t("没有等待处理的冲突")} body={t("目前不需要你做判断。你可以返回项目继续工作；只有记忆更新存在分歧时，才会出现在这里。")} action={<span className="quiet-confirm"><CircleDot size={15} /> {t("不打扰，也不擅自决定")}</span>} />}</ResourceState>
+  return <div className="review-studio">
+    <PageHeader title={t("待确认")} description={t("两条记忆有分歧时，在这里核对新旧结论。")} />
+    <ResourceState resource={resource}>
+      <div className="review-toolbar">
+        <span>{t("当前列表 · {count} 条", { count: rows.length })}</span>
+        <label className="check-label"><input type="checkbox" checked={showResolved}
+          onChange={event => setShowResolved(event.target.checked)} />{t("包含已处理")}</label>
+      </div>
+      {notice ? <p className="operation-notice" role="status">{notice}</p> : null}
+      {active ? <div className="review-layout" data-multiple={rows.length > 1}>
+        {rows.length > 1 ? <aside className="review-queue">
+          <nav aria-label={t("选择待核对的记忆")}>{rows.map(item => <button key={item.id}
+            aria-current={item.id === active.id ? 'true' : undefined} onClick={() => setActiveId(item.id)}>
+            <strong>{item.proposed?.title || t("有一条记忆的更新，需要你确认")}</strong>
+            <small>{item.status === 'resolved' ? t("已处理") : t("需要你的判断")} · {formatTime(item.created_at)}</small>
+          </button>)}</nav>
+          <label className="review-picker"><span>{t("选择待核对的记忆")}</span>
+            <select value={active.id} onChange={event => setActiveId(event.target.value)}>
+              {rows.map(item => <option key={item.id} value={item.id}>
+                {item.proposed?.title || t("有一条记忆的更新，需要你确认")} · {item.status === 'resolved' ? t("已处理") : t("需要你的判断")}
+              </option>)}
+            </select>
+          </label>
+        </aside> : null}
+        <ConflictItem key={active.id} item={active} revision={revision} onChoose={setSelection} />
+      </div> : <EmptyState title={showResolved ? t("还没有冲突记录") : t("没有等待处理的冲突")}
+        body={t("目前不需要你做判断。你可以返回项目继续工作；只有记忆更新存在分歧时，才会出现在这里。")} />}
+    </ResourceState>
     {selection ? <ConflictConfirmation selection={selection} revision={revision} onClose={() => setSelection(null)} onChanged={changed} /> : null}
-  </>;
+  </div>;
 }

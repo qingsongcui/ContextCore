@@ -1,6 +1,6 @@
 import { t } from "../lib/i18n.jsx";
 import { useState } from 'react';
-import { Monitor, Moon, Power, Sun } from 'lucide-react';
+import { ChevronDown, Database, Monitor, Moon, Power, ShieldCheck, Sun } from 'lucide-react';
 import { mutate } from '../lib/api.js';
 import { useResource } from '../lib/useResource.js';
 import { useTheme } from '../lib/theme.js';
@@ -9,6 +9,19 @@ import { RetrievalSettings } from '../components/RetrievalSettings.jsx';
 import { ProcessingStatus } from '../components/ProcessingStatus.jsx';
 import { LanguageSwitch } from '../components/LanguageSwitch.jsx';
 import { AuditPage } from './AuditPage.jsx';
+import '../styles/operation-preferences.css';
+
+function SettingsGroup({ title, description, icon: Icon, children }) {
+  return <details className="preferences-group">
+    <summary>
+      <Icon size={21} aria-hidden="true" />
+      <span><strong>{title}</strong><small>{description}</small></span>
+      <ChevronDown size={17} className="preferences-chevron" aria-hidden="true" />
+    </summary>
+    <div className="preferences-group-body">{children}</div>
+  </details>;
+}
+
 export function SettingsPage({
   revision,
   status,
@@ -29,6 +42,7 @@ export function SettingsPage({
   const [backupError, setBackupError] = useState(null);
   const [stopping, setStopping] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
+  const [diagnosticsVisited, setDiagnosticsVisited] = useState(false);
   const stopStatus = status?.service?.stop_status;
   const serviceRunning = status?.ok === true && status?.service?.running === true;
   async function autostart(value) {
@@ -84,13 +98,13 @@ export function SettingsPage({
     }
   }
   const autostartInstalled = resource.data?.autostart_installed ?? status?.service?.autostart_installed;
-  return <>
+  return <div className="preferences-studio">
     <PageHeader title={t("设置")} description={t("调整外观和语言，查看本机服务状态、数据库备份与变更记录。")} />
     <ErrorNotice error={error} />{notice ? <p className="operation-notice" role="status">{notice}</p> : null}
-    <section className="settings-section group"><header><h2>{t("外观")}</h2><p>{t("界面清爽，内容清楚。")}</p></header><div className="theme-options" role="group" aria-label={t("界面主题")}>{[['light', Sun, t("浅色")], ['dark', Moon, t("深色")], ['system', Monitor, t("跟随系统")]].map(([value, Icon, label]) => <button className={theme === value ? 'selected' : ''} key={value} aria-pressed={theme === value} onClick={() => setTheme(value)}><span className={`theme-preview theme-preview-${value}`}><i /><i /><i /></span><span><Icon size={16} />{label}</span></button>)}</div></section>
-    <section className="settings-section group"><header><h2>{t("语言")}</h2><p>{t("只改变界面文字，不会翻译或改写你的聊天和记忆。")}</p></header><LanguageSwitch /></section>
-    <section className="settings-section group"><header><h2>{t("权限分开管理")}</h2><p>{t("读取哪些聊天、修改哪些助手配置，均在所选助手中独立确认。登记项目目录不等于允许读取。")}</p></header><Button onClick={() => navigate?.('agents')}>{t("选择助手并管理接入")}</Button></section>
-    <ResourceState resource={resource}>{resource.data ? <>
+    <section className="preferences-appearance"><h2>{t("外观")}</h2><div className="theme-options" role="group" aria-label={t("界面主题")}>{[['light', Sun, t("浅色")], ['dark', Moon, t("深色")], ['system', Monitor, t("跟随系统")]].map(([value, Icon, label]) => <button className={theme === value ? 'selected' : ''} key={value} aria-pressed={theme === value} onClick={() => setTheme(value)}><span className={`theme-preview theme-preview-${value}`}><i /><i /><i /></span><span><Icon size={16} />{label}</span></button>)}</div></section>
+    <section className="preferences-language"><header><h2>{t("语言")}</h2><p>{t("只改变界面文字，不会翻译或改写你的聊天和记忆。")}</p></header><LanguageSwitch /></section>
+    <SettingsGroup title={t("本机运行与备份")} description={t("服务状态、开机启动和数据库快照")} icon={Database}>
+      <ResourceState resource={resource}>{resource.data ? <>
       <section className="settings-section group"><header><h2>{t("本机运行")}</h2><p>{t("关掉网页不会停止采集；只有明确停止服务，后台才会真正停下。")}</p></header>
         <div className="setting-row"><div><h3>{t("开机自动启动")}</h3><p>{t("建议开启。打开后会写入并注册本机登录项；下面显示实际是否已安装。")}</p></div><label className="switch"><input type="checkbox" aria-label={t("开机自动启动")} checked={resource.data.autostart ?? false} disabled={busy || resource.loading || !!resource.error || typeof resource.data.autostart !== 'boolean'} onChange={event => autostart(event.target.checked)} /><span /></label></div>
         <div className="setting-row"><div><h3>{t("实际启动项")}</h3><p>{!status && typeof resource.data?.autostart_installed !== 'boolean' ? t("读不到服务状态，暂时判断不了启动项装没装。") : autostartInstalled ? t("系统启动项已安装。") : t("还没检测到启动项。需要在本机服务里执行安装命令——网页不会替你绕过系统授权。")}</p></div><Badge>{!status && typeof resource.data?.autostart_installed !== 'boolean' ? t("未知") : autostartInstalled ? t("已安装") : t("未安装")}</Badge></div>
@@ -103,8 +117,16 @@ export function SettingsPage({
         <div className="setting-row"><div><h3>{t("创建数据库快照")}</h3><p>{backupResult?.backup_path || backupResult?.path ? <><span>{t("最新备份路径：")}</span><code>{backupResult.backup_path || backupResult.path}</code></> : t("备份文件保存在本机数据目录的 backups 文件夹中，不会上传到外部服务。")}</p>{backupResult ? <p className="operation-notice" role="status">{backupResult.integrity === 'ok' ? t("完整性校验已通过（quick_check: ok）") : t("完整性校验状态：{status}", { status: backupResult.integrity || t("未知") })}</p> : null}</div><Button busy={backingUp} disabled={busy || backingUp} onClick={backupDatabase}>{t("立即备份数据库")}</Button></div>
         <ErrorNotice error={backupError} />
       </section>
-      {managementAvailable ? <details className="consumer-advanced"><summary>{t("高级：增强搜索与处理诊断")}</summary><RetrievalSettings revision={revision} /><ProcessingStatus revision={revision} /></details> : null}<section className="settings-section group"><header><h2>{t("已确定的数据规则")}</h2></header><dl className="policy-list"><div><dt>{t("共享范围")}</dt><dd>{t("接入的 Agent 都能读写所有项目的内容。")}</dd></div><div><dt>{t("凭据处理")}</dt><dd>{t("原始记录不会自动打码，里面可能有密钥和登录信息。")}</dd></div><div><dt>{t("内容保存")}</dt><dd>{t("一直保留，直到你主动删除。聊天和记忆分开删，删了就没了，没有回收站。")}</dd></div><div><dt>{t("变更记录")}</dt><dd>{t("只记谁在什么时候改了什么，不复制正文和密钥；平常查看不会逐条记。")}</dd></div><div><dt>{t("通知")}</dt><dd>{t("只有要紧的事才在网页上提示，平常不打扰你。")}</dd></div></dl><Button onClick={() => setShowAudit(value => !value)}>{t("查看变更记录")}</Button>{showAudit ? <div className="embedded-audit"><AuditPage revision={revision} /></div> : null}</section>
-    </> : null}</ResourceState>
+      {managementAvailable ? <details className="consumer-advanced" onToggle={event => { if (event.currentTarget.open) setDiagnosticsVisited(true); }}>
+        <summary>{t("高级：增强搜索与处理诊断")}</summary>
+        {diagnosticsVisited ? <><RetrievalSettings revision={revision} /><ProcessingStatus revision={revision} /></> : null}
+      </details> : null}
+      </> : null}</ResourceState>
+    </SettingsGroup>
+    <SettingsGroup title={t("权限与数据记录")} description={t("助手接入、数据保留和变更记录")} icon={ShieldCheck}>
+    <section className="settings-section group"><header><h2>{t("权限分开管理")}</h2><p>{t("读取哪些聊天、修改哪些助手配置，均在所选助手中独立确认。登记项目目录不等于允许读取。")}</p></header><Button onClick={() => navigate?.('agents')}>{t("选择助手并管理接入")}</Button></section>
+      <section className="settings-section group"><header><h2>{t("已确定的数据规则")}</h2></header><dl className="policy-list"><div><dt>{t("共享范围")}</dt><dd>{t("接入的 Agent 都能读写所有项目的内容。")}</dd></div><div><dt>{t("凭据处理")}</dt><dd>{t("原始记录不会自动打码，里面可能有密钥和登录信息。")}</dd></div><div><dt>{t("内容保存")}</dt><dd>{t("一直保留，直到你主动删除。聊天和记忆分开删，删了就没了，没有回收站。")}</dd></div><div><dt>{t("变更记录")}</dt><dd>{t("只记谁在什么时候改了什么，不复制正文和密钥；平常查看不会逐条记。")}</dd></div><div><dt>{t("通知")}</dt><dd>{t("只有要紧的事才在网页上提示，平常不打扰你。")}</dd></div></dl><Button aria-expanded={showAudit} onClick={() => setShowAudit(value => !value)}>{t("查看变更记录")}</Button>{showAudit ? <div className="embedded-audit"><AuditPage revision={revision} embedded /></div> : null}</section>
+    </SettingsGroup>
     {stopping ? <Modal title={t("停止本机服务？")} busy={busy} onClose={() => setStopping(false)}><p className="modal-copy">{t("对话采集会暂停，网页也会断开与本机服务的连接。已保存的内容仍在；再次使用前请重新启动服务。")}</p><ErrorNotice error={error} /><footer className="modal-actions"><Button onClick={() => setStopping(false)}>{t("取消")}</Button><Button variant="danger" busy={busy} onClick={stop}>{t("确认停止")}</Button></footer></Modal> : null}
-  </>;
+  </div>;
 }

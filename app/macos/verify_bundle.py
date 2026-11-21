@@ -58,9 +58,12 @@ with tempfile.TemporaryDirectory(prefix='senrelay-desktop-check-') as tmp:
                     return json.load(response)
             # Exercise management inside the real frozen runtime, with a clean
             # temporary home and no credentials, host execution or model calls.
+            # Use an explicit loopback endpoint so split-horizon DNS cannot turn
+            # this candidate into a blocked private-address fixture. No requests go there.
+            native_endpoint = 'http://127.0.0.1:18998/v1'
             (home / '.codex').mkdir(exist_ok=True)
             (home / '.codex/config.toml').write_text(
-                '[model_providers.personal]\nname = "Personal"\nbase_url = "https://provider.example/v1"\nwire_api = "responses"\n')
+                f'[model_providers.personal]\nname = "Personal"\nbase_url = "{native_endpoint}"\nwire_api = "responses"\n')
             created = post('/api/manage/providers/setup', {'request_id': 'bundle-smoke-setup-0001', 'host_id': 'codex',
                 'provider': {'name': 'Bundle fixture', 'base_url': 'http://127.0.0.1:18999/v1', 'protocol': 'openai'}, 'model_id': 'bundle-fixture-model'})
             plan = post('/api/manage/plans', {'host_id': 'codex', 'provider_id': created['provider']['id'], 'model_id': created['model']['id'], 'activate_provider': True})
@@ -82,7 +85,7 @@ with tempfile.TemporaryDirectory(prefix='senrelay-desktop-check-') as tmp:
             codex_quota = next(item for item in quotas if item['id'] == 'native-codex')
             assert codex_quota['last_attempt_at'] is None and codex_quota['snapshot'] is None
             native = post('/api/manage/hosts/codex/native/preview', {'kind': 'providers'})
-            assert native['status'] == 'ready' and any(item.get('available') and item.get('base_url') == 'https://provider.example/v1' for item in native['candidates'])
+            assert native['status'] == 'ready' and any(item.get('available') and item.get('base_url') == native_endpoint for item in native['candidates'])
             usage = {'origin': 'proxy', 'logical_request_id': 'packaged-request',
                      'host_id': 'codex', 'model': 'test', 'raw_usage': {}}
             post('/api/usage/ingest', {'observations': [

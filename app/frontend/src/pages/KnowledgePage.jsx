@@ -555,7 +555,8 @@ export function ContentDetail({
   onBack,
   onChanged,
   onProject,
-  onOpenTasks
+  onOpenTasks,
+  backLabel = t('返回列表')
 }) {
   const [stack, setStack] = useState([{ kind: 'content', id }]);
   const current = stack[stack.length - 1];
@@ -586,7 +587,7 @@ export function ContentDetail({
       projects={projects}
       revision={revision}
       onBack={back}
-      backLabel={stack.length > 1 ? t('返回上一条内容') : t('返回列表')}
+      backLabel={stack.length > 1 ? t('返回上一条内容') : backLabel}
       onChanged={onChanged}
       onProject={onProject}
       onOpen={open}
@@ -697,7 +698,7 @@ function ContentRecord({
       : t('当前有效');
 
   return (
-    <article className="content-detail">
+    <article className="content-detail evidence-reader">
       <div className="detail-toolbar">
         <Button icon={ArrowLeft} onClick={onBack}>{backLabel}</Button>
         {item ? (
@@ -760,7 +761,14 @@ function ContentRecord({
       <ResourceState resource={resource}>
         {item ? (
           <>
-            <div className="reading-heading">
+            <header className="reading-heading">
+              <h2>{item.heading || item.title}</h2>
+              <p className="evidence-byline">
+                <span>{AGENTS[item.agent] || item.agent || t('人工维护')}</span>
+                {item.created_at && <time dateTime={item.created_at}>{t('创建于 {time}', { time: formatTime(item.created_at) })}</time>}
+                {item.updated_at && <time dateTime={item.updated_at}>{t('更新于 {time}', { time: formatTime(item.updated_at) })}</time>}
+                {item.version != null && <span>{t('版本 {version}', { version: item.version })}</span>}
+              </p>
               <div className="meta-line">
                 {itemPinned ? <Badge className="badge-pinned">{t('常驻核心')}</Badge> : null}
                 <Badge>{t(CATEGORIES[item.category] || item.category)}</Badge>
@@ -775,7 +783,7 @@ function ContentRecord({
                     {t('所属项目：')}{owner.name}{owner.status === 'archived' ? t('（已归档）') : ''}
                   </Button>
                 ) : (
-                  <span>{t('全局通用偏好')}</span>
+                  <span>{item.kind === 'document' || item.project_id ? t('项目待定') : t('全局通用偏好')}</span>
                 )}
               </div>
 
@@ -807,12 +815,6 @@ function ContentRecord({
                 </div>
               ) : null}
 
-              <h2>{item.heading || item.title}</h2>
-              <p>
-                {AGENTS[item.agent] || item.agent || t('人工维护')} {t('· 创建于')} {formatTime(item.created_at)}{' '}
-                {t('· 更新于')} {formatTime(item.updated_at)} {t('· 版本')} {item.version}
-              </p>
-
               {applicabilityTags.length ? (
                 <div className="applicability-tags" aria-label={t('适用条件')}>
                   {applicabilityTags.map(tag => (
@@ -824,14 +826,51 @@ function ContentRecord({
               <div className="tags">
                 {item.tags?.filter(tag => !/^(?:pinned$|implicit_auto$|role:|message_index:|source_version:|stance:)/.test(tag)).map(tag => <span key={tag}>#{tag}</span>)}
               </div>
-            </div>
+            </header>
 
             {!(item.tags?.includes('implicit_auto') && item.sources?.some(source => source.quote === item.content)) &&
               <Markdown>{item.content}</Markdown>}
 
+            <section className="provenance">
+              <h3>{t('内容来源')}</h3>
+              {item.sources?.length ? (
+                item.sources.map((source, index) => (
+                  <div key={`${source.id}-${index}`} className="source-block">
+                    <div className="source-row">
+                      <FileText size={16} />
+                      <span>{source.title || t('来源记录')}</span>
+                      {source.agent ? <Badge>{AGENTS[source.agent] || source.agent}</Badge> : null}
+                      {source.deleted ? (
+                        <Badge>{t('原始记录已删除')}</Badge>
+                      ) : !source.id ? (
+                        <Badge>{t('来源标识不可用')}</Badge>
+                      ) : (
+                        <Button onClick={() => onOpen(source.kind === 'conversation' ? 'conversation' : 'content', source.id)}>
+                          {source.kind === 'conversation' ? t('查看原话') : t('查看文档')}
+                        </Button>
+                      )}
+                    </div>
+                    {source.quote ? <blockquote className="source-quote">{source.quote}</blockquote> : null}
+                  </div>
+                ))
+              ) : (
+                <p>{t('未关联可追溯的原始会话或文档。')}</p>
+              )}
+              {item.related_ids?.length ? (
+                <>
+                  <h3>{t('关联内容')}</h3>
+                  <div className="toolbar-actions">
+                    {item.related_ids.map(relatedId => (
+                      <RelatedContentLink key={relatedId} id={relatedId} revision={revision} onOpen={onOpen} />
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </section>
+
             {item.kind !== 'document' ? (
-              <section className="usage-receipt-section">
-                <h3>{t('Agent 使用与引用回执')}</h3>
+              <details className="usage-receipt-section evidence-disclosure">
+                <summary>{t('Agent 使用与引用回执')}</summary>
                 <div className="usage-receipt-summary">
                   <UsageSummaryBadge usageSummary={item.usage_summary} />
                   <p className="muted">
@@ -871,45 +910,8 @@ function ContentRecord({
                     ))}
                   </ul>
                 ) : null}
-              </section>
+              </details>
             ) : null}
-
-            <section className="provenance">
-              <h3>{t('内容来源')}</h3>
-              {item.sources?.length ? (
-                item.sources.map((source, index) => (
-                  <div key={`${source.id}-${index}`} className="source-block">
-                    <div className="source-row">
-                      <FileText size={16} />
-                      <span>{source.title || t('来源记录')}</span>
-                      {source.agent ? <Badge>{AGENTS[source.agent] || source.agent}</Badge> : null}
-                      {source.deleted ? (
-                        <Badge>{t('原始记录已删除')}</Badge>
-                      ) : !source.id ? (
-                        <Badge>{t('来源标识不可用')}</Badge>
-                      ) : (
-                        <Button onClick={() => onOpen(source.kind === 'conversation' ? 'conversation' : 'content', source.id)}>
-                          {source.kind === 'conversation' ? t('查看原话') : t('查看文档')}
-                        </Button>
-                      )}
-                    </div>
-                    {source.quote ? <blockquote className="source-quote">{source.quote}</blockquote> : null}
-                  </div>
-                ))
-              ) : (
-                <p>{t('未关联可追溯的原始会话或文档。')}</p>
-              )}
-              {item.related_ids?.length ? (
-                <>
-                  <h3>{t('关联内容')}</h3>
-                  <div className="toolbar-actions">
-                    {item.related_ids.map(relatedId => (
-                      <RelatedContentLink key={relatedId} id={relatedId} revision={revision} onOpen={onOpen} />
-                    ))}
-                  </div>
-                </>
-              ) : null}
-            </section>
 
             {history ? (
               <VersionHistory
@@ -1492,7 +1494,7 @@ export function KnowledgePage({
   }
 
   return (
-    <section className="content-browser">
+    <section className={kind === 'document' ? 'content-browser evidence-documents' : 'content-browser'}>
       {kind === 'memory' ? (
         <div className="memory-workbench-bar">
           <div className="memory-workbench-switch" role="tablist" aria-label={t('记忆分层工作台')}>
@@ -1545,7 +1547,7 @@ export function KnowledgePage({
               <p>
                 {kind === 'memory'
                   ? t('分层管理常驻核心规则、使用偏好与项目经验；支持一键去重整理与 AGENTS.md 导出。')
-                  : t('你的资料，也是每个 Agent 能直接用的背景。')}
+                  : t('保存项目文档和参考材料，供 Agent 查阅。')}
               </p>
             </div>
             <div className="toolbar-actions">
@@ -1831,6 +1833,7 @@ export function KnowledgePage({
                             </label>
 
                             <button className="content-row-main" onClick={() => setSelectedId(item.id)}>
+                              <h3>{item.heading || item.title}</h3>
                               <div className="meta-line">
                                 {pinned ? <Badge className="badge-pinned">{t('常驻核心')}</Badge> : null}
                                 <Badge>{t(CATEGORIES[item.category] || item.category)}</Badge>
@@ -1854,8 +1857,7 @@ export function KnowledgePage({
                                 ) : null}
                               </div>
 
-                              <h3>{item.title}</h3>
-                              <p>{item.content_preview || item.content}</p>
+                              {item.content_preview || item.content ? <p>{item.content_preview || item.content}</p> : null}
 
                               {applicabilityTags.length ? (
                                 <div className="applicability-tags">

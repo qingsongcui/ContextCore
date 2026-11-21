@@ -79,6 +79,10 @@ struct VerifyWorkbenchShortcuts {
         _ = try entry("常用助手", in: shortcuts.menu)
         let go = NSMenu()
         shortcuts.addNavigationKeys(to: go)
+        go.performActionForItem(at: go.indexOfItem(withTitle: "工作台"))
+        try await waitFor("workbench home") { navigated == WorkbenchDestination(page: "home") }
+        go.performActionForItem(at: go.indexOfItem(withTitle: "Agent 名片"))
+        try await waitFor("agent card") { navigated == WorkbenchDestination(page: "personal", section: "profile") }
         guard try entry("所有助手", in: go).keyEquivalent == "2",
               try entry("账号额度", in: go).keyEquivalentModifierMask == [.option, .command]
         else { throw Failed(reason: "Keyboard shortcuts") }
