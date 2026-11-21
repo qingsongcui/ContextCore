@@ -27,6 +27,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from app.integrations.secret_store import SecretStore
+from app.private_storage import private_directory
 
 _LOCK = threading.RLock()
 configuration_lock = _LOCK
@@ -39,6 +40,34 @@ class ConfigurationError(ValueError):
     def __init__(self, message: str, status_code: int = 409):
         super().__init__(message)
         self.status_code = status_code
+
+
+@contextmanager
+def _host_configuration_write_lock():
+    """Serialize host-file transactions across services for this OS user."""
+    import fcntl
+
+    # The same host file can be reached from services with different databases,
+    # HOME or TMPDIR values. A fixed, UID-specific namespace also avoids
+    # mismatched locks for case-insensitive paths and shared host directories.
+    directory = Path("/tmp") / f"senrelay-host-config-write-{os.getuid()}"
+    try:
+        private_directory(directory)
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        raise ConfigurationError("Host configuration write lock is unavailable", 503) from None
+    try:
+        try:
+            if os.fstat(fd).st_uid != os.getuid():
+                raise OSError("Host configuration lock directory ownership changed")
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ConfigurationError("Another Senrelay service is writing host configuration; preview and retry") from None
+        except OSError:
+            raise ConfigurationError("Host configuration write lock is unavailable", 503) from None
+        yield
+    finally:
+        os.close(fd)
 
 
 def digest(data: bytes) -> str:
@@ -782,7 +811,7 @@ class ConfigurationTransactions:
     ) -> dict:
         if confirmed is not True or type(expected_version) is not int:
             raise ConfigurationError("Explicit confirmation and an integer plan version are required", 422)
-        with _LOCK:
+        with _LOCK, _host_configuration_write_lock():
             plan = self.get(plan_id)
             deferred = plan["payload"].get("renderer") == "connection_components_v1"
             undo = plan["payload"].get("renderer") == "managed_undo"
@@ -916,7 +945,7 @@ class ConfigurationTransactions:
     def recover(self, plan_id: str, confirmed: bool) -> dict:
         if confirmed is not True:
             raise ConfigurationError("Explicit recovery confirmation is required", 422)
-        with _LOCK:
+        with _LOCK, _host_configuration_write_lock():
             plan = self.get(plan_id)
             if plan["status"] == "recovered":
                 return plan

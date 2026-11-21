@@ -18,6 +18,8 @@ This build runs at `127.0.0.1:19436` and keeps its data and service home in `~/L
 
 The optional `使用本机Agent配置.command` launcher opens the same local web workspace against the current user's actual Agent configuration roots. Run it next to the app, or open the copy inside `Senrelay.app/Contents/Resources` in the ZIP distribution. Type START, then open the printed local URL in a browser. The foreground process uses port 19446 and its own state directory `~/Library/Application Support/SenrelayHostWorkspaceTest`. The regular test workspace uses its separate test home. Export and import selected definitions to transfer them between the two workspaces. Preview target paths before applying changes and stop the optional service with Ctrl-C.
 
+Services on this build share an OS-user lock when applying or recovering host configuration, even across separate databases. If a write is in progress, re-preview and retry after it finishes. Before writing to actual Agent paths during an upgrade or test, exit older Senrelay services that manage those same paths. Older services and third-party editors do not participate in this lock.
+
 ## Menu bar and keyboard navigation
 
 Open the Senrelay menu bar icon to see favorite and recent agents. Each agent submenu reads the current provider, model and configuration file status from the workbench service. Choose the agent’s models, change history or usage to open that screen. Account quotas shows saved readings and their observation times. Open the full quota screen to authorize a refresh.

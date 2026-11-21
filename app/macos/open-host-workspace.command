@@ -17,6 +17,7 @@ print "Senrelay · 本机 Agent 配置工作台"
 print "独立数据目录  $data_dir"
 print "宿主配置示例  ${CODEX_HOME:-$HOME/.codex}/config.toml"
 print "目标文件以每次分发前的预览为准。确认应用后，工作台会写入你所选 Agent 的实际配置。"
+print "写入实际配置前，请结束仍在管理同一宿主的旧版 Senrelay 服务。旧版服务未接入跨进程写入锁。"
 print "本机网页  http://127.0.0.1:19446/?page=agents&section=library"
 print "输入 START 并回车启动。服务在当前终端前台运行，按 Ctrl-C 结束。"
 IFS= read -r answer || exit 0

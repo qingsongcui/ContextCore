@@ -127,3 +127,72 @@ def test_same_skill_in_one_shared_directory_cannot_be_written_as_two_folders(man
     assert [row['error_code'] for row in batch['targets']] == [None,'shared_target',None]
     assert apply(manager, batch)['counts']['applied'] == 2
     assert len(list((manager.home / '.codex/skills').glob('*/SKILL.md'))) == 1
+
+
+def _run_batch_in_process(home, database, batch, result, entered=None, resume=None):
+    from tests.test_management import FakeVault
+    manager = management_service.ManagementService(database, home, FakeVault())
+    if entered is not None:
+        atomic = manager.transactions._atomic
+
+        def paused_write(path, data):
+            # Pause after the last hash check, before replacing the file.
+            entered.set()
+            if not resume.wait(15):
+                raise TimeoutError("Timed out waiting to finish first write")
+            return atomic(path, data)
+
+        manager.transactions._atomic = paused_write
+    result.put(apply(manager, batch))
+
+
+def test_independent_databases_cannot_overwrite_a_confirmed_host_write(tmp_path):
+    import multiprocessing
+    import tomllib
+    from tests.test_management import FakeVault
+
+    context = multiprocessing.get_context('spawn')
+    home = tmp_path.resolve() / 'shared-host-home'
+    home.mkdir()
+    managers = [
+        management_service.ManagementService(tmp_path / name / 'test.db', home, FakeVault())
+        for name in ('daily', 'alternate')
+    ]
+    first_asset, second_asset = [mcp(manager, name) for manager, name in zip(managers, ('First', 'Second'))]
+    batches = [shared_batches.create(manager, {'operation': 'install', 'targets': [target('codex', asset)]})
+               for manager, asset in zip(managers, (first_asset, second_asset))]
+    assert all(batch['status'] == 'planned' for batch in batches)
+
+    entered, resume = context.Event(), context.Event()
+    results = [context.Queue(), context.Queue()]
+    first = context.Process(target=_run_batch_in_process,
+                            args=(home, managers[0].db_path, batches[0], results[0], entered, resume))
+    second = context.Process(target=_run_batch_in_process,
+                             args=(home, managers[1].db_path, batches[1], results[1]))
+    try:
+        first.start()
+        assert entered.wait(10), 'First service did not reach its write'
+        second.start()
+        conflict = results[1].get(timeout=10)
+        resume.set()
+        applied = results[0].get(timeout=10)
+    finally:
+        resume.set()
+        for process in (first, second):
+            if process.pid is not None:
+                process.join(5)
+                if process.is_alive():
+                    process.kill()
+                    process.join(5)
+        for queue in results:
+            queue.close()
+            queue.join_thread()
+
+    assert first.exitcode == second.exitcode == 0
+    assert applied['targets'][0]['status'] == 'applied'
+    assert conflict['targets'][0]['status'] == 'failed'
+    assert conflict['targets'][0]['error_code'] == 'apply_conflict'
+    replay = apply(managers[1], retry(managers[1], conflict, 'codex'))
+    assert replay['targets'][0]['status'] == 'applied'
+    config = tomllib.loads((home / '.codex' / 'config.toml').read_text())
+    assert set(config['mcp_servers']) == {asset['id'].replace('asset_', 'senrelay_') for asset in (first_asset, second_asset)}
