@@ -86,3 +86,39 @@
   .audit-filter-actions button,
   .review-layout .conflict-panel footer button { min-height: 44px; }
 }
+
+.preferences-group > summary { padding: 14px 12px; min-height: 72px; gap: 12px; border-radius: 8px }
+.preferences-group > summary::after { content: none }
+.preferences-group > summary:hover { background: var(--hover) }
+.preferences-group > summary > svg:first-child {
+  flex: none; width: 34px; height: 34px; padding: 7px; border-radius: 9px;
+  background: var(--surface-soft); color: var(--accent);
+}
+.preferences-group > summary strong { font-size: 15px; line-height: 1.5 }
+.preferences-chevron { width: 15px; transition: transform var(--dur-2) }
+.review-layout { border: 1px solid var(--line); border-radius: 12px; background: var(--surface) }
+.review-layout .conflict-panel { padding: clamp(16px, 2.5cqi, 28px) }
+.conflict-panel > header > div { min-width: 0; flex: 1 1 24rem }
+.conflict-panel header h2 { max-width: 42em; line-height: 1.5; text-wrap: pretty }
+.conflict-panel header p { max-width: 75ch; line-height: 1.7; overflow-wrap: anywhere }
+.conflict-panel time { font-variant-numeric: tabular-nums; padding-top: 5px }
+.review-layout .review-view-switch { min-height: 28px; height: auto; padding: 3px 8px; font-size: 12px; box-shadow: none }
+.review-view-switch[aria-pressed=true] { color: var(--accent); background: var(--accent-tint) }
+.review-layout .conflict-panel .conflict-comparison {
+  gap: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; margin-top: 20px;
+}
+.review-layout .conflict-panel .conflict-comparison > section { padding: 0; border-radius: 0 }
+.review-layout .conflict-comparison > section + section { border-inline-start: 1px solid var(--line) }
+.comparison-heading {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 38px; padding: 8px 16px; background: var(--surface-soft); border-bottom: 1px solid var(--line);
+}
+.comparison-heading h3 { margin: 0; font-size: 12px; color: var(--ink) }
+.comparison-heading small { font-size: 11px; color: var(--secondary) }
+.review-layout .conflict-comparison section > :not(.comparison-heading) { margin: 0; padding: 14px 16px }
+.review-layout .conflict-panel footer { padding-top: 16px; margin-top: 18px; border-top: 1px solid var(--line); gap: 6px }
+@container (max-width: 620px) {
+  .review-layout .conflict-panel .conflict-comparison { grid-template-columns: 1fr }
+  .review-layout .conflict-comparison > section + section { border-inline-start: 0; border-top: 1px solid var(--line) }
+  .review-layout .conflict-panel footer { justify-content: flex-start }
+}

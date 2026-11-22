@@ -85,3 +85,49 @@
 }
 /* WKWebView can suspend animations in a background window. Content must be visible on first paint. */
 .studio-shell .page-surface, .studio-shell .tab-content { animation:none }
+
+/* Keep identity and preferences in place while the navigation list scrolls. */
+.studio-shell .sidebar { overflow: hidden; padding-bottom: max(14px, env(safe-area-inset-bottom)) }
+.studio-brand-row, .studio-shell .sidebar-bottom { flex: none }
+.studio-nav-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 3px 4px 12px;
+  margin-inline: -4px;
+  scrollbar-color: color-mix(in srgb, var(--secondary) 32%, transparent) transparent;
+  scrollbar-width: thin;
+}
+.studio-nav-scroll::-webkit-scrollbar { width: 4px }
+.studio-nav-scroll::-webkit-scrollbar-thumb { border-radius: 4px; background: var(--line-strong) }
+.studio-shell .sidebar-bottom { margin: 6px 0 0; padding: 10px 3px 0; border-top: 1px solid var(--line) }
+.studio-shell .local-status { border: 0; background: transparent; padding: 0; margin: 0 0 7px; min-height: 22px; height: auto; gap: 8px }
+.studio-shell .sidebar-controls { justify-content: space-between; flex-wrap: wrap; gap: 5px }
+.studio-shell .sidebar-controls :is(.language-switch, .theme-switch) {
+  height: auto; padding: 2px; border: 0; background: color-mix(in srgb, var(--ink) 5%, transparent); border-radius: 8px;
+}
+.studio-shell .sidebar-controls button { min-width: 29px; height: 27px; border-radius: 6px }
+.studio-shell .sidebar-controls button[aria-pressed=true] {
+  background: var(--surface-raised); color: var(--accent); box-shadow: 0 0 0 1px var(--line-strong);
+}
+.studio-shell .nav-count { border: 0; border-radius: 20px; min-width: 18px; text-align: center }
+.studio-shell {
+  --control-bg: var(--surface);
+  --control-bg-hover: var(--surface-soft);
+  --control-border: var(--line-strong);
+  --control-border-hover: var(--muted);
+  --shadow-btn-hover: none;
+}
+.studio-shell :is(.reading-entry, .evidence-details) > summary:has(> svg)::after { content: none }
+.studio-shell :is(button, summary, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.studio-shell :is(input:not([type=checkbox], [type=radio]), select, textarea):focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+@media (pointer: coarse) {
+  .studio-shell .sidebar-controls button { min-width: 38px; height: 40px }
+}
+@media (max-height: 380px) {
+  .studio-shell .sidebar { overflow-y: auto }
+  .studio-nav-scroll { overflow: visible; flex: none }
+}

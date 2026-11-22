@@ -129,6 +129,7 @@ export function Shell({
     <aside ref={sidebar} id="workspace-navigation" className={`sidebar ${open ? 'sidebar-open' : ''}`} role={mobile && open ? 'dialog' : undefined} aria-modal={mobile && open ? true : undefined} aria-label={t("工作台导航")}>
       <div className="studio-brand-row"><button className="brand" onClick={() => go('home')} aria-label={t("返回工作台")}><BrandIdentity /></button>
       {mobile && <Button className="drawer-close" icon={X} onClick={() => setOpen(false)} aria-label={t("关闭导航")} />}</div>
+      <div className="studio-nav-scroll">
       <nav className="main-nav" aria-label={t("主导航")}>{GROUPS.map((group, index) => <div key={group.name} className="studio-nav-group">
         <p className="nav-label">{t(group.name)}</p>{group.items.map(navItem)}
         {index === 0 && hasConflicts && navItem({ id: 'conflicts', label: '待确认', icon: CircleDot })}
@@ -137,6 +138,7 @@ export function Shell({
           onProject(project.id);
           setOpen(false);
         }}><Layers3 size={14} aria-hidden="true" /><span>{project.name}</span></button>)}</div>}
+      </div>
       <div className="sidebar-bottom"><div className="local-status"><span className={`status-dot ${status?.ok && status.service?.running === true && !status.service?.stop_status ? 'online' : ''}`} /><span>{!status?.ok && statusLoading ? t("正在读取本机服务状态…") : !status?.ok ? t("本机服务未连接") : status.service?.stop_status === 'pending' ? t("本机服务正在停止") : status.service?.stop_status === 'failed' ? t("停止失败，请检查") : status.service?.stop_status === 'stopped' ? t("本机服务已报告停止") : status.service?.running === true ? t("本机服务运行中") : t("本机服务已响应，但还不能确认它在运行。")}</span></div><div className="sidebar-controls"><LanguageSwitch /><div className="theme-switch" role="group" aria-label={t("主题")}>{[['light', Sun, t("浅色")], ['dark', Moon, t("深色")], ['system', Monitor, t("跟随系统")]].map(([value, Icon, label]) => <button key={value} aria-label={label} title={label} aria-pressed={theme === value} onClick={() => setTheme(value)}><Icon size={15} /></button>)}</div></div></div>
     </aside>
     <main ref={main} id="main-content" tabIndex={-1} className="main-content">{children}</main>

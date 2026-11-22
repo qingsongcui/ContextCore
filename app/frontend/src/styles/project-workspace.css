@@ -95,3 +95,9 @@
   .project-room>.project-tabs>button{font-size:13px}
   .project-room>.project-tabs>button svg{display:none}
 }
+
+.project-directory .directory-row { padding-inline: 12px; transition: background-color var(--dur-1) }
+.directory-symbol { border: 0; background: var(--surface-soft); border-radius: 9px }
+.directory-arrow { opacity: .65 }
+.directory-row:is(:hover, :focus-visible) .directory-arrow { color: var(--accent); opacity: 1 }
+.directory-title strong { line-height: 1.45 }

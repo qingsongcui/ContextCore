@@ -30,3 +30,15 @@
 .agent-global-link { display:flex; flex-wrap:wrap; align-items:center; column-gap:12px; row-gap:4px; margin:16px 0; color:var(--secondary); font-size:.875rem }
 .global-focus { display:flex; align-items:center; gap:10px; flex-wrap:wrap }
 .global-host-scroll { margin-top:6px; max-height:300px; overflow-y:auto; overscroll-behavior:contain; padding:2px 6px }
+
+.global-library .global-tabs { gap: 4px; padding-bottom: 0 }
+.global-tabs .button {
+  padding: 8px 10px; min-height: 38px; border: 0; border-bottom: 2px solid transparent;
+  border-radius: 0; box-shadow: none; background: transparent; color: var(--secondary);
+}
+.global-tabs .button:hover:not(:disabled) { background: var(--hover); box-shadow: none }
+.global-tabs .button[aria-pressed=true] { background: transparent; border-bottom-color: var(--accent); color: var(--accent); font-weight: 650 }
+.global-asset-heading > label { cursor: pointer }
+.global-asset-heading > label small { margin-top: 3px; color: var(--secondary); line-height: 1.5 }
+.global-host-choice { padding-inline: 6px; border-radius: 6px }
+.global-host-choice:hover { background: var(--hover) }
