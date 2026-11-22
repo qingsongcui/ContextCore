@@ -1,5 +1,5 @@
 import { t } from "../lib/i18n.jsx";
-import { BarChart3, BookOpen, BriefcaseBusiness, CircleDot, ContactRound, FolderOpen, House, LibraryBig, Layers3, Menu, Monitor, Moon, Plug, Settings2, Sun, UsersRound, X } from 'lucide-react';
+import { BarChart3, BookOpen, BriefcaseBusiness, CircleDot, ContactRound, FolderOpen, House, LibraryBig, Layers3, Menu, Monitor, Moon, Plug, Settings2, SlidersHorizontal, Sun, UsersRound, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTheme } from '../lib/theme.js';
 import { Button } from './ui.jsx';
@@ -42,6 +42,28 @@ export function Shell({
   const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 1023px)').matches);
   const sidebar = useRef(null);
   const main = useRef(null);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const preferencesButton = useRef(null);
+  useEffect(() => {
+    if (!preferencesOpen) return;
+    const dismissOutside = event => {
+      if (!preferencesButton.current?.parentElement?.contains(event.target)) setPreferencesOpen(false);
+    };
+    const dismissEscape = event => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      setPreferencesOpen(false);
+      preferencesButton.current?.focus();
+    };
+    document.addEventListener('pointerdown', dismissOutside);
+    document.addEventListener('focusin', dismissOutside);
+    document.addEventListener('keydown', dismissEscape, true);
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside);
+      document.removeEventListener('focusin', dismissOutside);
+      document.removeEventListener('keydown', dismissEscape, true);
+    };
+  }, [preferencesOpen]);
   const mobileHeader = useRef(null);
   useEffect(() => {
     const media = window.matchMedia('(max-width: 1023px)');
@@ -139,7 +161,23 @@ export function Shell({
           setOpen(false);
         }}><Layers3 size={14} aria-hidden="true" /><span>{project.name}</span></button>)}</div>}
       </div>
-      <div className="sidebar-bottom"><div className="local-status"><span className={`status-dot ${status?.ok && status.service?.running === true && !status.service?.stop_status ? 'online' : ''}`} /><span>{!status?.ok && statusLoading ? t("正在读取本机服务状态…") : !status?.ok ? t("本机服务未连接") : status.service?.stop_status === 'pending' ? t("本机服务正在停止") : status.service?.stop_status === 'failed' ? t("停止失败，请检查") : status.service?.stop_status === 'stopped' ? t("本机服务已报告停止") : status.service?.running === true ? t("本机服务运行中") : t("本机服务已响应，但还不能确认它在运行。")}</span></div><div className="sidebar-controls"><LanguageSwitch /><div className="theme-switch" role="group" aria-label={t("主题")}>{[['light', Sun, t("浅色")], ['dark', Moon, t("深色")], ['system', Monitor, t("跟随系统")]].map(([value, Icon, label]) => <button key={value} aria-label={label} title={label} aria-pressed={theme === value} onClick={() => setTheme(value)}><Icon size={15} /></button>)}</div></div></div>
+      <div className="sidebar-bottom">
+        <div className="local-status"><span className={`status-dot ${status?.ok && status.service?.running === true && !status.service?.stop_status ? 'online' : ''}`} /><span>{!status?.ok && statusLoading ? t("正在读取本机服务状态…") : !status?.ok ? t("本机服务未连接") : status.service?.stop_status === 'pending' ? t("本机服务正在停止") : status.service?.stop_status === 'failed' ? t("停止失败，请检查") : status.service?.stop_status === 'stopped' ? t("本机服务已报告停止") : status.service?.running === true ? t("本机服务运行中") : t("本机服务已响应，但还不能确认它在运行。")}</span></div>
+        <button ref={preferencesButton} className="preferences-trigger" type="button"
+          aria-label={t("外观")} title={t("外观")} aria-expanded={preferencesOpen}
+          aria-controls="sidebar-preferences" onClick={() => setPreferencesOpen(value => !value)}>
+          <SlidersHorizontal size={16} aria-hidden="true" />
+        </button>
+        <div id="sidebar-preferences" className="sidebar-preferences" hidden={!preferencesOpen}>
+          <div><span>{t("语言")}</span><LanguageSwitch /></div>
+          <div><span>{t("主题")}</span>
+            <div className="theme-switch" role="group" aria-label={t("主题")}>
+              {[['light', Sun, t("浅色")], ['dark', Moon, t("深色")], ['system', Monitor, t("跟随系统")]].map(([value, Icon, label]) =>
+                <button key={value} aria-label={label} title={label} aria-pressed={theme === value} onClick={() => setTheme(value)}><Icon size={15} /></button>)}
+            </div>
+          </div>
+        </div>
+      </div>
     </aside>
     <main ref={main} id="main-content" tabIndex={-1} className="main-content">{children}</main>
   </div>;
