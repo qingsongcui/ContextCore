@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Activity, List, RefreshCw, Wallet, Workflow } from 'lucide-react';
 import { t } from '../lib/i18n.jsx';
 import { list, readSavedValue, saveValue } from '../lib/management.js';
-import { dateRange, dimensionKeys, dimensionNames, hostOptions, originName, unattributed, usageParams, usagePath } from '../lib/usageView.js';
+import { dateRange, dimensionKeys, dimensionNames, hostOptions, isProductHostValue, originName, productHosts, unattributed, usageParams, usagePath } from '../lib/usageView.js';
 import { useResource } from '../lib/useResource.js';
 import { Button, ErrorNotice, Field, PageHeader } from '../components/ui.jsx';
 import { statusLabel } from '../components/ManagementUI.jsx';
@@ -42,11 +42,15 @@ function DailyUsage({ projects, agentId, projectId, section, requestId, navigate
   const options = useResource(tab !== 'accounts' ? usagePath('filter-options', usageParams(filters, { optionsOnly: true })) : null, revision);
   const hosts = useResource('/api/manage/hosts');
   const observed = options.data || {};
-  const selectedHost = list(hosts.data).find(host => host.id === filters.host_id);
+  const catalog = list(hosts.data);
+  // A deep link to an extended configuration host is not one of the six usage filters.
+  const requestedHost = !filters.host_id || filters.host_id === unattributed || isProductHostValue(catalog, filters.host_id) || catalog.length === 0
+    ? filters.host_id || '' : '';
+  const selectedHost = catalog.find(host => host.id === requestedHost);
   // Native logs may only identify a shared registry host (for example, Codex CLI/Desktop).
   // Select a distinct surface when the period contains observations attributed to it.
-  const exactHostObserved = list(observed.host_id).some(item => item.value === filters.host_id);
-  const reportHost = exactHostObserved ? filters.host_id : selectedHost?.registry_host_id || filters.host_id;
+  const exactHostObserved = list(observed.host_id).some(item => item.value === requestedHost);
+  const reportHost = exactHostObserved ? requestedHost : selectedHost?.registry_host_id || requestedHost;
   const params = usageParams({ ...filters, host_id: reportHost });
   const summary = useResource(['overview', 'sources'].includes(tab) ? usagePath('overview', params) : null, revision);
   useEffect(() => {
@@ -106,8 +110,9 @@ function DailyUsage({ projects, agentId, projectId, section, requestId, navigate
   }
   function choiceField(key) {
     const label = key === 'origin' ? '观测来源' : key === 'status' ? '尝试状态' : key === 'request_status' ? '请求结果' : dimensionNames[key];
+    const entries = [...choices[key]].filter(([value]) => key !== 'host_id' || value === unattributed || isProductHostValue(catalog, value));
     return <Field key={key} label={t(label)}><select value={(key === 'host_id' ? reportHost : filters[key]) || ''} onChange={e => update({ [key]: e.target.value })}>
-      <option value="">{t(allChoices[key])}</option>{[...choices[key]].map(([value, name]) => <option key={value} value={value}>{labelFor(key, value, name)}</option>)}
+      <option value="">{t(allChoices[key])}</option>{entries.map(([value, name]) => <option key={value} value={value}>{labelFor(key, value, name)}</option>)}
     </select></Field>;
   }
   function closeDetail() {
@@ -123,10 +128,10 @@ function DailyUsage({ projects, agentId, projectId, section, requestId, navigate
       return <button type="button" key={key} aria-current={tab === key ? 'page' : undefined} onClick={() => switchTab(key)}><Icon size={16} aria-hidden="true" />{t(label)}</button>;
     })}</nav>
     {tab === 'accounts' ? <>
-      <div className="usage-quota-filter"><Field label={t('助手')}><select value={filters.host_id === unattributed ? '' : filters.host_id || ''} onChange={e => update({ host_id: e.target.value })}>
-        <option value="">{t('全部助手')}</option>{list(hosts.data).map(item => <option key={item.id} value={item.id}>{item.label || item.name || item.id}</option>)}
+      <div className="usage-quota-filter"><Field label={t('助手')}><select value={requestedHost === unattributed ? '' : requestedHost || ''} onChange={e => update({ host_id: e.target.value })}>
+        <option value="">{t('全部助手')}</option>{productHosts(catalog).map(item => <option key={item.id} value={item.id}>{item.label || item.name || item.id}</option>)}
       </select></Field></div>
-      <AccountQuotaPanel hostId={filters.host_id === unattributed ? '' : filters.host_id} />
+      <AccountQuotaPanel hostId={requestedHost === unattributed ? '' : requestedHost} />
     </> : <>
       <section className="management-panel usage-filters" aria-label={t('用量筛选')}>
         <div className="usage-filter-row">

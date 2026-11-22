@@ -671,14 +671,29 @@ it('keeps Shell aria-current aligned, deduplicates UsagePage host options, and l
     { id: 'antigravity', name: 'Antigravity', registry_host_id: 'antigravity' },
     { id: 'antigravity-cli', name: 'Antigravity CLI', registry_host_id: 'antigravity' },
     { id: 'claude-code', name: 'Claude Code', registry_host_id: 'claude_code' },
+    { id: 'claude-desktop', name: 'Claude Desktop' },
+    { id: 'hermes', name: 'Hermes Agent' },
   ];
   h.data['/api/usage/summary?tz=UTC'] = { logical_requests: 0, known_tokens: 0, unknown_usage_count: 0, unknown_cost_count: 0, attempts: 0 };
+  await render(<UsagePage projects={[]} />);
+  const optionsPath = h.resources.map(item => item.path).find(path => String(path || '').includes('/api/usage/filter-options'));
+  h.data[optionsPath] = { host_id: [{ value: 'kimi-code', label: 'Kimi Code CLI' }, { value: 'hermes', label: 'Hermes Agent' }] };
   await render(<UsagePage projects={[]} />);
   const hostSelect = field('助手');
   const optionValues = Array.from(hostSelect.querySelectorAll('option')).map(opt => opt.value);
   expect(new Set(optionValues).size).toBe(optionValues.length);
   expect(optionValues).toEqual(['', 'codex', 'antigravity', 'claude_code']);
   expect(hostSelect.textContent).toContain('Codex CLI / Codex Desktop');
+  expect(hostSelect.textContent).not.toContain('Claude Desktop');
+  expect(hostSelect.textContent).not.toContain('Hermes Agent');
+  expect(hostSelect.textContent).not.toContain('Kimi Code CLI');
+  await click(button('账号额度'));
+  const quotaOptions = Array.from(field('助手').querySelectorAll('option')).map(opt => opt.textContent);
+  expect(quotaOptions).toEqual(['全部助手', 'Codex CLI', 'Codex Desktop', 'Antigravity', 'Antigravity CLI', 'Claude Code']);
+  await render(<UsagePage projects={[]} agentId="hermes" />);
+  expect(field('助手').value).toBe('');
+  const overviewPath = [...h.resources].reverse().find(item => String(item.path || '').includes('/api/usage/overview'))?.path;
+  expect(new URL(overviewPath, 'http://localhost').searchParams.has('host_id')).toBe(false);
 
   // Config restores accept the portable Senrelay format.
   await render(<ImportDialog agent="Codex" category="providers" onClose={vi.fn()} onChanged={vi.fn()} />);

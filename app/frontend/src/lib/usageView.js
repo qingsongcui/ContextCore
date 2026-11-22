@@ -1,3 +1,4 @@
+import { agentGroup, isPrimaryAgent } from './agentGroups.js';
 import { t, locale } from './i18n.jsx';
 import { usageDateFilters } from './management.js';
 
@@ -66,9 +67,21 @@ export function originName(origin) {
   return labels[origin] ? t(labels[origin]) : origin || t('未知');
 }
 
+// Usage filters follow the six product Agents. Extended configuration hosts stay in Agent setup.
+export function productHosts(hosts = []) {
+  return (hosts || []).filter(host => host && isPrimaryAgent(agentGroup(host.id)));
+}
+
+export function isProductHostValue(hosts, value) {
+  if (!value) return false;
+  if (isPrimaryAgent(agentGroup(value))) return true;
+  return productHosts(hosts).some(host => host.id === value || host.registry_host_id === value);
+}
+
 export function hostOptions(hosts, observed) {
+  const eligible = productHosts(hosts);
   const labels = new Map();
-  for (const row of hosts) {
+  for (const row of eligible) {
     const value = row.registry_host_id || row.id;
     if (!value) continue;
     const group = labels.get(value) || [];
@@ -76,9 +89,9 @@ export function hostOptions(hosts, observed) {
     labels.set(value, group);
   }
   const options = new Map([...labels].map(([value, group]) => [value, group.join(' / ')]));
-  for (const row of observed) {
-    if (!row.value) continue;
-    const definition = hosts.find(host => host.id === row.value);
+  for (const row of observed || []) {
+    if (!row.value || !isProductHostValue(eligible, row.value)) continue;
+    const definition = eligible.find(host => host.id === row.value);
     if (!options.has(row.value)) options.set(row.value, row.label && row.label !== row.value ? row.label : definition?.label || definition?.name || row.value);
   }
   return [...options].map(([value, label]) => ({ value, label }));
