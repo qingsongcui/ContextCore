@@ -1154,6 +1154,7 @@ def bootstrap_working_memory(
     consumer_id: str | None = None,
     session_key: str | None = None,
     max_tokens: int = 12000,
+    new_task: bool = False,
 ) -> dict[str, Any]:
     """Assemble minimal, project-isolated startup working memory without raw chat dumps."""
     if type(max_tokens) is not int or not 1 <= max_tokens <= 32000:
@@ -1276,7 +1277,8 @@ def bootstrap_working_memory(
 
         # 2. Layer 2: Active working_tasks (strictly active/in_progress/blocked)
         active_tasks: list[dict[str, Any]] = []
-        if resolved_pid is not None:
+        load_active_tasks = not new_task or bool((task_id or "").strip())
+        if resolved_pid is not None and load_active_tasks:
             working_memory_service.ensure_legacy_tasks_synced(resolved_pid, conn=conn)
             active_tasks = working_memory_service.list_working_tasks(
                 resolved_pid, active_only=True, include_events=False, conn=conn

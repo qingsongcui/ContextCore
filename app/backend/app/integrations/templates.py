@@ -10,6 +10,8 @@ import sys
 from typing import Any
 from urllib.parse import urlsplit
 from app.integrations.constants import (
+    CODEX_DAILY_MEMORY_FILES,
+    DAILY_MEMORY_RULE_PATHS,
     DEFAULT_BASE_URL,
     DEFAULT_MCP_ENDPOINT,
     HOOK_COMMAND_TIMEOUT_SEC,
@@ -20,6 +22,15 @@ from app.integrations.constants import (
 )
 
 SKILLS_DIR = Path(__file__).parent / "skills"
+DAILY_MEMORY_RULE = """# Senrelay working memory
+
+When the Senrelay ContextCore MCP tools are available:
+
+- Before substantive project work, planning, review, debugging, or resuming work, call `bootstrap_working_memory` with the current working directory and task. Skip this for simple unrelated questions. Set `new_task=true` for clearly new work when supported. Follow `must_not_execute` and apply a task's temporary limits only to that task.
+- When the current user message states a lasting decision, preference, or correction, call `save_memory` with the current working directory before your final response. This includes rules mentioned while assigning work. The user need not say “remember” or invoke the Skill. Use global scope only for a cross-project rule stated by the user. Store a one-time exception separately with `upsert_working_task`; never turn it into a standing rule. Leave suggestions, guesses, and raw logs out of long-term memory. Follow conflict and applicability checks.
+- If a retrieved item materially guides the response or implementation, call `cite_memory` with that item's ID and the reason before replying. Report saved or applied memory only after the corresponding tool succeeds.
+- Use conversation relay and raw transcript tools only when the user explicitly requests a relay or wants to read a named conversation. For an ordinary new task, continue with the current task when no memory matches.
+"""
 OMP_EXTENSION_PATH = Path(__file__).parent / "omp_extension.ts"
 OPENCODE_PLUGIN_PATH = Path(__file__).parent / "opencode_plugin.ts"
 CC_HOOK_PATH = Path(__file__).parent / "cc_hook.py"
@@ -87,7 +98,7 @@ def render_mcp_config(
                     "headers": {
                         "Authorization": f"Bearer {token}",
                     },
-                    "timeout": MCP_TOOL_TIMEOUT_SEC,
+                    "timeout": MCP_TOOL_TIMEOUT_SEC * 1000,
                 }
             }
         }
@@ -170,7 +181,7 @@ def render_mcp_config(
                     "headers": {
                         "Authorization": f"Bearer {token}",
                     },
-                    "timeout": MCP_TOOL_TIMEOUT_SEC,
+                    "timeout": MCP_TOOL_TIMEOUT_SEC * 1000,
                     "enabled": True,
                 }
             },
@@ -398,6 +409,7 @@ def render_skill_or_command(agent_id: HostId) -> dict[str, Any]:
             "filename": "SKILL.md",
             "content": content,
             "invocation": "/contextcore",
+            "daily_rule": {"target_path": CODEX_DAILY_MEMORY_FILES[-1], "content": DAILY_MEMORY_RULE},
         }
     elif agent_id == "omp":
         path = SKILLS_DIR / "omp_command.md"
@@ -407,6 +419,10 @@ def render_skill_or_command(agent_id: HostId) -> dict[str, Any]:
             "filename": "contextcore.md",
             "content": content,
             "invocation": "/contextcore",
+            "daily_rule": {
+                "target_path": DAILY_MEMORY_RULE_PATHS["omp"],
+                "content": "---\nalwaysApply: true\n---\n\n" + DAILY_MEMORY_RULE,
+            },
         }
     elif agent_id == "cursor":
         path = SKILLS_DIR / "cursor_skill.md"
@@ -425,6 +441,10 @@ def render_skill_or_command(agent_id: HostId) -> dict[str, Any]:
             "filename": "SKILL.md",
             "content": content,
             "invocation": "/contextcore",
+            "daily_rule": {
+                "target_path": DAILY_MEMORY_RULE_PATHS["antigravity"],
+                "content": "---\ntrigger: always_on\n---\n\n" + DAILY_MEMORY_RULE,
+            },
         }
     elif agent_id == "claude-code":
         path = SKILLS_DIR / "claude_code_skill.md"
@@ -434,6 +454,7 @@ def render_skill_or_command(agent_id: HostId) -> dict[str, Any]:
             "filename": "SKILL.md",
             "content": content,
             "invocation": "/contextcore",
+            "daily_rule": {"target_path": DAILY_MEMORY_RULE_PATHS["claude-code"], "content": DAILY_MEMORY_RULE},
         }
     elif agent_id == "opencode":
         path = SKILLS_DIR / "opencode_command.md"

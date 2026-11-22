@@ -832,6 +832,64 @@ def test_ambiguous_active_tasks_fail_closed_in_bootstrap_and_assemble(env_projec
     assert resolved["must_not_execute"] is False
 
 
+@pytest.mark.parametrize("fallback", [False, True])
+def test_bootstrap_new_task_keeps_rules_and_handoff_gate_without_prior_task_state(env_project, monkeypatch, fallback):
+    from app import mcp_server
+    from app.security import authenticated_agent
+    from app.services import handoff_service
+
+    project_id = env_project["project"]["id"]
+    cwd = str(env_project["repo_dir"])
+    if fallback:
+        monkeypatch.setattr(retrieval_service, "bootstrap_working_memory", None)
+    project_rule = content_service.create_content(
+        title="Support memo title", content="Start support memos with the customer issue.",
+        project_id=project_id, category="decision",
+    )
+    personal_rule = content_service.create_content(
+        title="Plain language", content="Use plain language in all work.", category="preference",
+    )
+    conversation = conversation_service.create_conversation(
+        agent="codex", title="Discuss backup repair", project_id=project_id, cwd=cwd,
+        messages=[{"role": "user", "content": "Only discuss the backup repair. Avoid writing files."}],
+    )
+    temporary_rule = "During this backup repair only, avoid writing files."
+    task = working_memory_service.upsert_working_task(
+        project_id=project_id, cwd=cwd, title="Repair backup", execution_mode="discussion_only",
+        temp_constraints=[temporary_rule], source_conversation_id=conversation["id"],
+    )
+
+    agent = authenticated_agent.set("opencode")
+    try:
+        fresh = mcp_server.bootstrap_working_memory(cwd=cwd, query="Draft a support memo", new_task=True)
+        assert fresh["status"] == "ready"
+        assert fresh["active_tasks"] == []
+        assert fresh["selected_task"] is None
+        assert fresh["task_selection_required"] is False
+        assert fresh["must_not_execute"] is False
+        assert temporary_rule not in json.dumps(fresh)
+        assert {item["id"] for item in fresh["applicable_constraints"]} == {project_rule["id"], personal_rule["id"]}
+
+        continued = mcp_server.bootstrap_working_memory(cwd=cwd, query="Repair backup")
+        assert continued["selected_task"]["id"] == task["id"]
+        assert continued["selected_task"]["temp_constraints"] == [temporary_rule]
+        assert continued["must_not_execute"] is True
+        explicit = mcp_server.bootstrap_working_memory(cwd=cwd, task_id=task["id"], new_task=True)
+        assert explicit["selected_task"]["id"] == task["id"]
+        assert explicit["must_not_execute"] is True
+
+        handoff = handoff_service.create_handoff(
+            project_id=project_id, target_agent="opencode", conversation_id=conversation["id"],
+            task_id=task["id"], query="Continue the backup repair",
+        )
+        assert handoff["status"] == "awaiting_confirmation"
+        pending = mcp_server.bootstrap_working_memory(cwd=cwd, query="Draft a support memo", new_task=True)
+        assert pending["selected_task"] is None
+        assert pending["must_not_execute"] is True
+    finally:
+        authenticated_agent.reset(agent)
+
+
 def test_legacy_outdated_pauses_instead_of_completing_and_keeps_discussion_gate(env_project):
     proj_id = env_project["project"]["id"]
 

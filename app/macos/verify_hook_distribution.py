@@ -10,7 +10,25 @@ import socket
 import subprocess
 import tempfile
 import time
+import urllib.error
 import urllib.request
+
+
+def apply_connection_plan(request, host, operation, surface, capabilities):
+    path = f'/api/connections/{host}/plans'
+    for attempt in range(8):
+        plan = request(path, {'operation': operation, 'surface': surface, 'capabilities': capabilities})
+        try:
+            return request(f"{path}/{plan['id']}/apply", {'confirmed': True, 'version': plan['version']})
+        except urllib.error.HTTPError as error:
+            with error:
+                detail = error.read().decode('utf-8', errors='replace')
+            # The OS-user lock also covers independent synthetic test services.
+            # Only retry its transient conflict, with a fresh preview each time.
+            if (attempt == 7 or error.code != 409
+                    or 'Another Senrelay service is writing host configuration; preview and retry' not in detail):
+                raise RuntimeError(f'{host} {operation} returned HTTP {error.code}: {detail}') from error
+            time.sleep(0.25)
 
 
 def commands(value):
@@ -98,8 +116,7 @@ def verify(bundle, output):
                     ('omp', 'cli', None), ('opencode', 'cli', None),
                 ]:
                     capabilities = ['context_tools', 'continuation', 'lifecycle']
-                    plan = request(f'/api/connections/{host}/plans', {'operation': 'install', 'surface': surface, 'capabilities': capabilities})
-                    applied = request(f"/api/connections/{host}/plans/{plan['id']}/apply", {'confirmed': True, 'version': plan['version']})
+                    applied = apply_connection_plan(request, host, 'install', surface, capabilities)
                     assert applied['status'] == 'applied' and applied['readback'] == 'verified'
                     if config:
                         generated = list(commands(json.loads((home/config).read_text())))
@@ -127,8 +144,7 @@ def verify(bundle, output):
                             observed = True; break
                         time.sleep(.5)
                     assert observed, f'{host}: hook ran but bundled background did not consume notification at candidate port'
-                    remove = request(f'/api/connections/{host}/plans', {'operation': 'uninstall', 'surface': surface, 'capabilities': capabilities})
-                    removed = request(f"/api/connections/{host}/plans/{remove['id']}/apply", {'confirmed': True, 'version': remove['version']})
+                    removed = apply_connection_plan(request, host, 'uninstall', surface, capabilities)
                     assert removed['status'] == 'applied'
                     slot = home/'.contextcore/notifications'/f'{host}.json'
                     before = slot.read_bytes() if slot.exists() else None

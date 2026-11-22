@@ -3,7 +3,10 @@ from itertools import combinations
 from pathlib import Path
 import pytest
 from app.database import create_schema, seed_data
-from app.integrations.constants import SUPPORTED_HOSTS, MAX_CONNECTION_FILES
+from app.integrations.constants import (
+    CODEX_DAILY_MEMORY_FILES, DAILY_MEMORY_RULE_PATHS, SUPPORTED_HOSTS,
+    MAX_CONNECTION_FILES, HOST_CONNECTION_FILE_CAPACITY,
+)
 from app.integrations.config_transactions import ConfigurationError
 from app.services.connection_plans import ConnectionPlans, CAPABILITIES
 from app.services.host_registry import HOST_DEFINITIONS
@@ -17,11 +20,16 @@ def test_all_component_combinations_prepare_and_full_plan_installs_and_uninstall
     for size in (1, 2, 3):
         for selected in combinations(CAPABILITIES, size):
             plan = plans.create(host, {'operation': 'install', 'surface': surface, 'capabilities': list(selected)}, 'http://127.0.0.1:18420')
-            assert len(plan['payload']['files']) <= MAX_CONNECTION_FILES
+            capacity = HOST_CONNECTION_FILE_CAPACITY.get(host, MAX_CONNECTION_FILES)
+            assert len(plan['payload']['files']) <= capacity
             assert plan['status'] == 'planned'
     assert not (plans.home/'.contextcore').exists()
-    if host in ('codex', 'cursor', 'antigravity', 'claude-code'):
+    if host in ('cursor', 'omp'):
         assert len(plan['payload']['files']) == 6
+    if host in ('claude-code', 'antigravity'):
+        assert len(plan['payload']['files']) == 7
+    if host == 'codex':
+        assert len(plan['payload']['files']) == 8
     result = plans.apply(host, plan['id'], plan['version'], True)
     assert result['status'] == 'applied'
     assert result['payload']['readback'] == 'verified'
@@ -100,8 +108,13 @@ def test_component_lifecycle_update_pause_resume_conflict_and_restart_recovery(h
     plans = ConnectionPlans(home=Path.home())
     assert plans.recover(host, interrupted['id'], True)['status'] == 'recovered'
     assert apply(prepare('install'))['status'] == 'applied'
+    daily_rule = (CODEX_DAILY_MEMORY_FILES[-1] if host == 'codex' else DAILY_MEMORY_RULE_PATHS.get(host))
+    daily_rule_path = plans.home / daily_rule[2:] if daily_rule else None
+    initial_rule = daily_rule_path.read_bytes() if daily_rule_path else None
     for capability in CAPABILITIES:
         assert apply(prepare('update', [capability]))['payload']['readback'] == 'verified'
+        if daily_rule_path:
+            assert daily_rule_path.read_bytes() == initial_rule
         before = {str(p): (p.read_bytes(), p.stat().st_mtime_ns) for p in plans.home.rglob('*') if p.is_file()}
         assert apply(prepare('pause', [capability]))['status'] == 'applied'
         grants = get_connection(host)['authorizations']
@@ -117,4 +130,6 @@ def test_component_lifecycle_update_pause_resume_conflict_and_restart_recovery(h
     assert target.read_bytes().endswith(b'synthetic external change\n')
     target.write_bytes(original)
     assert apply(prepare('uninstall'))['status'] == 'applied'
+    if daily_rule_path:
+        assert not daily_rule_path.exists()
     assert not any(get_connection(host)['authorizations'].get(c) for c in CAPABILITIES)

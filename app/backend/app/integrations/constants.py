@@ -282,5 +282,12 @@ HOST_MCP_CONTAINER: dict[HostId, tuple[str, ...]] = {
     "opencode": ("mcp",),
 }
 
-# Four hosts use MCP + Skill + hook config + runner + credential + manifest.
 MAX_CONNECTION_FILES = 6
+# Include managed instructions and simultaneous cleanup of the legacy Skill path.
+HOST_CONNECTION_FILE_CAPACITY = {"codex": 9, "claude-code": 8, "antigravity": 8}
+DAILY_MEMORY_RULE_PATHS = {
+    "claude-code": "~/.claude/rules/senrelay-working-memory.md",
+    "omp": "~/.omp/agent/rules/senrelay-working-memory.md",
+    "antigravity": "~/.gemini/config/rules/senrelay-working-memory.md",
+}
+CODEX_DAILY_MEMORY_FILES = ("~/.codex/AGENTS.override.md", "~/.codex/AGENTS.md")

@@ -59,6 +59,7 @@ def _fallback_bootstrap_working_memory(
     consumer_id: str | None = None,
     session_key: str | None = None,
     max_tokens: int = 12000,
+    new_task: bool = False,
 ) -> dict[str, Any]:
     """Degraded bootstrap path that still honours the protected-budget contract.
 
@@ -134,7 +135,8 @@ def _fallback_bootstrap_working_memory(
 
     # 2. Active working tasks, task selection and the shared execution gate
     active_tasks: list[dict[str, Any]] = []
-    if resolved_pid:
+    load_active_tasks = not new_task or bool((task_id or "").strip())
+    if resolved_pid and load_active_tasks:
         active_tasks = working_memory_service.list_working_tasks(
             project_id=resolved_pid, active_only=True, include_events=False
         )
@@ -278,6 +280,8 @@ contextcore_mcp = FastMCP(
         "1. Proactive Scoped Read: Before starting substantive coding/debugging/design work in a project, switching tasks/projects/Agents, "
         "when the user mentions '上次'/'按之前的'/'继续之前', hitting a potential pitfall, or recovering after context compaction, "
         "call `bootstrap_working_memory(cwd=..., query=...)` first. Skip calling it for trivial 1-turn Q&A (e.g. '现在有几个分支', 'git status').\n"
+        "For clearly separate new work, pass `new_task=True` to load project and personal rules without old working tasks. "
+        "For continuation or an unclear task relationship, use the default and honor task selection.\n"
         "2. Read != Execution Permission: If `bootstrap_working_memory`, `relay_conversation`, or `read_handoff` returns `must_not_execute=True` "
         "(`execution_mode='discussion_only'` or unconfirmed handoff), OR if the user is only discussing a plan/architecture without authorizing code edits, "
         "stay strictly in discussion mode — NEVER start modifying code until the user explicitly authorizes execution. "
@@ -314,8 +318,14 @@ def bootstrap_working_memory(
     task_id: str | None = None,
     session_key: str | None = None,
     max_tokens: int = 12000,
+    new_task: bool = False,
 ) -> dict[str, Any]:
-    """Proactively load minimal project-scoped constraints, active working task state, relevant lessons, and pending conflicts before substantive work."""
+    """Load project-scoped constraints, relevant lessons, and pending conflicts before substantive work.
+
+    Set new_task only when the user starts clearly separate work. It omits active task
+    state and temporary constraints. An explicit task_id takes precedence. Unconfirmed
+    handoffs still require confirmation.
+    """
     if type(max_tokens) is not int or not 1 <= max_tokens <= 32000:
         raise ValueError("max_tokens must be between 1 and 32000")
     _observe("memory_read", "bootstrap_working_memory")
@@ -332,6 +342,7 @@ def bootstrap_working_memory(
             consumer_id=consumer,
             session_key=session_key,
             max_tokens=max_tokens,
+            new_task=new_task,
         )
         if isinstance(res, dict) and "ok" not in res:
             res = {"ok": True, **res}
@@ -344,6 +355,7 @@ def bootstrap_working_memory(
         consumer_id=consumer,
         session_key=session_key,
         max_tokens=max_tokens,
+        new_task=new_task,
     )
 
 

@@ -35,6 +35,7 @@ ContextCore hooks stay silent and do not auto-inject noisy prompts. Use ContextC
 
 1. **Proactive Scoped Read (`收到任务先按需查`)**:
    - Before starting substantive coding, debugging, refactoring, or architecture work — or when switching tasks/projects/Agents, when the user mentions `"上次"` / `"按之前的"`, hitting a potential pitfall, or after context compaction — call `bootstrap_working_memory(cwd="<current_working_directory>", query="<current_task_summary>")`.
+   - Set `new_task=true` for clearly separate work to load project and personal rules without the previous task’s temporary constraints. For continuation or an unclear task relationship, leave the default and honor task selection.
    - Skip for trivial 1-turn Q&A (e.g. `"现在有几个分支"`, `"git status"`). Use `search_memory` / `read_memory` for deeper targeted lookups.
 2. **Read ≠ Execution Permission (`尊重 must_not_execute`)**:
    - If `bootstrap_working_memory` returns `must_not_execute=True` (`execution_mode="discussion_only"` or unconfirmed handoff), OR if the user is only discussing options/design, **stay in discussion mode** and NEVER modify code without explicit user authorization.

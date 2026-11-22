@@ -13,7 +13,7 @@ import shlex
 import stat
 import tomllib
 
-from app.integrations.constants import HOST_CONFIG_PATHS, LEGACY_HOST_SKILL_PATHS, SUPPORTED_HOSTS
+from app.integrations.constants import CODEX_DAILY_MEMORY_FILES, DAILY_MEMORY_RULE_PATHS, HOST_CONFIG_PATHS, LEGACY_HOST_SKILL_PATHS, SUPPORTED_HOSTS
 from app.integrations.installer import (
     _assert_path_safe, _atomic_write_file, _resolve_host_path,
     _remove_codex_toml, _clean_hook_entry, _matches_owned_entry,
@@ -43,6 +43,55 @@ class Change:
     before: bytes | None = field(repr=False)
     after: bytes | None = field(repr=False)
     mode: int | None
+
+
+CODEX_RULE_START = b"\n\n<!-- BEGIN SENRELAY WORKING MEMORY -->\n"
+CODEX_RULE_END = b"<!-- END SENRELAY WORKING MEMORY -->\n"
+
+
+def remove_codex_daily_rule(home: Path, manifest: dict) -> Change:
+    """Return the exact owned content removal without editing user instructions."""
+    paths = {_resolve_host_path(pattern, home) for pattern in CODEX_DAILY_MEMORY_FILES}
+    raw_path = manifest.get('daily_rule_target')
+    if not isinstance(raw_path, str) or Path(raw_path) not in paths:
+        raise RecoveryConflict('Unexpected owned Codex instructions path')
+    path = Path(raw_path)
+    original, mode = read_file(path, home)
+    if original is None:
+        return Change(path, None, None, mode)
+    start = original.find(CODEX_RULE_START)
+    end = original.find(CODEX_RULE_END, start + len(CODEX_RULE_START))
+    if (start == -1 or end == -1 or original.count(CODEX_RULE_START) != 1
+            or original.count(CODEX_RULE_END) != 1):
+        raise RecoveryConflict('Owned Codex working-memory block was edited or moved')
+    end += len(CODEX_RULE_END)
+    if digest(original[start:end]) != manifest.get('daily_rule_hash'):
+        raise RecoveryConflict('Owned Codex working-memory block was edited')
+    remaining = original[:start] + original[end:]
+    if not remaining and manifest.get('daily_rule_created_file') is True:
+        return Change(path, original, None, mode)
+    return Change(path, original, remaining, mode)
+
+
+def plan_codex_daily_rule(home: Path, manifest: dict, content: str) -> tuple[list[Change], dict]:
+    override, regular = [_resolve_host_path(pattern, home) for pattern in CODEX_DAILY_MEMORY_FILES]
+    states = {path: read_file(path, home) for path in (override, regular)}
+    target = override if (states[override][0] or b'').strip() else regular
+    prior = remove_codex_daily_rule(home, manifest) if manifest.get('daily_rule_hash') else None
+    new_block = CODEX_RULE_START + content.encode() + CODEX_RULE_END
+    changes = []
+    for path, (original, mode) in states.items():
+        remainder = (prior.after if prior and prior.path == path else original)
+        if path == target:
+            existing = remainder or b''
+            if CODEX_RULE_START.strip() in existing or CODEX_RULE_END.strip() in existing:
+                raise RecoveryConflict('Unowned Codex working-memory block already exists')
+            remainder = existing + new_block
+        changes.append(Change(path, original, remainder, mode))
+    created = (manifest.get('daily_rule_created_file') is True if prior and prior.path == target
+               else states[target][0] is None)
+    return changes, {'daily_rule_hash': digest(new_block), 'daily_rule_target': str(target),
+                     'daily_rule_created_file': created}
 
 
 @dataclass(frozen=True)
@@ -174,7 +223,12 @@ def plan_recovery(host: str, home: Path, components: list[str] | None = None) ->
         changes.append(Change(path, original, result, mode))
 
     owned_files = []
-    if 'skill' in selected: owned_files.append((paths['skill_target'], 'skill_hash', False))
+    if 'skill' in selected:
+        owned_files.append((paths['skill_target'], 'skill_hash', False))
+        if host in DAILY_MEMORY_RULE_PATHS and manifest.get('daily_rule_hash'):
+            owned_files.append((_resolve_host_path(DAILY_MEMORY_RULE_PATHS[host], home), 'daily_rule_hash', False))
+        if host == 'codex' and manifest.get('daily_rule_hash'):
+            changes.append(remove_codex_daily_rule(home, manifest))
     if installed & {'mcp', 'hooks'} and not remaining & {'mcp', 'hooks'}:
         owned_files.append((token, 'token_hash', True))
     for path, hash_key, stripped in owned_files:
@@ -186,7 +240,8 @@ def plan_recovery(host: str, home: Path, components: list[str] | None = None) ->
     if remaining:
         manifest['components'] = sorted(remaining)
         for component, fields in {'mcp': ['owned_mcp_entry', 'owned_mcp_entry_sha256', 'mcp_container_path', 'mcp_shape'],
-                                  'hooks': ['owned_hooks_commands', 'hooks_hash'], 'skill': ['skill_hash']}.items():
+                                  'hooks': ['owned_hooks_commands', 'hooks_hash'],
+                                  'skill': ['skill_hash', 'daily_rule_hash', 'daily_rule_target', 'daily_rule_created_file']}.items():
             if component in selected:
                 for field_name in fields: manifest.pop(field_name, None)
         if not remaining & {'mcp', 'hooks'}: manifest.pop('token_hash', None)

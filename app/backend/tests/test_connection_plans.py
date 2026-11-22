@@ -62,6 +62,104 @@ def test_skill_only_does_not_create_token_or_context_grant(plans):
     assert state['authorizations']['continuation']
 
 
+@pytest.mark.parametrize(('host', 'rule_directory'), [
+    ('claude-code', '.claude/rules'), ('omp', '.omp/agent/rules'), ('antigravity', '.gemini/config/rules'),
+])
+def test_daily_rule_is_reviewable_owned_and_preserves_user_rules(plans, host, rule_directory):
+    user_rules = plans.home / rule_directory
+    user_rules.mkdir(parents=True)
+    foreign_rule = user_rules / 'user-style.md'
+    foreign_rule.write_text('Existing user preference.')
+    daily_rule = user_rules / 'senrelay-working-memory.md'
+    def plan(operation):
+        return plans.create(host, {'operation': operation, 'capabilities': ['continuation'],
+                                   'surface': 'cli'}, 'http://127.0.0.1:8420')
+
+    daily_rule.write_text('Existing rule at the same path.')
+    with pytest.raises(ValueError, match='unowned or modified rule'):
+        plan('install')
+    daily_rule.unlink()
+    preview = plan('install')
+    assert str(daily_rule) in {entry['path'] for entry in preview['payload']['files']}
+    assert not daily_rule.exists()
+    assert plans.apply(host, preview['id'], preview['version'], True)['status'] == 'applied'
+    installed = daily_rule.read_bytes()
+    assert b'bootstrap_working_memory' in installed and b'cite_memory' in installed
+    if host == 'omp':
+        assert installed.startswith(b'---\nalwaysApply: true\n---\n')
+    if host == 'antigravity':
+        assert installed.startswith(b'---\ntrigger: always_on\n---\n')
+    daily_rule.write_text('User edits this rule after installation.')
+    with pytest.raises(ValueError, match='Owned file changed'):
+        plan('uninstall')
+    daily_rule.write_bytes(installed)
+    removal = plan('uninstall')
+    assert plans.apply(host, removal['id'], removal['version'], True)['status'] == 'applied'
+    assert not daily_rule.exists()
+    assert foreign_rule.read_text() == 'Existing user preference.'
+
+
+def test_codex_rule_follows_active_file_with_exact_ownership(plans):
+    from app.integrations.recovery import CODEX_RULE_START
+    root = plans.home / '.codex'
+    root.mkdir()
+    regular = root / 'AGENTS.md'
+    override = root / 'AGENTS.override.md'
+    foreign_regular = b'Existing user notes without a trailing newline.'
+    foreign_override = b'# Active user override\r\n'
+    regular.write_bytes(foreign_regular)
+    def plan(operation):
+        return plans.create('codex', {'operation': operation, 'capabilities': ['continuation'],
+                                      'surface': 'cli'}, 'http://127.0.0.1:8420')
+    def apply_operation(prepared):
+        return plans.apply('codex', prepared['id'], prepared['version'], True)
+
+    stale = plan('install')
+    assert {str(regular), str(override)} <= {entry['path'] for entry in stale['payload']['files']}
+    override.write_bytes(foreign_override)
+    with pytest.raises(ConfigurationError, match='changed since preview'):
+        apply_operation(stale)
+    assert apply_operation(plan('install'))['status'] == 'applied'
+    assert regular.read_bytes() == foreign_regular
+    before = override.read_bytes()
+    assert before.startswith(foreign_override + CODEX_RULE_START)
+
+    outside_suffix = b'\nForeign preference appended later.\n'
+    override.write_bytes(before + outside_suffix)
+    preview = plan('uninstall')
+    override.write_bytes(before + outside_suffix.replace(b'later', b'today'))
+    with pytest.raises(ConfigurationError, match='changed since preview'):
+        apply_operation(preview)
+    original = override.read_bytes()
+    override.write_bytes(original.replace(b'cite_memory', b'user_modified'))
+    with pytest.raises(ValueError, match='working-memory block was edited'):
+        plan('uninstall')
+    override.write_bytes(original)
+    assert apply_operation(plan('uninstall'))['status'] == 'applied'
+    assert override.read_bytes() == foreign_override + outside_suffix.replace(b'later', b'today')
+    assert regular.read_bytes() == foreign_regular
+
+
+def test_codex_rule_moves_from_created_default_file_to_new_override(plans):
+    root = plans.home / '.codex'
+    regular = root / 'AGENTS.md'
+    override = root / 'AGENTS.override.md'
+    def run(operation):
+        plan = plans.create('codex', {'operation': operation, 'capabilities': ['continuation'],
+                                      'surface': 'cli'}, 'http://127.0.0.1:8420')
+        assert plans.apply('codex', plan['id'], plan['version'], True)['status'] == 'applied'
+    run('install')
+    assert regular.exists() and not override.exists()
+    original = b'# New user override\n'
+    override.write_bytes(original)
+    run('update')
+    assert not regular.exists()
+    assert override.read_bytes().startswith(original)
+    assert b'bootstrap_working_memory' in override.read_bytes()
+    run('uninstall')
+    assert override.read_bytes() == original
+
+
 def test_stale_file_rejects_before_any_write(plans):
     plan = create(plans)
     mcp = plans.home/'.omp/agent/mcp.json'

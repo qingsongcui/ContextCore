@@ -639,9 +639,15 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         }
         findLink('home').click();
         await waitPage('home');
-        const themeBtns = [...document.querySelectorAll('.theme-switch button')];
+        const preferences = sidebar.querySelector('.preferences-trigger');
+        const panel = document.getElementById('sidebar-preferences');
+        if (!preferences?.getClientRects().length || !panel?.hidden) return null;
+        preferences.click();
+        await sleep(80);
+        const themeBtns = [...panel.querySelectorAll('.theme-switch button')];
         let themeSwitchOk = false;
-        if (themeBtns.length === 3) {
+        if (preferences.getAttribute('aria-expanded') === 'true' &&
+            themeBtns.length === 3 && themeBtns.every(button => button.getClientRects().length)) {
           themeBtns[1].click();
           await sleep(40);
           const darkOk = document.documentElement.classList.contains('dark') && themeBtns[1].getAttribute('aria-pressed') === 'true';
@@ -651,7 +657,10 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
           themeBtns[2].click();
           await sleep(40);
           const systemOk = themeBtns[2].getAttribute('aria-pressed') === 'true';
-          themeSwitchOk = darkOk && lightOk && systemOk;
+          preferences.click();
+          await sleep(80);
+          themeSwitchOk = darkOk && lightOk && systemOk && panel.hidden &&
+            preferences.getAttribute('aria-expanded') === 'false';
         }
         const sidebarBounds = sidebar.getBoundingClientRect();
         const language = document.documentElement.lang.startsWith('zh') ? 'zh' : 'en';
@@ -704,6 +713,17 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
               if (!toggle || !toggle.getClientRects().length || !drawer.inert) return 'compact navigation unavailable';
               toggle.click(); await pause(150);
               if (drawer.inert || toggle.getAttribute('aria-expanded') !== 'true') return 'drawer did not open';
+              const preferences = drawer.querySelector('.preferences-trigger');
+              const panel = document.getElementById('sidebar-preferences');
+              if (!preferences?.getClientRects().length || !panel?.hidden) return 'compact preferences unavailable';
+              preferences.click(); await pause(100);
+              if (panel.hidden || !panel.querySelector('.language-switch button')?.getClientRects().length) {
+                return 'compact preferences did not open';
+              }
+              document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true})); await pause(100);
+              if (!panel.hidden || drawer.inert || document.activeElement !== preferences) {
+                return 'Escape did not close preferences and restore focus';
+              }
               document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true})); await pause(150);
               return drawer.inert && toggle.getAttribute('aria-expanded') === 'false' ? 'ok' : 'drawer did not close';
             }
@@ -726,10 +746,19 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         let targetLang = initialLang == "zh" ? "en" : "zh"
         let toggleScript = """
         const sleep = ms => new Promise(r => setTimeout(r, ms));
-        const buttons = [...document.querySelectorAll('.sidebar .language-switch button')];
+        const preferences = document.querySelector('.sidebar .preferences-trigger');
+        const panel = document.getElementById('sidebar-preferences');
+        if (!preferences?.getClientRects().length || !panel?.hidden) return '';
+        preferences.click();
+        await sleep(80);
+        const buttons = [...panel.querySelectorAll('.language-switch button')];
         const target = buttons.find(b => b.getAttribute('aria-pressed') === 'false');
-        if (target) target.click();
+        if (!target?.getClientRects().length) return '';
+        target.click();
         await sleep(120);
+        preferences.click();
+        await sleep(80);
+        if (!panel.hidden) return '';
         return document.documentElement.lang.startsWith('zh') ? 'zh' : 'en';
         """
         web.callAsyncJavaScript(toggleScript, arguments: [:], in: nil, in: .page) { toggledOutcome in
@@ -738,15 +767,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
             let toggledMenus = NSApp.mainMenu?.items.compactMap { $0.submenu?.title } ?? []
             let toggledRetry = self.retry.title
             let toggledUpgrade = self.upgradeButton.title
-            let restoreScript = """
-            const sleep = ms => new Promise(r => setTimeout(r, ms));
-            const buttons = [...document.querySelectorAll('.sidebar .language-switch button')];
-            const target = buttons.find(b => b.getAttribute('aria-pressed') === 'false');
-            if (target) target.click();
-            await sleep(120);
-            return document.documentElement.lang.startsWith('zh') ? 'zh' : 'en';
-            """
-            self.web.callAsyncJavaScript(restoreScript, arguments: [:], in: nil, in: .page) { restoredOutcome in
+            self.web.callAsyncJavaScript(toggleScript, arguments: [:], in: nil, in: .page) { restoredOutcome in
                 let restoredWebLang = (try? restoredOutcome.get()) as? String ?? ""
                 let syncOk = (toggledWebLang == targetLang && toggledNativeLang == targetLang && restoredWebLang == initialLang && self.language == initialLang)
                 result["live_language_sync"] = [

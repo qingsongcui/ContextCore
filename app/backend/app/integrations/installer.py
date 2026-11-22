@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from app.integrations.constants import COMMAND_HOOK_HOSTS, HOST_CONFIG_PATHS, LEGACY_HOST_SKILL_PATHS, MAX_CONNECTION_FILES, MCP_STARTUP_TIMEOUT_SEC, MCP_TOOL_TIMEOUT_SEC
+from app.integrations.constants import COMMAND_HOOK_HOSTS, HOST_CONFIG_PATHS, HOST_CONNECTION_FILE_CAPACITY, LEGACY_HOST_SKILL_PATHS, MAX_CONNECTION_FILES, MCP_STARTUP_TIMEOUT_SEC, MCP_TOOL_TIMEOUT_SEC
 
 try:
     import tomllib  # Python 3.11+
@@ -496,6 +496,8 @@ def generate_setup_bundle(
         f"echo 'ContextCore configuration files generated for {agent_id}.'",
         "echo 'Please review the .contextcore.preview files before merging.'",
     ]
+    if daily_rule := skill.get("daily_rule"):
+        notes.append(f"Install the optional daily working-memory rule at {daily_rule['target_path']} with the companion Skill.")
 
     install_script = "\n".join(script_lines)
 
@@ -655,6 +657,22 @@ def apply_host_integration(
                 plan_recovery(host, resolved_home, components=["hooks"])
 
     legacy_skill_to_remove: Path | None = None
+    daily_rule_ownership = {}
+    daily_rule = bundle.skill_or_command.get("daily_rule") if "skill" in selected else None
+    daily_rule_target = None
+    codex_rule_changes = []
+    if daily_rule and host == "codex":
+        from app.integrations.recovery import plan_codex_daily_rule
+        codex_rule_changes, daily_rule_ownership = plan_codex_daily_rule(
+            resolved_home, existing_manifest or {}, daily_rule["content"],
+        )
+    elif daily_rule:
+        from app.integrations.recovery import digest, read_file
+        daily_rule_target = _resolve_host_path(daily_rule["target_path"], resolved_home)
+        old_rule, _ = read_file(daily_rule_target, resolved_home)
+        if old_rule is not None and ("skill" not in installed or digest(old_rule) != (existing_manifest or {}).get("daily_rule_hash")):
+            raise ValueError(f"Refusing to overwrite an unowned or modified rule at {daily_rule_target}.")
+        daily_rule_ownership["daily_rule_hash"] = _sha256(daily_rule["content"])
     if "skill" in selected:
         manifest_skill_target = (
             _assert_path_safe(Path(str(existing_manifest["skill_target"])), resolved_home)
@@ -720,6 +738,11 @@ def apply_host_integration(
         if component in selected: record_backup(target)
     if legacy_skill_to_remove is not None:
         record_backup(legacy_skill_to_remove)
+    if daily_rule_target is not None:
+        record_backup(daily_rule_target)
+    for rule_change in codex_rule_changes:
+        if rule_change.before != rule_change.after:
+            record_backup(rule_change.path)
     if runner_target is not None:
         record_backup(runner_target)
     record_backup(manifest_target)
@@ -853,8 +876,21 @@ def apply_host_integration(
             # 6. Install Skill or Command (and clean up verified owned legacy skill path if migrating)
             write_target(skill_target, bundle.skill_or_command["content"], mode=0o644)
             details.append(f"Installed skill/command to {skill_target}")
+            if daily_rule_target is not None:
+                write_target(daily_rule_target, daily_rule["content"], mode=0o644)
+                details.append(f"Installed daily working-memory rule to {daily_rule_target}")
+            for rule_change in codex_rule_changes:
+                if rule_change.before == rule_change.after:
+                    prepared_files[str(rule_change.path)] = rule_change.before
+                elif rule_change.after is None:
+                    prepared_files[str(rule_change.path)] = None
+                    if not prepare_only:
+                        rule_change.path.unlink()
+                else:
+                    write_target(rule_change.path, rule_change.after, mode=rule_change.mode or 0o644)
             if legacy_skill_to_remove is not None:
-                if len(prepared_files) + 2 <= MAX_CONNECTION_FILES:
+                capacity = HOST_CONNECTION_FILE_CAPACITY.get(host, MAX_CONNECTION_FILES)
+                if len(prepared_files) + 2 <= capacity:
                     prepared_files[str(legacy_skill_to_remove)] = None
                 if not prepare_only:
                     legacy_skill_to_remove.unlink(missing_ok=True)
@@ -885,6 +921,7 @@ def apply_host_integration(
             "skill_target": str(skill_target),
             "skill_hash": _sha256(bundle.skill_or_command["content"]) if "skill" in selected else (existing_manifest or {}).get("skill_hash"),
         }
+        manifest_data.update(daily_rule_ownership)
         if "owned_mcp_entry" in manifest_data:
             if "mcp" not in selected:
                 manifest_data["owned_mcp_entry_sha256"] = _entry_digest(manifest_data["owned_mcp_entry"])

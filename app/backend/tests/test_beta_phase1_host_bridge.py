@@ -37,6 +37,10 @@ def test_mcp_configs_declare_fail_open_timeouts():
             assert f"tool_timeout_sec = {MCP_TOOL_TIMEOUT_SEC}" in rendered["content"]
         elif host == "antigravity":
             assert rendered["data"]["mcpServers"]["contextcore"]["timeoutSeconds"] == MCP_TOOL_TIMEOUT_SEC
+        elif host == "opencode":
+            assert rendered["data"]["mcp"]["contextcore"]["timeout"] == MCP_TOOL_TIMEOUT_SEC * 1000
+        elif host == "omp":
+            assert rendered["data"]["mcpServers"]["contextcore"]["timeout"] == MCP_TOOL_TIMEOUT_SEC * 1000
         else:
             entry = rendered["data"].get("mcpServers", rendered["data"].get("mcp", {})).get("contextcore")
             if entry is None:

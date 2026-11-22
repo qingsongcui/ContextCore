@@ -36,6 +36,19 @@ if (process.argv[3] === 'omp') {
   invoke=()=>handlers.get('input')({text:'synthetic input'},ctx);
 } else {
   const handlers=await factory({directory:'/synthetic'});
+  const system={system:['host policy']};
+  const transform=handlers['experimental.chat.system.transform'];
+  await transform({},system);
+  assert.deepEqual(system.system,['host policy']);
+  await handlers.config({mcp:{contextcore:{type:'remote',url:'http://127.0.0.1:8420/mcp/',enabled:true}}});
+  await transform({},system);
+  assert.equal(system.system[0],'host policy');
+  assert.match(system.system[1],/contextcore_save_memory/);
+  assert.match(system.system[1],/contextcore_bootstrap_working_memory/);
+  await handlers.config({mcp:{contextcore:{type:'remote',url:'http://127.0.0.1:8420/mcp/',enabled:false}}});
+  const disabled={system:[]};
+  await transform({},disabled);
+  assert.deepEqual(disabled.system,[]);
   invoke=()=>handlers['chat.message']({sessionID:'test'},{parts:[{type:'text',text:'synthetic input'}]});
 }
 for (let i=0;i<1000;i++) assert.equal(invoke(),undefined,'host must not receive a network promise');

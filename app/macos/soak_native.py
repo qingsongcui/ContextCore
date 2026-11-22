@@ -176,7 +176,7 @@ def run(bundle, output, seconds, interval, terminate_webkit=False, language="zh"
             pages = set()
             with (native/'native-soak-pages.jsonl').open() as lines:
                 for line in lines: pages.add(json.loads(line)['page']['page'])
-            assert pages == {'projects','agents','usage','settings'}, pages
+            assert pages == {'home', 'projects', 'personal', 'exchange', 'agents', 'usage', 'settings'}, pages
             assert request('/api/content/index?project_id='+project['id']+'&limit=1')['total'] == 100
             for item in seeded:
                 restored = request('/api/content/'+item['id'])

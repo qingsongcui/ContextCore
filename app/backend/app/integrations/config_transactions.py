@@ -5,7 +5,7 @@ private snapshot before replacement; interrupted operations enter recovery.
 Only manifest-owned entries may be replaced/uninstalled. Never execute assets.
 """
 from __future__ import annotations
-from app.integrations.constants import MAX_CONNECTION_FILES
+from app.integrations.constants import HOST_CONNECTION_FILE_CAPACITY, MAX_CONNECTION_FILES
 
 
 import copy
@@ -709,7 +709,9 @@ class ConfigurationTransactions:
         The trusted connection service renders bytes only at apply time. It uses
         this same transaction journal, snapshot, readback and recovery machinery.
         """
-        if metadata.get("namespace") != "connections" or not paths or len(paths) > MAX_CONNECTION_FILES or len(set(paths)) != len(paths):
+        host_id = metadata.get("host_id")
+        capacity = HOST_CONNECTION_FILE_CAPACITY.get(host_id, MAX_CONNECTION_FILES) if isinstance(host_id, str) else MAX_CONNECTION_FILES
+        if metadata.get("namespace") != "connections" or not paths or len(paths) > capacity or len(set(paths)) != len(paths):
             raise ConfigurationError("Invalid connection plan", 422)
         normalized = [self.safe_path(raw) for raw in paths]
         if len(set(normalized)) != len(normalized):
