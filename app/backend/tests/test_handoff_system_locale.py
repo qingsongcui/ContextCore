@@ -105,6 +105,7 @@ def test_language_switch_reuses_the_selected_card_and_cannot_confirm_it(card):
     assert "USER_QUOTE_未记录" in switched["context_text"]
     assert _counts() == before
 
+
     other = content_service.create_content(
         title="OTHER_TASK", content="Do not attach this", category="task",
         project_id=created["project_id"], agent="codex",
@@ -117,6 +118,25 @@ def test_language_switch_reuses_the_selected_card_and_cannot_confirm_it(card):
     assert failure.value.status_code == 409
     assert handoff_service.get_handoff(created["id"])["status"] == "awaiting_confirmation"
     assert _counts() == before
+
+
+def test_continuation_and_confirmation_use_requested_system_language(card):
+    _, _, created = card
+    english = handoff_service.lookup_continuation("omp", handoff_id=created["id"], language="en")
+    chinese = handoff_service.lookup_continuation("omp", handoff_id=created["id"], language="zh")
+    assert english["status"] == chinese["status"] == "awaiting_confirmation"
+    assert english["must_not_execute"] is chinese["must_not_execute"] is True
+    assert "Selected task" in english["card"]["progress"] and "选定任务" in chinese["card"]["progress"]
+    assert "USER_QUOTE_未记录" in english["card"]["decisions"]
+    assert "awaiting confirmation" in english["message"]
+    assert "尚待确认" in chinese["message"]
+    assert _counts() == (1, 0)
+
+    confirmed = handoff_service.confirm_handoff(created["id"], confirmed=True, actor="omp", language="en")
+    assert confirmed["status"] == "confirmed" and confirmed["system_text_language"] == "en"
+    assert "Selected task" in confirmed["card"]["progress"]
+    assert "USER_QUOTE_未记录" in confirmed["card"]["decisions"]
+    assert _counts() == (1, 1)
 
 
 def test_unmarked_or_corrupt_legacy_text_is_not_guessed(card):

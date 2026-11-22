@@ -102,6 +102,7 @@ def test_confirm_then_continue_from_selected_task(tmp_path, monkeypatch):
             task_id=t_auth["id"],
             conversation_id=conv["id"],
             source_agent="cursor",
+            language="zh",
         )
         hid = created["handoff_id"]
         card = created["card"]
@@ -117,7 +118,7 @@ def test_confirm_then_continue_from_selected_task(tmp_path, monkeypatch):
         assert "并行任务未选定" in card["progress"]
         assert created["continuation"]["must_not_execute"] is True
 
-        unconfirmed = mcp_server.read_handoff(hid)
+        unconfirmed = mcp_server.read_handoff(hid, language="zh")
         assert unconfirmed["status"] == "awaiting_confirmation"
         assert unconfirmed["must_not_execute"] is True
         assert unconfirmed["card"] == card

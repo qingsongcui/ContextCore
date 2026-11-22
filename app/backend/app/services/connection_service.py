@@ -78,47 +78,76 @@ KNOWN_HOST_ROOTS: dict[str, list[str]] = {
 }
 
 
-def _capability_detail(agent_id: str, name: str, fallback: str) -> str:
+_WORKFLOW_DETAILS = {
+    ("codex", "memory_read"): (
+        "默认配置中的工作记忆规则会引导助手在相关任务中通过 MCP 读取记忆。生命周期通知不会注入聊天内容。",
+        "Working memory instructions in the default profile guide the Agent to read relevant memory through MCP. Lifecycle hooks do not inject chat content.",
+    ),
+    ("omp", "capture"): (
+        "安装后，扩展会报告会话开始、用户输入和会话结束事件。",
+        "The installed extension reports session start, user input, and session end events.",
+    ),
+    ("omp", "memory_read"): (
+        "常驻规则引导助手在相关任务中经 MCP 读取记忆。扩展不会重写输入。",
+        "An installed rule guides the Agent to read relevant memory through MCP. The extension leaves user input intact.",
+    ),
+    ("cursor", "memory_read"): (
+        "助手可在技能被调用时通过 MCP 读取记忆。是否主动启用技能取决于 Cursor。",
+        "The Agent can read memory through MCP when the Skill is invoked. Automatic Skill selection depends on Cursor.",
+    ),
+    ("antigravity", "memory_read"): (
+        "全局工作记忆规则引导助手在相关任务中通过 MCP 读取记忆。生命周期通知不会注入聊天内容。",
+        "A global working memory rule guides the Agent to read relevant memory through MCP. Lifecycle hooks do not inject chat content.",
+    ),
+    ("claude-code", "memory_read"): (
+        "常驻规则引导助手在相关任务中通过 MCP 读取记忆。生命周期通知不会注入聊天内容。",
+        "An installed rule guides the Agent to read relevant memory through MCP. Lifecycle hooks do not inject chat content.",
+    ),
+    ("opencode", "memory_read"): (
+        "接入插件生效后会引导助手在相关任务中通过 MCP 读取记忆。插件不会插入聊天内容。",
+        "The active integration plugin guides the Agent to read relevant memory through MCP. The plugin does not insert chat messages.",
+    ),
+}
+
+
+def _capability_detail(agent_id: str, name: str, fallback: str, language: str = "zh") -> str:
+    if name == "memory_write":
+        return ("An authorized Agent can save shared memory through MCP."
+                if language == "en" else "获得授权的助手可以通过 MCP 写入共享记忆。")
+    if name == "handoff":
+        return (
+            "Ask the receiving Agent to continue a conversation or invoke /contextcore. Selecting a conversation alone loads it for review and waits for a task."
+            if language == "en" else
+            "可在接收方助手中请求接棒或调用 /contextcore。只选择会话时，助手回读后等待任务指令。"
+        )
+    workflow = _WORKFLOW_DETAILS.get((agent_id, name))
+    if workflow:
+        return workflow[1] if language == "en" else workflow[0]
+    if language == "en":
+        return fallback
     details = {
         ("codex", "history"): "只读解析授权目录中的 rollout JSONL 和会话索引；兼容已观察到的事件格式，未知格式明确报错。",
         ("codex", "capture"): "可通过官方 hook 采集新增对话（SessionStart / UserPromptSubmit / Stop 已真机验证）。",
-        ("codex", "memory_read"): "需要你主动说“接着做”或调用技能，Agent 才会通过 MCP 读取记忆。Hook 不会自动灌入。",
-        ("codex", "memory_write"): "授权后可通过 MCP 写入共享记忆。这不是历史会话重建。",
-        ("codex", "handoff"): "你在新会话里要求接棒后，Agent 回读六项并等你确认。确认后才可继续。",
         ("codex", "compute"): "官方命令缺少可证明的无工具隔离，当前禁止用它提炼记忆。",
         ("omp", "history"): "只读解析授权目录中的 JSONL 会话，保留原始对话并单独整理过程信息。",
-        ("omp", "capture"): "可通过扩展事件采集新增对话。配置写入后才生效。",
-        ("omp", "memory_read"): "需要调用 /contextcore 或 MCP 读取记忆。扩展自动事件不会改写你的输入。",
-        ("omp", "memory_write"): "授权后可通过 MCP 写入共享记忆。",
-        ("omp", "handoff"): "可通过 /contextcore 和扩展事件接棒。不覆盖宿主内置 /handoff。",
         ("omp", "compute"): "使用 --no-tools 等限制调用已登录 OMP，解析最终 JSONL 消息；临时配置禁止自动重试和备用模型切换，失败会明确显示。",
         ("cursor", "history"): "只读解析 state.vscdb 的 composerHeaders 与 cursorDiskKV 消息，已在本机历史验证；格式升级可能需要适配。",
         ("cursor", "capture"): "支持通过本地 SQLite state.vscdb 增量同步新对话。官方 hook 的实际触发与消费尚未真机验证。",
-        ("cursor", "memory_read"): "需要 /contextcore 或 MCP 读取记忆。提交前不能自动附带上下文。",
-        ("cursor", "memory_write"): "授权后可通过 MCP 写入共享记忆，但不能保证每次提问前自动读到。",
-        ("cursor", "handoff"): "需要显式技能或“接着做”。提交前不能自动附带接棒卡。",
         ("cursor", "compute"): "官方命令缺少可证明的无工具隔离，当前禁止用它提炼记忆。",
         ("antigravity", "history"): "只读解析 brain 会话目录中的 transcript JSONL，支持桌面与 CLI 记录；未提供的原文不会补造。",
         ("antigravity", "capture"): "hook 只有元数据和工具事件，不含用户原话。",
-        ("antigravity", "memory_read"): "需要技能或 MCP 读取记忆。生命周期 Hook 不会自动灌入（已真机验证）。",
-        ("antigravity", "memory_write"): "授权后可通过 MCP 写入共享记忆。hook 不能回写结构化历史。",
-        ("antigravity", "handoff"): "通过技能或 MCP 显式触发六项回读与确认续做（已真机验证）。",
         ("antigravity", "compute"): "官方命令缺少可证明的无工具隔离，当前禁止用它提炼记忆。",
         ("claude-code", "history"): "只读解析 ~/.claude/projects 下的会话记录；只沿最后一条有效分支还原，子代理与内部标记不混进对话。",
         ("claude-code", "capture"): "提交前提示能实时采到你的提问；助手的回复要等会话记录同步后才完整。",
-        ("claude-code", "memory_read"): "需要 /contextcore 或 MCP 读取记忆。Hook 不会自动灌入（MCP 协议已真机验证）。",
-        ("claude-code", "memory_write"): "授权后可通过 MCP 写入共享记忆。这不是历史会话重建。",
-        ("claude-code", "handoff"): "可在提交前识别接棒意图，也可用 /contextcore 显式触发。",
         ("claude-code", "compute"): "官方命令缺少可证明的无工具隔离，当前禁止用它提炼记忆。",
         ("opencode", "history"): "只读解析本机会话数据库；子代理会话不算独立对话，旧版文件存储仅作回落。",
         ("opencode", "capture"): "插件能实时采到每次提问；助手正文要等数据库同步后才完整。",
-        ("opencode", "memory_read"): "需要 /contextcore 或 MCP 读取记忆。插件只采集提问，不会插入聊天内容（已真机验证）。",
-        ("opencode", "memory_write"): "授权后可通过 MCP 写入共享记忆。",
-        ("opencode", "handoff"): "需要 /contextcore 或 MCP 接棒。插件只采集提问，不会插入接棒卡。",
         ("opencode", "compute"): "官方命令缺少可证明的无工具隔离，当前禁止用它提炼记忆。",
     }
     return details.get((agent_id, name), fallback)
-def _enrich_capabilities(item: dict[str, Any]) -> None:
+
+
+def _enrich_capabilities(item: dict[str, Any], language: str) -> None:
     try:
         from app.integrations.constants import HOST_CAPABILITY_STATUS
         matrix_caps = HOST_CAPABILITY_STATUS.get(item["id"])
@@ -126,7 +155,7 @@ def _enrich_capabilities(item: dict[str, Any]) -> None:
             item["capabilities"] = {
                 name: {
                     "status": "unsupported" if info.get("status") == "unavailable" else info.get("status", "unsupported"),
-                    "detail": _capability_detail(item["id"], name, info.get("detail", "")),
+                    "detail": _capability_detail(item["id"], name, info.get("detail", ""), language),
                 }
                 for name, info in matrix_caps.items()
             }
@@ -134,7 +163,7 @@ def _enrich_capabilities(item: dict[str, Any]) -> None:
         return
 
 
-def _clean_connection_dict(item: dict[str, Any]) -> dict[str, Any]:
+def _clean_connection_dict(item: dict[str, Any], language: str = "zh") -> dict[str, Any]:
     item.pop("token_hash", None)
     item["discovered"] = bool(item.get("discovered", 0))
     item["enabled"] = bool(item.get("enabled", 0))
@@ -153,14 +182,14 @@ def _clean_connection_dict(item: dict[str, Any]) -> dict[str, Any]:
     item["discovery"]["reference_acceptance"] = get_reference_evidence(item["id"])
     item["discovery"]["local_observations_present"] = bool(item["discovery"]["observations"])
     item["discovery"]["usage_sync"] = get_app_setting(f"usage_sync:{item['id']}", {"status": "not_observed"})
-    _enrich_capabilities(item)
+    _enrich_capabilities(item, language)
     return item
 
 
-def list_connections() -> list[dict[str, Any]]:
+def list_connections(*, language: str = "zh") -> list[dict[str, Any]]:
     with db() as conn:
         rows = conn.execute("SELECT * FROM connections ORDER BY id ASC").fetchall()
-        return [_clean_connection_dict(row_to_dict(r)) for r in rows]
+        return [_clean_connection_dict(row_to_dict(r), language) for r in rows]
 
 
 def get_connection(connection_id: str) -> dict[str, Any]:

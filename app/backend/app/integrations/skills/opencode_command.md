@@ -1,50 +1,68 @@
 ---
 name: contextcore
-description: "ContextCore (续境) cross-agent working memory closed loop and conversation relay for OpenCode: proactively bootstrap project memory, maintain working tasks with honest citations, and continue prior conversations across agents."
+description: "ContextCore working memory and conversation relay for OpenCode. Use before substantive project work to retrieve applicable memories, save lasting decisions, and cite memories used. Activate on /contextcore or a request to continue a previous conversation."
 ---
 
-# ContextCore Working Memory & Relay Command for OpenCode
+# ContextCore Working Memory and Relay Command for OpenCode
 
-The OpenCode plugin captures events silently and does not inject noisy context into chat. Use ContextCore MCP tools for both the **Daily Working Memory Closed Loop** and **Explicit `/contextcore` Relay**.
+Use ContextCore MCP tools for daily working memory and explicit conversation relay. Lifecycle hooks capture events silently without rewriting messages.
 
-## 1. Daily Working Memory Closed Loop (`日常工作记忆闭环`)
+## Conversation language
 
-1. **Proactive Scoped Read (`收到任务先按需查`)**:
-   - Before starting substantive coding, debugging, refactoring, or design work in a project — or when switching tasks/projects/Agents, when the user mentions `"上次"` / `"按之前的"`, hitting a potential pitfall, or recovering after context compaction — call `bootstrap_working_memory(cwd="<current_working_directory>", query="<current_task_summary>")`.
-   - Set `new_task=true` for clearly separate work to load project and personal rules without the previous task’s temporary constraints. For continuation or an unclear task relationship, leave the default and honor task selection.
-   - Skip for trivial 1-turn Q&A (e.g. `"现在有几个分支"`). Use `search_memory` / `read_memory` for deeper lookups.
-2. **Read ≠ Execution Permission (`尊重 must_not_execute`)**:
-   - If `bootstrap_working_memory` returns `must_not_execute=True` (`execution_mode="discussion_only"` or unconfirmed handoff), OR if the user is only discussing a plan/architecture, **stay strictly in discussion mode** — NEVER edit code until explicitly authorized.
-   - Ask the user when `task_selection_required=True` or `pending_conflicts` exist. Verify `applicability` conditions before applying lessons.
-3. **Restrained 4-Event Writes (`克制写入，零噪音`)**:
-   - **(a) User explicit decision / preference / correction** -> `save_memory(cwd=..., category="decision"|"preference", title=..., content=..., is_user_correction=True|False)`.
-   - **(b) Task stage completion (verified), blocker, failed attempt, or one-off constraint (`"这次先别..."`)** -> `upsert_working_task(cwd=..., title=..., goal=..., add_completed_step=..., current_state=..., add_temp_constraint=..., add_failed_attempt=..., blockers=..., next_steps=..., execution_mode=...)`.
-   - **(c) Validated reusable conditional lesson** -> `promote_task_lesson(task_id=..., title=..., content=..., applicability={"when": "...", "env": "..."})`.
-   - **(d) User marks an old rule outdated** -> `mark_memory_outdated(memory_id=..., reason=...)`.
-   - **Forbidden**: Never write unconfirmed AI proposals, unverified guesses, or raw command/traceback logs.
-4. **Honest Citation & Feedback (`真实引用`)**:
-   - Pass `cited_memory_ids=[...]` to `upsert_working_task` or call `cite_memory(memory_ids=[...], reason=...)` when loaded memories genuinely guide your work, and briefly inform the user of referenced constraints/progress.
+- Use the language explicitly requested for the reply. Otherwise, follow the latest substantive user message. A bare command, conversation ID, number, or code snippet inherits the language already used in the conversation.
+- Use `language="en"` for English and `language="zh"` for Chinese when calling localized MCP tools or relay endpoints. For other reply languages, request English tool feedback and write the user-facing reply in the requested language.
+- Match status updates, selectors, headings, and summaries to the reply language. Give one version unless the user asks for a bilingual reply. The language of stored memories, raw transcripts, and tool results does not set the reply language. Preserve commands, IDs, code, fixed identifiers, and any verbatim quotes. Summarize source material in the reply language without modifying the original.
 
-## 2. Explicit `/contextcore` Cross-Agent Relay (`跨 Agent 对话接力`)
+## 1. Daily working memory
 
-1. When the user invokes `/contextcore` or says `"接力"`, `"接着做"`, or `"continue"` without specifying a conversation, call `discover_relay_conversations(cwd="<current_working_directory>")` or `relay_conversation(cwd="<current_working_directory>")` (or `relay_project` for project-level relay).
-2. Present the numbered conversation list — **every row MUST show `title` (对话主题) + `brief_summary` (对话简介：聊了什么、最后停在哪) + `agent` + `updated_at` + `conversation_id`/`external_id` (NEVER omit `brief_summary`)** — and ask which conversation number to continue.
-3. Once selected (`1` or `conversation_id`), call `relay_conversation(conversation_id=..., cwd="<current_working_directory>")`.
-4. If `transcript_paging.complete` is `false` (or `coverage.omitted_messages > 0`), **immediately page `read_conversation_messages(conversation_id=..., offset=..., limit=30)` sequentially from `offset=0` until `next_offset` is `null`** so you read the ENTIRE conversation from turn 0 to the end (do not stop with only the tail).
-5. Compact the entire conversation you just read in context (as in `/compact`: goal & background, full progression & modified files/commands, key decisions & user corrections, verified vs unverified/pitfalls, current stopping point, and the last 1–2 verbatim turns). Present `✅ 已读完并压缩完整上下文：《<标题>》（共 <total> 条消息）` with that clean compacted context — **NEVER present a handoff card / six-element card / missing-handoff notice**.
-6. When `status="loaded"` (`must_not_execute=True`) or `status="sync_pending"`, stop and wait for the user's concrete next instruction (noting if background history refresh is still pending). Only execute immediately when `must_not_execute=False` (`status="confirmed"` / `continuation.status="ready"`).
+1. **Read before starting project work**
+   - Call `bootstrap_working_memory(cwd="<current_working_directory>", query="<current_task_summary>", language=...)` before substantive coding, debugging, refactoring, or design, when switching tasks, projects, or agents, when the user refers to prior work, when checking for known pitfalls, or when recovering after context compaction.
+   - Set `new_task=true` for clearly separate work to load project and personal rules without the previous task's temporary constraints. For continuation or an unclear task relationship, leave the default and honor task selection.
+   - Skip trivial one-turn questions, such as asking for the current Git branch. Use `search_memory` or `read_memory` for a deeper lookup.
+2. **Respect execution gates**
+   - When `must_not_execute=true`, the handoff is unconfirmed, or the user is only discussing a plan, stay in discussion mode until the user explicitly authorizes execution.
+   - Ask the user to resolve `task_selection_required=true` or non-empty `pending_conflicts` before proceeding. Verify each lesson's `applicability` and any `applicability_warning` against the current environment and version.
+3. **Write when there is something durable or actionable**
+   - An explicit user decision, lasting preference, or correction goes to `save_memory(cwd=..., category="decision"|"preference", title=..., content=..., is_user_correction=...)`. Use global scope only for cross-project preferences. Take these actions during ordinary work without waiting for the user to ask you to remember.
+   - Verified task progress, blockers, failed attempts, and one-off constraints go to `upsert_working_task(cwd=..., title=..., goal=..., add_completed_step=..., current_state=..., add_temp_constraint=..., add_failed_attempt=..., blockers=..., next_steps=..., execution_mode=...)`. Keep one-off constraints out of long-term memory.
+   - A verified, reusable lesson goes to `promote_task_lesson(task_id=..., title=..., content=..., applicability={"when": "...", "env": "..."})`.
+   - A rule the user declares obsolete goes to `mark_memory_outdated(memory_id=..., reason=...)`.
+   - Keep unconfirmed suggestions, unverified guesses, and raw command or traceback logs out of memory.
+4. **Cite memory when it changes your work**
+   - Pass `cited_memory_ids=[...]` to `upsert_working_task` or call `cite_memory(memory_ids=[...], reason=...)` for previously retrieved memories that materially guide your actions or answer.
+   - Briefly describe the applicable rule or update in the reply language after the tool succeeds. For a final-only deliverable, leave the citation in the tool record.
 
-## 3. Local CLI / HTTP Fallback (When MCP Tools Are Not Loaded Yet)
+## 2. Explicit conversation relay
 
-If MCP tools are not visible in the current session, NEVER stop and claim tools are missing — query the local ContextCore loopback API:
+1. Treat `/contextcore` as an explicit relay invocation. Natural-language aliases include `continue the previous conversation`, `relay`, `接力`, `接着做`, and `接棒`. Without a specific conversation, call `discover_relay_conversations(cwd=..., language=...)` or `relay_conversation(cwd=..., language=...)`. For an explicitly requested project-level relay, use `relay_project(language=...)`.
+2. Show a numbered candidate list and ask which conversation to continue. Each row includes the title, brief summary of the work and stopping point, source agent, last update time, and conversation ID or native external ID. Use the corresponding `title`, `brief_summary`, `agent`, `updated_at`, and `conversation_id` or `external_id` fields. Use `next_offset` for additional results. Write selector labels and summaries in the reply language. If a title is untitled or in another language, provide a short descriptive label for the selector so the user can still identify it.
+3. Resolve the user's selection to the stable ID and call `relay_conversation(conversation_id=..., cwd=..., language=...)`. Pass a concrete task in `query` only when the user supplied one.
+4. If `transcript_paging.complete` is false or `coverage.omitted_messages > 0`, start at `read_conversation_messages(conversation_id=..., offset=0, limit=30)` and follow `next_offset` until it is null. Read the full conversation before saying it is complete.
+5. Compact the full conversation in context. Include the goal, work completed, affected files or commands, key decisions and corrections, what was verified, open issues, and the stopping point. Retain the final one or two turns verbatim in context. Report the readback and message count in the reply language. Present the concise recap without a formal handoff card.
+6. If `status="sync_pending"`, retry once the history refresh completes. When `status="loaded"` or `must_not_execute=true`, recap the available context and wait for the user's concrete next instruction. Continue execution only when `must_not_execute=false` and the selected relay is confirmed or `continuation.status="ready"`.
+
+## 3. Local HTTP fallback
+
+If the host hasn't loaded the MCP tools yet, use the local loopback relay API. Set `relay_language` for the reply. Use the same project, selection, and execution gates as the MCP workflow.
 
 ```bash
-# Discover recent conversations for current project
-curl -sS -G "http://127.0.0.1:8420/api/handoffs/relay/conversation" --data-urlencode "consumer=opencode" --data-urlencode "cwd=$PWD" || curl -sS -G "http://127.0.0.1:18420/api/handoffs/relay/conversation" --data-urlencode "consumer=opencode" --data-urlencode "cwd=$PWD"
+relay_language=en  # Set to zh for Chinese replies.
 
-# Load selected conversation (<N> or <conversation_id>)
-curl -sS -G "http://127.0.0.1:8420/api/handoffs/relay/conversation" --data-urlencode "conversation_id=<N>" --data-urlencode "consumer=opencode" --data-urlencode "cwd=$PWD" || curl -sS -G "http://127.0.0.1:18420/api/handoffs/relay/conversation" --data-urlencode "conversation_id=<N>" --data-urlencode "consumer=opencode" --data-urlencode "cwd=$PWD"
+# Discover conversations for the current project.
+curl -sS -G "http://127.0.0.1:8420/api/handoffs/relay/conversation" \
+  --data-urlencode "consumer=opencode" --data-urlencode "cwd=$PWD" --data-urlencode "language=$relay_language" \
+  || curl -sS -G "http://127.0.0.1:18420/api/handoffs/relay/conversation" \
+    --data-urlencode "consumer=opencode" --data-urlencode "cwd=$PWD" --data-urlencode "language=$relay_language"
 
-# Page full transcript from offset=0, 30, ... until all `total` messages are read, then compact context
-curl -sS "http://127.0.0.1:8420/api/conversations/<conversation_id>/messages?offset=0&limit=30" || curl -sS "http://127.0.0.1:18420/api/conversations/<conversation_id>/messages?offset=0&limit=30"
+# Resolve the selection to its conversation ID before running this command.
+curl -sS -G "http://127.0.0.1:8420/api/handoffs/relay/conversation" \
+  --data-urlencode "conversation_id=<conversation_id>" --data-urlencode "consumer=opencode" \
+  --data-urlencode "cwd=$PWD" --data-urlencode "language=$relay_language" \
+  || curl -sS -G "http://127.0.0.1:18420/api/handoffs/relay/conversation" \
+    --data-urlencode "conversation_id=<conversation_id>" --data-urlencode "consumer=opencode" \
+    --data-urlencode "cwd=$PWD" --data-urlencode "language=$relay_language"
+
+# Start at offset=0 and follow next_offset until it is null.
+curl -sS "http://127.0.0.1:8420/api/conversations/<conversation_id>/messages?offset=0&limit=30" \
+  || curl -sS "http://127.0.0.1:18420/api/conversations/<conversation_id>/messages?offset=0&limit=30"
 ```

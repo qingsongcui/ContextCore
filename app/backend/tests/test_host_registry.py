@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 
 import pytest
 
@@ -26,6 +27,32 @@ def test_host_registries_stay_in_sync() -> None:
     assert set(KNOWN_HOST_ROOTS) == expected
     assert ALLOWED_TARGET_AGENTS == expected
     assert set(HOST_MCP_CONTAINER) == expected - {"codex"}
+
+
+def test_connection_diagnostics_return_requested_language():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.database import create_schema, seed_data
+    from app.routers.connections import router
+
+    create_schema()
+    seed_data()
+    application = FastAPI()
+    application.include_router(router)
+    with TestClient(application) as client:
+        chinese = client.get("/api/connections")
+        english = client.get("/api/connections", params={"language": "en"})
+    assert chinese.status_code == english.status_code == 200
+    english_hosts = {host["id"]: host["capabilities"] for host in english.json()}
+    assert set(english_hosts) == set(SUPPORTED_HOSTS)
+    for host in chinese.json():
+        for capability, localized in host["capabilities"].items():
+            translated = english_hosts[host["id"]][capability]
+            assert translated["status"] == localized["status"]
+            assert translated["detail"] and not re.search(r"[\u4e00-\u9fff]", translated["detail"])
+    assert re.search(r"[\u4e00-\u9fff]", chinese.json()[0]["capabilities"]["memory_read"]["detail"])
+    assert "Automatic Skill selection" in english_hosts["cursor"]["memory_read"]["detail"]
+    assert "/contextcore" in english_hosts["omp"]["handoff"]["detail"]
 
 
 def test_claude_install_preserves_unrelated_state(tmp_path: Path, monkeypatch) -> None:

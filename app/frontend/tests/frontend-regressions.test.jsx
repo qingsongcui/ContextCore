@@ -401,6 +401,18 @@ describe('consumer frontend regression tests for audit findings', () => {
     expect(button('确认授权范围').disabled).toBe(false);
   });
 
+  it('requests localized diagnostic evidence with the active interface language', async () => {
+    const props = { agentId: 'codex', revision: 0, onChanged: vi.fn() };
+    const codex = { id: 'codex', label: 'Codex', enabled: false };
+    h.data['/api/connections'] = [{ ...codex, capabilities: { memory_read: { status: 'available', detail: '读取相关记忆。' } } }];
+    h.data['/api/connections?language=en'] = [{ ...codex, capabilities: { memory_read: { status: 'available', detail: 'Read relevant memories.' } } }];
+    await render(<ConsolePage {...props} />);
+    expect(container.querySelector('.capability-detail pre').textContent).toBe('读取相关记忆。');
+    setLang('en');
+    await render(<ConsolePage {...props} />);
+    expect(container.querySelector('.capability-detail pre').textContent).toBe('Read relevant memories.');
+  });
+
   it('navigates back to the management host via returnAgent in ConsolePage', async () => {
     const navigate = vi.fn();
     await render(<ConsolePage agentId="antigravity" returnAgent="antigravity-cli" navigate={navigate} revision={0} onChanged={vi.fn()} />);

@@ -14,6 +14,7 @@ from app.services.handoff_text import CardText, system, render, check_language
 ALLOWED_TARGET_AGENTS = frozenset(SUPPORTED_HOSTS)
 STALE_HANDOFF_DETAIL = "Source data changed or is unavailable; please regenerate this handoff card."
 STALE_HANDOFF_MESSAGE = "来源已变化或不可用，请重新生成接棒卡。"
+STALE_HANDOFF_MESSAGE_EN = "The source changed or is unavailable. Create a new handoff card."
 CODE_STATE_STALE_DETAIL = (
     "Cannot confirm or read handoff: git commit or uncommitted changes drifted since card creation; "
     "please regenerate this handoff card."
@@ -121,19 +122,21 @@ def has_explicit_confirmation(handoff: dict[str, Any], conn) -> bool:
     ).fetchone())
 
 
+def _localized_card(card: dict[str, Any], language: str) -> dict[str, Any]:
+    translations = card.get('_system_text')
+    return {
+        key: render(value, translations.get(key, []) if isinstance(translations, dict) else [], language)
+        for key, value in card.items() if key not in {'_system_text', '_confirmation'}
+    }
+
+
 def present_handoff(handoff: dict[str, Any], conn, language: str = 'zh') -> dict[str, Any]:
     check_language(language)
     card = handoff.get("card") if isinstance(handoff.get("card"), dict) else {}
     if '_confirmation' in card:
         handoff['confirmation'] = card['_confirmation']
-        card = {key: value for key, value in card.items() if key != '_confirmation'}
-        handoff['card'] = card
-    translations = card.get('_system_text')
-    handoff['system_text_language'] = language if isinstance(translations, dict) else 'original'
-    handoff['card'] = card = {
-        key: render(value, translations.get(key, []) if isinstance(translations, dict) else [], language)
-        for key, value in card.items() if key != '_system_text'
-    }
+    handoff['system_text_language'] = language if isinstance(card.get('_system_text'), dict) else 'original'
+    handoff['card'] = card = _localized_card(card, language)
     handoff["readback"] = d005_readback(card)
     if handoff.get('status') == 'confirmed' and not has_explicit_confirmation(handoff, conn):
         handoff['stored_status'] = 'confirmed'
@@ -755,6 +758,7 @@ def invalidate_handoffs(conn, source_id: str) -> None:
 
 
 def list_handoffs(project_id: str | None = None, language: str = 'zh') -> list[dict[str, Any]]:
+    check_language(language)
     with db() as conn:
         if project_id:
             rows = conn.execute(
@@ -772,8 +776,9 @@ def list_handoffs(project_id: str | None = None, language: str = 'zh') -> list[d
                 # A list remains usable when one card is stale, but never return
                 # its copied source text as if it were current or confirmed.
                 handoff["status"] = "stale"
-                handoff["stale_reason"] = STALE_HANDOFF_MESSAGE
-                handoff["card"] = {field: STALE_HANDOFF_MESSAGE for field in HANDOFF_CARD_FIELDS}
+                stale_message = STALE_HANDOFF_MESSAGE if language == "zh" else STALE_HANDOFF_MESSAGE_EN
+                handoff["stale_reason"] = stale_message
+                handoff["card"] = {field: stale_message for field in HANDOFF_CARD_FIELDS}
                 handoff["source_ids"] = []
                 handoff["source_revisions"] = {}
                 handoff["confirmed_at"] = None
@@ -1545,7 +1550,10 @@ def validate_source_revisions(conn, current_handoff: dict[str, Any]) -> None:
             )
 
 
-def confirm_handoff(handoff_id: str, confirmed: bool = False, actor: str = "user") -> dict[str, Any]:
+def confirm_handoff(
+    handoff_id: str, confirmed: bool = False, actor: str = "user", *, language: str = "zh",
+) -> dict[str, Any]:
+    check_language(language)
     if confirmed is not True:
         raise HTTPException(status_code=422, detail="Handoff confirmation requires confirmed=True")
 
@@ -1574,7 +1582,7 @@ def confirm_handoff(handoff_id: str, confirmed: bool = False, actor: str = "user
             (now, encode(card), handoff_id),
         )
 
-    return get_handoff(handoff_id)
+    return get_handoff(handoff_id, language)
 
 
 def cancel_handoff(handoff_id: str) -> dict[str, Any]:
@@ -1593,16 +1601,20 @@ def cancel_handoff(handoff_id: str) -> dict[str, Any]:
     return get_handoff(handoff_id)
 
 
-def continuation_contract(handoff: dict[str, Any], consumer_id: str | None = None) -> dict[str, Any]:
+def continuation_contract(
+    handoff: dict[str, Any], consumer_id: str | None = None, *, language: str = "en",
+) -> dict[str, Any]:
     """Machine-readable resume cursor after a six-field card exists.
 
     Confirmation still only changes status; this contract is what a successor
     must consume so it continues the selected task, skips parallel work,
     ignores historical decisions, and does not redo completed tasks.
     """
+    check_language(language)
+    zh = language == "zh"
     target = str(handoff.get("target_agent") or "").strip().lower()
     consumer = str(consumer_id or "").strip().lower()
-    card = handoff.get("card") if isinstance(handoff.get("card"), dict) else {}
+    card = _localized_card(handoff.get("card") or {}, language) if isinstance(handoff.get("card"), dict) else {}
     payload = {
         "handoff_id": handoff.get("id"),
         "project_id": handoff.get("project_id"),
@@ -1622,7 +1634,8 @@ def continuation_contract(handoff: dict[str, Any], consumer_id: str | None = Non
     }
     if consumer and consumer != target:
         payload["status"] = "not_addressed"
-        payload["message"] = f"This handoff is addressed to '{target}', not '{consumer}'."
+        payload["message"] = (f"此接棒指定由「{target}」接收。当前助手为「{consumer}」。" if zh
+                              else f"This handoff is addressed to '{target}'. The current agent is '{consumer}'.")
         return payload
 
     source_ids = payload["source_ids"]
@@ -1648,8 +1661,9 @@ def continuation_contract(handoff: dict[str, Any], consumer_id: str | None = Non
         except HTTPException:
             payload["status"] = "stale"
             payload["execution_mode"] = "discussion_only"
-            payload["message"] = STALE_HANDOFF_MESSAGE
-            payload["card"] = {field: STALE_HANDOFF_MESSAGE for field in HANDOFF_CARD_FIELDS}
+            stale_message = STALE_HANDOFF_MESSAGE if zh else STALE_HANDOFF_MESSAGE_EN
+            payload["message"] = stale_message
+            payload["card"] = {field: stale_message for field in HANDOFF_CARD_FIELDS}
             payload["readback"] = d005_readback(payload["card"])
             return payload
 
@@ -1681,16 +1695,20 @@ def continuation_contract(handoff: dict[str, Any], consumer_id: str | None = Non
         payload["status"] = "cancelled"
         payload["must_not_execute"] = True
         payload["execution_mode"] = "discussion_only"
-        payload["message"] = "Handoff was cancelled; cannot execute."
+        payload["message"] = "接棒已取消，无法执行。" if zh else "The handoff was cancelled and cannot be executed."
         return payload
     if status != "confirmed":
         payload["status"] = "awaiting_confirmation"
-        payload["message"] = "Handoff is not confirmed; obtain explicit user confirmation before executing."
+        payload["message"] = ("接棒尚待确认。执行前请取得用户明确确认。" if zh
+                              else "The handoff is awaiting confirmation. Get explicit user approval before executing.")
         return payload
 
     if not proof_valid:
         payload['status'] = 'confirmation_review_required'
-        payload['message'] = 'Historical confirmation provenance is unknown. Read back the card and obtain explicit user confirmation again.'
+        payload["message"] = (
+            "历史确认的来源未知。请回读接棒卡，并再次取得用户明确确认。" if zh
+            else "Historical confirmation provenance is unknown. Read back the card and obtain explicit user confirmation again."
+        )
         return payload
 
     if is_discussion_only:
@@ -1699,15 +1717,18 @@ def continuation_contract(handoff: dict[str, Any], consumer_id: str | None = Non
         payload["must_not_execute"] = True
         payload["resume_from"] = None
         payload["message"] = (
-            "Task is in discussion-only mode (尚未授权改代码 / discussion_only); "
-            "continue design discussion only and do NOT edit files until user explicitly authorizes execution."
+            "目前仅限讨论方案。用户明确授权执行后才能编辑文件。" if zh
+            else "The task is in discussion-only mode. Wait for explicit user authorization before editing files."
         )
         return payload
 
     payload["status"] = "ready"
     payload["must_not_execute"] = False
     payload["resume_from"] = str(card.get("next_steps") or "")
-    payload["message"] = "Handoff confirmed. Continue from resume_from; do not redo completed work or switch to parallel tasks."
+    payload["message"] = (
+        "接棒已确认。请从 resume_from 继续所选任务，跳过已完成的事项。并行任务保持原状。" if zh
+        else "The handoff is confirmed. Continue only the selected task from resume_from and skip completed work."
+    )
     return payload
 
 
@@ -1716,6 +1737,8 @@ def lookup_continuation(
     project_id: str | None = None,
     query: str | None = None,
     handoff_id: str | None = None,
+    *,
+    language: str = "en",
 ) -> dict[str, Any] | None:
     """Return the candidate or confirmed continuation contract for this consumer.
 
@@ -1723,6 +1746,7 @@ def lookup_continuation(
     picking the latest card. Hooks stay silent. Successors receive this only when
     they call MCP.
     """
+    check_language(language)
     consumer = str(consumer_id or "").strip().lower()
     if consumer not in ALLOWED_TARGET_AGENTS:
         return None
@@ -1743,7 +1767,7 @@ def lookup_continuation(
             if row:
                 if project_id and row["project_id"] != project_id:
                     return None
-                return continuation_contract(row_to_dict(row), consumer)
+                return continuation_contract(row_to_dict(row), consumer, language=language)
             return None
 
         # 2. Query matching cards
@@ -1761,7 +1785,7 @@ def lookup_continuation(
             return None
 
         if len(rows) == 1:
-            return continuation_contract(row_to_dict(rows[0]), consumer)
+            return continuation_contract(row_to_dict(rows[0]), consumer, language=language)
 
         # 3. Multiple cards: check if query uniquely identifies one card
         if query and not _is_continuation_prompt(query):
@@ -1777,13 +1801,13 @@ def lookup_continuation(
                 if (q_lower in goal) or any(isinstance(sid, str) and sid.lower() in q_lower for sid in source_ids):
                     matching_cards.append(h)
             if len(matching_cards) == 1:
-                return continuation_contract(matching_cards[0], consumer)
+                return continuation_contract(matching_cards[0], consumer, language=language)
 
         # 4. Ambiguous continuation: fail closed, return candidates
         candidates = []
         for r in rows:
             h = row_to_dict(r)
-            card = h.get("card") if isinstance(h.get("card"), dict) else {}
+            card = _localized_card(h["card"], language) if isinstance(h.get("card"), dict) else {}
             candidates.append({
                 "handoff_id": h["id"],
                 "project_id": h.get("project_id"),
@@ -1804,7 +1828,8 @@ def lookup_continuation(
             "must_not_execute": True,
             "candidates": candidates,
             "continuation_candidates": candidates,
-            "message": "Multiple handoff cards found; user must select a specific card before continuation.",
+            "message": ("检测到多张接棒卡。请用户选择一张后再继续。" if language == "zh"
+                        else "Multiple handoff cards found. Ask the user to select one before continuing."),
             "selected_task_id": None,
             "resume_from": None,
             "parallel_open_tasks": [],
@@ -3035,7 +3060,7 @@ def relay_conversation(
 
     if handoff:
         card = handoff.get("card") if isinstance(handoff.get("card"), dict) else decode(handoff.get("card"), {})
-        continuation = continuation_contract(handoff, target_agent)
+        continuation = continuation_contract(handoff, target_agent, language=language)
     else:
         decision_lines = [
             f"[{d['id']} v{d['version']} · {d['category']}] {d['title']}: {d['content']}"
@@ -3350,8 +3375,8 @@ def relay_conversation(
             if current["content_hash"] != selected_conv.get("content_hash"):
                 raise HTTPException(409, "Selected conversation changed while loading; retry")
         if handoff and ready:
-            confirmed_handoff = confirm_handoff(handoff["id"], confirmed=True, actor=target_agent)
-            actual = continuation_contract(confirmed_handoff, target_agent)
+            confirmed_handoff = confirm_handoff(handoff["id"], confirmed=True, actor=target_agent, language=language)
+            actual = continuation_contract(confirmed_handoff, target_agent, language=language)
             if actual["must_not_execute"]:
                 raise HTTPException(409, "Handoff state changed while preparing selected context; reload before executing")
     except Exception:
@@ -3734,7 +3759,7 @@ def relay_project(
     ]
 
     card = handoff.get("card") if isinstance(handoff.get("card"), dict) else decode(handoff.get("card"), {})
-    continuation = continuation_contract(handoff, target_agent)
+    continuation = continuation_contract(handoff, target_agent, language=language)
     is_discussion_only = bool(
         (selected_task and selected_task.get("execution_mode") == "discussion_only")
         or continuation.get("execution_mode") == "discussion_only"
@@ -3752,6 +3777,7 @@ def relay_project(
             budget_tokens=max_tokens,
             consumer_id=target_agent,
             handoff_id=handoff["id"],
+            language=language,
         )
     except Exception:
         _abort_provisional()

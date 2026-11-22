@@ -612,7 +612,7 @@ def test_mcp_closed_loop_cross_agent_and_guardrails(env_setup):
 
 
 def test_all_six_host_skills_meet_frontmatter_size_and_closed_loop_invariants():
-    """Verify all 6 host skill/command templates preserve unified name: contextcore, <16KB size, and dual workflows."""
+    """Verify shared host Skill contracts and language-aware instructions."""
     from app.integrations.constants import SUPPORTED_HOSTS
     from app.integrations.host_management_native import native_skill
     from app.integrations.structured_config import parse_document
@@ -653,6 +653,13 @@ def test_all_six_host_skills_meet_frontmatter_size_and_closed_loop_invariants():
 
         for kw in required_keywords:
             assert kw in text, f"{filename} missing required closed-loop/relay keyword: {kw}"
+
+        assert 'language="en"' in text and 'language="zh"' in text
+        assert 'discover_relay_conversations(cwd=..., language=...)' in text
+        assert 'relay_conversation(conversation_id=..., cwd=..., language=...)' in text
+        assert '--data-urlencode "language=$relay_language"' in text
+        prose = re.sub(r"`(?:接力|接着做|接棒)`", "", text)
+        assert not re.search(r"[\u3400-\u9fff]", prose), f"{filename} hard-codes Chinese outside relay aliases"
 
         # Validate against native_skill validators for Cursor, Antigravity, OMP, Codex
         for native_host in ("cursor", "antigravity", "omp", "codex-desktop"):

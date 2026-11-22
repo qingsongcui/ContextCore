@@ -30,4 +30,5 @@ def auto_summarize_endpoint(payload: dict[str, Any] = Body(default={})):
         cwd=payload.get("cwd"),
         actor=str(payload.get("actor") or "host_agent"),
         auto_extract_from_messages=bool(payload.get("auto_extract_from_messages", True)),
+        language=payload.get("language"),
     )

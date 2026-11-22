@@ -17,6 +17,7 @@ from typing import Any, Callable
 from fastapi import HTTPException
 
 from app.database import db, decode, encode, get_app_setting, log_audit, new_id, now_iso, set_app_setting
+from app.services.handoff_text import check_language
 
 DEFAULT_SETTINGS = {"lexical_enabled": True, "semantic_enabled": False,
                     "relation_enabled": False, "max_results": 15, "context_budget_tokens": 2000}
@@ -164,6 +165,19 @@ def _sources(conn, entity_id: str) -> list[dict]:
     return result
 
 
+def localized_sources(sources: list[dict], language: str) -> list[dict]:
+    """Render the legacy deleted-source marker while keeping original titles."""
+    if language != "en":
+        return sources
+    rendered = []
+    for source in sources:
+        title_key = "title" if "title" in source else "source_title"
+        if source.get("deleted") and source.get(title_key) == "已删除来源":
+            source = {**source, title_key: "Deleted source"}
+        rendered.append(source)
+    return rendered
+
+
 def _terms(text: str) -> list[str]:
     words = re.findall(r"[a-zA-Z0-9_./:-]+", text.lower())
     for sequence in re.findall(r"[\u3400-\u9fff]+", text):
@@ -298,7 +312,7 @@ def get_status() -> dict:
             "scope": "global", "index_is_authority": False}
 
 
-def _extract_applicability(item: dict) -> tuple[dict[str, Any], str | None]:
+def _extract_applicability(item: dict, *, language: str = "zh") -> tuple[dict[str, Any], str | None]:
     from app.services import governance_guardrails
 
     raw_app = item.get("applicability")
@@ -319,7 +333,13 @@ def _extract_applicability(item: dict) -> tuple[dict[str, Any], str | None]:
         if key not in {"when", "env", "version_range", "os", "runtime", "framework", "branch", "paths"} and val:
             parts.append(f"{key}={val}")
     detail = "; ".join(parts)
-    warning = f"适用条件/前提（套用前请先核验版本/环境/路径条件）: {detail}" if detail else None
+    if not detail:
+        return norm, None
+    warning = (
+        f"适用条件/前提（套用前请先核验版本/环境/路径条件）: {detail}"
+        if language == "zh"
+        else f"Applicability conditions ({detail}). Verify the version, environment, and paths before applying."
+    )
     return norm, warning
 
 
@@ -333,7 +353,7 @@ def _tags_for_item(item: dict) -> list[str]:
     return []
 
 
-def _hit(conn, item: dict, query: str, score: float, channels: list[str]) -> dict:
+def _hit(conn, item: dict, query: str, score: float, channels: list[str], *, language: str) -> dict:
     content = item["content"]
     position = content.lower().find(query.lower().strip()) if query.strip() else 0
     if position < 0:
@@ -343,7 +363,7 @@ def _hit(conn, item: dict, query: str, score: float, channels: list[str]) -> dic
     snippet = content[start:start + 480]
     tags = _tags_for_item(item)
     is_pinned = "pinned" in tags
-    applicability, applicability_warning = _extract_applicability(item)
+    applicability, applicability_warning = _extract_applicability(item, language=language)
     return {"id": item["id"], "entity_id": item["id"], "version": item["version"],
             "kind": item["kind"], "category": item["category"], "title": item["title"],
             "pinned": is_pinned, "scope": "global" if not item.get("project_id") else "project",
@@ -354,8 +374,9 @@ def _hit(conn, item: dict, query: str, score: float, channels: list[str]) -> dic
             "sources": _sources(conn, item["id"])}
 
 
-def search(query: str = "", project_id: str | None = None, limit: int | None = None,
-           mode: str = "lexical", *, embedder=None) -> dict:
+def _search(query: str, project_id: str | None, limit: int | None, mode: str, *,
+            embedder=None, language: str) -> dict:
+    check_language(language)
     configured = get_settings()
     limit = max(1, min(limit or configured["max_results"], 100))
     if mode not in {"lexical", "hybrid", "semantic"}:
@@ -429,14 +450,23 @@ def search(query: str = "", project_id: str | None = None, limit: int | None = N
         for entity_id, candidate in sorted(candidates.items(), key=lambda pair: (-pair[1]["score"], pair[0])):
             item = _valid_content(conn, entity_id, candidate["version"])
             if item is not None:
-                items.append(_hit(conn, item, query, candidate["score"], candidate["channels"]))
+                items.append(_hit(conn, item, query, candidate["score"], candidate["channels"], language=language))
             if len(items) == limit:
                 break
     return {"items": items, "coverage": {"lexical": lexical_status, "semantic": semantic_status, "scope": "global"},
             "degraded": degraded, "total": len(items)}
 
 
-def read_evidence(handle: str, offset: int = 0, limit: int = 2000) -> dict:
+def search(query: str = "", project_id: str | None = None, limit: int | None = None,
+           mode: str = "lexical", *, embedder=None, language: str = "zh") -> dict:
+    result = _search(query, project_id, limit, mode, embedder=embedder, language=language)
+    for item in result["items"]:
+        item["sources"] = localized_sources(item["sources"], language)
+    return result
+
+
+def read_evidence(handle: str, offset: int = 0, limit: int = 2000, *, language: str = "zh") -> dict:
+    check_language(language)
     entity_id, version = _parse_evidence(handle)
     if offset < 0 or not 1 <= limit <= 8000:
         raise HTTPException(422, "Invalid evidence page")
@@ -453,7 +483,7 @@ def read_evidence(handle: str, offset: int = 0, limit: int = 2000) -> dict:
         return {"id": handle, "entity_id": entity_id, "version": version, "title": current["title"],
                 "text": text[offset:end], "offset": offset,
                 "next_offset": end if end < len(text) else None, "total_chars": len(text),
-                "sources": _sources(conn, entity_id)}
+                "sources": localized_sources(_sources(conn, entity_id), language)}
 
 
 def estimate_tokens(text: str) -> int:
@@ -474,7 +504,6 @@ def bound_context_response(payload: dict, budget: int, language: str = 'en') -> 
     """
     if type(budget) is not int or not 1 <= budget <= 32000:
         raise HTTPException(422, "Context budget must be between 1 and 32000")
-    from app.services.handoff_text import check_language
     check_language(language)
     result = dict(payload)
     result.update(budget_tokens=budget, budget_scope="serialized_application_payload",
@@ -505,13 +534,20 @@ def bound_context_response(payload: dict, budget: int, language: str = 'en') -> 
     }
 
 
-def _entry_text(hit: dict, body: str) -> str:
-    sources = hit["sources"]
-    labels = [f"{s.get('title') or s['id']}（已删除）" if s["deleted"] else str(s.get("title") or s["id"]) for s in sources]
-    suffix = f" (来源: {'; '.join(labels)})" if labels else ""
-    base = f"- [id: {hit['id']} v{hit['version']}] {hit['title']}: {body}{suffix}\n  evidence: {hit['evidence_id']}"
+def _entry_text(hit: dict, body: str, *, language: str) -> str:
+    sources = localized_sources(hit["sources"], language)
+    deleted = "（已删除）" if language == "zh" else " (deleted)"
+    deleted_title = "已删除来源" if language == "zh" else "Deleted source"
+    labels = []
+    for source in sources:
+        title = str(source.get("title") or source["id"])
+        labels.append(title + (deleted if source["deleted"] and title != deleted_title else ""))
+    source_label = "来源" if language == "zh" else "Sources"
+    suffix = f" ({source_label}: {'; '.join(labels)})" if labels else ""
+    evidence_label = "证据" if language == "zh" else "Evidence"
+    base = f"- [id: {hit['id']} v{hit['version']}] {hit['title']}: {body}{suffix}\n  {evidence_label}: {hit['evidence_id']}"
     if hit.get("applicability_warning"):
-        base += f"\n  applicability: {hit['applicability_warning']}"
+        base += f"\n  {hit['applicability_warning']}"
     return base
 
 
@@ -576,7 +612,9 @@ def bootstrap_must_not_execute(
 def assemble_context(query: str = "", project_id: str | None = None, budget_tokens: int | None = None,
                      context_epoch: str = "default", consumer_id: str | None = None,
                      protected: list[dict] | None = None, limit: int = 15,
-                     *, max_tokens: int | None = None, handoff_id: str | None = None) -> dict:
+                     *, max_tokens: int | None = None, handoff_id: str | None = None,
+                     language: str = "zh") -> dict:
+    check_language(language)
     budget = budget_tokens if budget_tokens is not None else max_tokens
     budget = get_settings()["context_budget_tokens"] if budget is None else budget
     if type(budget) is not int or not 1 <= budget <= 32000:
@@ -594,7 +632,7 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
         raise HTTPException(422, "Invalid protected context")
     from app.services import telemetry_service, working_memory_service
     from app.services.handoff_service import lookup_continuation, budget_blocked_continuation
-    continuation = lookup_continuation(effective_consumer, project_id, query, handoff_id=handoff_id)
+    continuation = lookup_continuation(effective_consumer, project_id, query, handoff_id=handoff_id, language=language)
     working_tasks: list[dict[str, Any]] = []
     if project_id:
         with db() as conn:
@@ -641,9 +679,10 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
         response.update(status="insufficient_budget", text="", shortfall_tokens=base_cost - budget,
                         must_not_execute=True)
         response["coverage"] = {"scope": "global", "lexical": "not_run", "semantic": "not_run"}
-        response["continuation"] = budget_blocked_continuation(continuation)
+        response["continuation"] = budget_blocked_continuation(continuation, language=language)
         return response
-    result = search(query, project_id, limit, "hybrid" if get_settings()["semantic_enabled"] else "lexical")
+    mode = "hybrid" if get_settings()["semantic_enabled"] else "lexical"
+    result = _search(query, project_id, limit, mode, language=language)
     response["coverage"] = result["coverage"]
     response["degraded"] = result["degraded"]
     blocks = [prefix] if prefix else []
@@ -682,8 +721,8 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
                     AND entity_id=? AND content_version=?""", (effective_consumer, effective_epoch, item["id"], item["version"])).fetchone()
                 if emitted:
                     continue
-            hit = _hit(conn, item, query, 1.0, ["protected_constraint"])
-            rendered = _entry_text(hit, item["content"])
+            hit = _hit(conn, item, query, 1.0, ["protected_constraint"], language=language)
+            rendered = _entry_text(hit, item["content"], language=language)
             blocks.append(rendered)
             pinned_ids.add(item["id"])
             response["entries"].append({**hit, "tier": "protected", "text": rendered,
@@ -691,8 +730,8 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
         if continuation and continuation.get("selected_task_id") and continuation.get("status") in {"ready", "discussion_only"}:
             selected_item = _valid_content(conn, continuation["selected_task_id"])
             if selected_item is not None and selected_item["id"] not in pinned_ids:
-                hit = _hit(conn, selected_item, query, 1.0, ["confirmed_handoff"])
-                rendered = _entry_text(hit, selected_item["content"])
+                hit = _hit(conn, selected_item, query, 1.0, ["confirmed_handoff"], language=language)
+                rendered = _entry_text(hit, selected_item["content"], language=language)
                 blocks.append(rendered)
                 pinned_ids.add(selected_item["id"])
                 response["entries"].append({**hit, "tier": "resume", "text": rendered,
@@ -703,7 +742,7 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
                             estimated_tokens=protected_cost, shortfall_tokens=protected_cost - budget,
                             must_not_execute=True)
             response["omitted"] = [{"entity_id": ident, "reason": "protected_budget"} for ident in sorted(pinned_ids)]
-            response["continuation"] = budget_blocked_continuation(continuation)
+            response["continuation"] = budget_blocked_continuation(continuation, language=language)
             return response
         response["estimated_tokens"] = protected_cost
         category_counts = {}
@@ -739,11 +778,14 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
             # A todo is not shortened into a passage that can be mistaken for the
             # whole item. It is included in full, or replaced by an explicit pointer.
             if category == "task":
-                tier_options = (("detail", item["content"]), ("reference", "待办正文未放入本段；按需读取原文，此处不是摘录"))
+                reference = ("待办正文未放入本段；按需读取原文，此处不是摘录"
+                             if language == "zh" else "Task text omitted. Read the original on demand.")
+                tier_options = (("detail", item["content"]), ("reference", reference))
             else:
-                tier_options = (("detail", item["content"]), ("passage", hit["snippet"]), ("reference", "按需读取原文"))
+                reference = "按需读取原文" if language == "zh" else "Read the original on demand."
+                tier_options = (("detail", item["content"]), ("passage", hit["snippet"]), ("reference", reference))
             for tier, body in tier_options:
-                rendered = _entry_text(hit, body)
+                rendered = _entry_text(hit, body, language=language)
                 cost = estimate_tokens("\n\n".join([*blocks, rendered]))
                 if cost <= budget:
                     chosen = {**hit, "tier": tier, "text": rendered, "estimated_tokens": estimate_tokens(rendered)}
@@ -784,6 +826,8 @@ def assemble_context(query: str = "", project_id: str | None = None, budget_toke
                 dedupe_session=is_explicit_session_epoch,
                 conn=conn,
             )
+    for entry in response["entries"]:
+        entry["sources"] = localized_sources(entry["sources"], language)
     return response
 
 
@@ -848,38 +892,40 @@ def _bootstrap_payload_cost(payload: dict[str, Any]) -> int:
     return int(probe["estimated_tokens"])
 
 
-def _bootstrap_feedback(payload: dict[str, Any]) -> str:
+def _bootstrap_feedback(payload: dict[str, Any], *, language: str) -> str:
     """Concise summary derived from whatever the bounded payload actually carries."""
     constraints = payload.get("applicable_constraints") or []
     lessons = payload.get("relevant_lessons") or []
     conflicts = payload.get("pending_conflicts") or []
     tasks = payload.get("active_tasks") or []
     selected = payload.get("selected_task")
-    parts = [f"已加载 {len(constraints)} 条长期约束"]
+    zh = language == "zh"
+    parts = [f"已加载 {len(constraints)} 条长期约束" if zh else f"Long-term constraints loaded ({len(constraints)})"]
     if lessons:
-        parts[0] += f"、{len(lessons)} 条相关经验"
+        parts.append(f"{len(lessons)} 条相关经验" if zh else f"Relevant lessons ({len(lessons)})")
     if isinstance(selected, dict) and selected.get("title"):
-        mode_tag = (
-            "（仅讨论方案/尚未授权改代码）"
-            if selected.get("execution_mode") == "discussion_only"
-            else ""
-        )
-        parts.append(f"当前任务「{selected['title']}」[{selected.get('status')}]{mode_tag}")
+        title = selected["title"]
+        status = selected.get("status")
+        task_label = f"当前任务「{title}」[{status}]" if zh else f"Current task “{title}” [{status}]"
+        if selected.get("execution_mode") == "discussion_only":
+            task_label += "（仅讨论方案/尚未授权改代码）" if zh else " (discussion only, edits require authorization)"
+        parts.append(task_label)
     elif payload.get("task_selection_required"):
-        parts.append(f"存在 {len(tasks)} 个并行活跃任务（需先选定任务再执行）")
+        parts.append(f"存在 {len(tasks)} 个并行活跃任务（需先选定任务再执行）" if zh
+                     else f"Multiple active tasks ({len(tasks)}). Select one before executing.")
     else:
-        parts.append("当前无活跃工作任务")
+        parts.append("当前无活跃工作任务" if zh else "No active working task")
     if conflicts:
-        parts.append(f"存在 {len(conflicts)} 条待裁决冲突")
-    summary = "与".join(parts[:2]) + (("；" + "；".join(parts[2:])) if len(parts) > 2 else "")
+        parts.append(f"存在 {len(conflicts)} 条待裁决冲突" if zh else f"Unresolved conflicts ({len(conflicts)})")
     counters = [
         int(payload.get(key) or 0)
         for key in ("omitted_constraints_count", "omitted_lessons_count",
                     "omitted_active_tasks_count", "omitted_conflicts_count")
     ]
     if payload.get("tasks_truncated") or any(counters):
-        summary += "；部分描述性细节已按预算省略（见 omitted_* 计数）"
-    return summary
+        parts.append("部分描述性细节已按预算省略（见 omitted_* 计数）" if zh
+                     else "The budget omitted some descriptive details. See the omission counts.")
+    return ("。 " if zh else ". ").join(part.rstrip(".") for part in parts)
 
 
 def _bootstrap_task_targets(work: dict[str, Any], *, selected: bool) -> list[dict[str, Any]]:
@@ -1030,7 +1076,9 @@ def _bootstrap_reducers(work: dict[str, Any]) -> list[Callable[[], bool]]:
     ]
 
 
-def _bootstrap_insufficient_budget(work: dict[str, Any], *, max_tokens: int, required_tokens: int) -> dict[str, Any]:
+def _bootstrap_insufficient_budget(
+    work: dict[str, Any], *, max_tokens: int, required_tokens: int, language: str,
+) -> dict[str, Any]:
     """Explicit refusal: no source text, no safety flag cleared, exact requirement."""
     payload: dict[str, Any] = {
         "ok": False,
@@ -1063,8 +1111,9 @@ def _bootstrap_insufficient_budget(work: dict[str, Any], *, max_tokens: int, req
         "message": (
             "预算不足：完整的安全规则与临时约束无法在该预算内原样交付，因此未输出任何上下文。"
             f"请立即将 max_tokens 提高到至少 {required_tokens}（当前 {max_tokens}）重新调用 bootstrap_working_memory；在拿到完整上下文前，不要确认或执行任务。"
-            " Insufficient budget to deliver every safety rule and temp constraint intact "
-            f"(required {required_tokens} > {max_tokens}); immediately call bootstrap_working_memory again with max_tokens>={required_tokens}, and do not confirm or execute task actions before receiving full context."
+            if language == "zh" else
+            f"The budget is too small to return all safety rules and temporary constraints intact ({required_tokens} required, {max_tokens} supplied). "
+            f"Call bootstrap_working_memory again with max_tokens of at least {required_tokens}. Wait for the complete context before confirming or executing the task."
         ),
         "estimated_tokens": 0,
     }
@@ -1072,7 +1121,7 @@ def _bootstrap_insufficient_budget(work: dict[str, Any], *, max_tokens: int, req
     return payload
 
 
-def bound_bootstrap_payload(payload: dict[str, Any], max_tokens: int) -> dict[str, Any]:
+def bound_bootstrap_payload(payload: dict[str, Any], max_tokens: int, *, language: str = "zh") -> dict[str, Any]:
     """Fit the serialized bootstrap payload inside `max_tokens` without safety loss.
 
     Invariants:
@@ -1084,6 +1133,7 @@ def bound_bootstrap_payload(payload: dict[str, Any], max_tokens: int) -> dict[st
       an explicit `insufficient_budget` refusal with exact `required_tokens`
       instead of an oversized or silently shortened `ready` fragment.
     """
+    check_language(language)
     work: dict[str, Any] = {
         **payload,
         "applicable_constraints": [
@@ -1107,7 +1157,7 @@ def bound_bootstrap_payload(payload: dict[str, Any], max_tokens: int) -> dict[st
     work["feedback_summary"] = ""
 
     def _cost(state: dict[str, Any]) -> int:
-        state["feedback_summary"] = _bootstrap_feedback(state)
+        state["feedback_summary"] = _bootstrap_feedback(state, language=language)
         return _bootstrap_payload_cost(state)
 
     def _min_budget(state: dict[str, Any]) -> int:
@@ -1135,7 +1185,7 @@ def bound_bootstrap_payload(payload: dict[str, Any], max_tokens: int) -> dict[st
         while reduce_step():
             required = min(required, _min_budget(probe))
     if required > max_tokens:
-        return _bootstrap_insufficient_budget(work, max_tokens=max_tokens, required_tokens=required)
+        return _bootstrap_insufficient_budget(work, max_tokens=max_tokens, required_tokens=required, language=language)
     if _cost(work) <= max_tokens:
         return _finalize()
     for reduce_step in _bootstrap_reducers(work):
@@ -1155,8 +1205,10 @@ def bootstrap_working_memory(
     session_key: str | None = None,
     max_tokens: int = 12000,
     new_task: bool = False,
+    language: str = "zh",
 ) -> dict[str, Any]:
     """Assemble minimal, project-isolated startup working memory without raw chat dumps."""
+    check_language(language)
     if type(max_tokens) is not int or not 1 <= max_tokens <= 32000:
         raise HTTPException(422, "max_tokens must be between 1 and 32000")
     if len(query or "") > 8000:
@@ -1254,7 +1306,7 @@ def bootstrap_working_memory(
             tags = _tags_for_item(item)
             if not is_asserted(tags):
                 continue
-            app_dict, app_warn = _extract_applicability(item)
+            app_dict, app_warn = _extract_applicability(item, language=language)
             constraint_ids_set.add(item["id"])
             raw_constraints.append(
                 {
@@ -1388,7 +1440,7 @@ def bootstrap_working_memory(
 
             scope_boost = 0.05 if (resolved_pid and item.get("project_id") == resolved_pid) else 0.0
             cat_boost = 0.03 if item.get("category") == "lesson" else (0.015 if item.get("category") == "background" else 0.0)
-            app_dict, app_warn = _extract_applicability(item)
+            app_dict, app_warn = _extract_applicability(item, language=language)
             path_boost = 0.0
             if norm_cwd and isinstance(app_dict.get("paths"), list):
                 for p in app_dict["paths"]:
@@ -1436,7 +1488,7 @@ def bootstrap_working_memory(
             if unconf_row is not None:
                 pending_unconfirmed_handoff = True
             else:
-                cont = lookup_continuation(consumer_id, resolved_pid, query)
+                cont = lookup_continuation(consumer_id, resolved_pid, query, language=language)
                 if (
                     cont
                     and cont.get("status") not in {"ready", "not_addressed", "none", None}
@@ -1487,7 +1539,7 @@ def bootstrap_working_memory(
             "omitted_conflicts_count": 0,
             "tasks_truncated": False,
         }
-        base_shell = bound_bootstrap_payload(base_shell, max_tokens)
+        base_shell = bound_bootstrap_payload(base_shell, max_tokens, language=language)
         if base_shell.get("status") != "ready":
             # A refused payload delivers no memory text, so it records no receipt.
             return base_shell

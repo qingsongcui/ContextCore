@@ -282,6 +282,7 @@ def test_http_mcp_confirm_then_continue_without_compute(tmp_path, monkeypatch):
                         "task_id": auth["id"],
                         "conversation_id": conv["id"],
                         "source_agent": "cursor",
+                        "language": "zh",
                     },
                 )
                 hid = created["handoff_id"]
@@ -339,7 +340,7 @@ def test_http_mcp_confirm_then_continue_without_compute(tmp_path, monkeypatch):
                 )
                 assert unconfirmed["status"] == "awaiting_confirmation"
                 assert unconfirmed["must_not_execute"] is True
-                assert "not confirmed" in json.dumps(unconfirmed).lower()
+                assert "awaiting confirmation" in unconfirmed["continuation"]["message"].lower()
 
                 denied = _call(
                     client,
@@ -374,7 +375,7 @@ def test_http_mcp_confirm_then_continue_without_compute(tmp_path, monkeypatch):
                     mcp_headers("codex"),
                     next_id(),
                     "assemble_context",
-                    {"task_query": "接着做", "project_id": project_id, "max_tokens": 32000},
+                    {"task_query": "接着做", "project_id": project_id, "max_tokens": 32000, "language": "zh"},
                 )
                 assert assembled["trigger"] == "opt_in_mcp"
                 assert assembled["continuation"]["status"] == "ready"
@@ -394,7 +395,7 @@ def test_http_mcp_confirm_then_continue_without_compute(tmp_path, monkeypatch):
                     mcp_headers("codex"),
                     next_id(),
                     "read_handoff",
-                    {"handoff_id": hid},
+                    {"handoff_id": hid, "language": "zh"},
                 )
                 assert read["continuation"]["selected_task_id"] == auth["id"]
                 assert read["card"] == card

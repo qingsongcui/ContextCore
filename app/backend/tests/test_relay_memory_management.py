@@ -929,10 +929,11 @@ class TestManagementFeatureParity:
                 content="当前项目统一使用 pnpm v9。",
                 category="preference",
                 cwd=str(auto_repo),
+                language="zh",
             )
             assert saved_1["action"] == "created"
             assert saved_1["status"] == "active"
-            assert "💡 已自动记入续境记忆" in saved_1["summary_note"]
+            assert saved_1["summary_note"] == "已保存记忆：包管理器规范"
             auto_proj_id = saved_1["project_id"]
             assert auto_proj_id
 

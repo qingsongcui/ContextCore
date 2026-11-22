@@ -57,7 +57,7 @@ def test_handoff_read_requires_confirmation_and_correct_recipient(project):
     handoff = handoff_service.create_handoff(project_id=project['id'], target_agent='codex', source_agent='omp')
     identity = authenticated_agent.set('codex')
     try:
-        unconfirmed = mcp_server.read_handoff(handoff['id'])
+        unconfirmed = mcp_server.read_handoff(handoff['id'], language="zh")
         assert unconfirmed['status'] == 'awaiting_confirmation'
         assert unconfirmed['must_not_execute'] is True
         assert unconfirmed['card'] == handoff['card']

@@ -11,7 +11,8 @@ import { join } from "node:path";
 
 const BASE_URL = "http://127.0.0.1:8420";
 const TIMEOUT_MS = 500;
-const WORKING_MEMORY_GUIDANCE = `ContextCore (续境) tools are available for everyday work across Agent sessions.
+const WORKING_MEMORY_GUIDANCE = `ContextCore tools are available for everyday work across Agent sessions.
+- Use the user's requested reply language, or otherwise the current conversation language. Retain it for bare commands and ID-only replies. Pass language="en" for English or language="zh" for Chinese to ContextCore tools that accept it. Localize generated headings, options, warnings, and memory receipts. Preserve original names, paths, IDs, and verbatim quotes.
 - Before starting a new project task or producing a project deliverable, your first tool call must be contextcore_bootstrap_working_memory with the current working directory and a focused query. This includes short project reports, drafts, edits, and tasks where the user wants only the finished output. Set new_task=true when the user is starting distinct work, so temporary constraints from another task do not transfer. Skip only unrelated small talk and simple factual questions. Use only relevant, current memories. Honor must_not_execute, task selection, and pending conflicts.
 - During ordinary chat, save a clearly stated lasting decision, preference, or correction with contextcore_save_memory even if the user does not ask you to remember it. Use project scope for project rules and global scope only for explicitly cross-project preferences. When the user gives both a standing rule and a one-time exception, save only the standing rule. Leave the one-time exception out of the memory body, title, and tags, even as an example.
 - Use contextcore_upsert_working_task for real progress, blockers, and temporary task constraints. Keep guesses, unapproved suggestions, transient requirements, and raw logs out of long-term memory.

@@ -32,8 +32,8 @@ def test_omp_factory_auth_live_session_and_nonexecuting_commands(tmp_path):
         globalThis.fetch = async (url,options) => {
           assert.equal(options.headers.Authorization, 'Bearer synthetic-omp-token');
           assert.equal(options.redirect, 'error');
-          calls.push({url,body: options.body && JSON.parse(options.body)});
-          return {ok:true,json:async () => ({injection:'six-part card; WAIT FOR CONFIRMATION'})};
+          calls.push({url,method: options.method,body: options.body && JSON.parse(options.body)});
+          return {ok:true};
         };
         await handlers.get('session_start')({},ctx);
         await new Promise(setImmediate);
@@ -45,14 +45,17 @@ def test_omp_factory_auth_live_session_and_nonexecuting_commands(tmp_path):
         assert.equal(result,undefined,'input must not be rewritten');
         assert.equal(messages.length,0);
         assert.equal(calls.length,2,'one request per input');
-        const command = commands.get('contextcore');
+        assert.equal(commands.has('contextcore'),false,'native status must not shadow the Markdown relay command');
+        const command = commands.get('contextcore-status');
         assert.equal(typeof command.handler,'function');
-        await command.handler('handoff synthetic task',ctx);
-        assert.equal(calls[2].body.prompt,'synthetic task');
-        assert.equal(calls[2].body.cwd,ctx.cwd);
-        assert.equal(messages[0].options.triggerTurn,false);
-        assert.match(messages[0].message.content,/WAIT FOR CONFIRMATION/);
+        await command.handler('',ctx);
+        assert.equal(calls[2].method,'GET');
+        assert.equal(new URL(calls[2].url).pathname,'/api/status');
+        assert.equal(calls[2].body,undefined);
+        assert.deepEqual(notices.pop(),['ContextCore service is online.','info']);
+        assert.equal(messages.length,0);
         await handlers.get('input')({text:'/contextcore handoff'},ctx);
+        await handlers.get('input')({text:'/contextcore-status'},ctx);
         assert.equal(calls.length,3,'no duplicate slash dispatch');
         await handlers.get('session_stop')({},ctx);
         await new Promise(setImmediate);
@@ -60,8 +63,8 @@ def test_omp_factory_auth_live_session_and_nonexecuting_commands(tmp_path):
         globalThis.fetch = async () => ({ok:false,status:401});
         assert.equal(await handlers.get('input')({text:'resume task'},ctx),undefined);
         assert.equal(notices.length,0,'automatic failures must stay silent');
-        await command.handler('status',ctx);
-        assert.match(notices.at(-1)[0],/not retrieved/);
+        await command.handler('',ctx);
+        assert.deepEqual(notices.at(-1),['ContextCore service is unavailable.','warning']);
         assert(!JSON.stringify(notices).includes('synthetic-omp-token'));
         const ctx2 = {...ctx,cwd:'/synthetic/other',sessionManager:{getSessionId:()=> 'session-two'}};
         globalThis.fetch = async (_url,options) => {

@@ -1,4 +1,4 @@
-import { t } from "../lib/i18n.jsx";
+import { getLang, t } from "../lib/i18n.jsx";
 import { useEffect, useState } from 'react';
 import { Pause, Play, Plug, RefreshCw, Search, Unplug } from 'lucide-react';
 import { errorFeedback, mutate, request } from '../lib/api.js';
@@ -58,7 +58,7 @@ export function ConsolePage({
   installerRoot,
   managementAvailable = true
 }) {
-  const resource = useResource('/api/connections', revision);
+  const resource = useResource(getLang() === 'en' ? '/api/connections?language=en' : '/api/connections', revision);
   const hosts = useResource(!embedded && managementAvailable ? '/api/manage/hosts' : null, revision);
   const rootFor = item => embedded ? installerRoot : (Array.isArray(hosts.data) ? hosts.data : hosts.data?.items)?.find(host => host.id === item.id)?.config_root;
   const setupSurface = item => {

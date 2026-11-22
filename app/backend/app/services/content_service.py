@@ -1150,6 +1150,7 @@ def reconcile_long_term_memory(
     related_ids: list[str] | None = None,
     cwd: str | None = None,
     auto_route_temp_constraint: bool = True,
+    language: str = "zh",
     _connection=None,
 ) -> dict[str, Any]:
     """Governed long-term memory reconciliation state machine:
@@ -1190,6 +1191,7 @@ def reconcile_long_term_memory(
                 title_hint=clean_title,
                 agent=agent or effective_actor,
                 conn=_connection,
+                language=language,
             )
         return {
             "ok": True,

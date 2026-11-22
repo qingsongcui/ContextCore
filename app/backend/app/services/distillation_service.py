@@ -8,6 +8,7 @@ from app.database import db, now_iso, new_id, row_to_dict, log_audit, encode, de
 
 
 from app.services.memory_rules import is_explicit_change, personal_declaration, rule_topic
+from app.services.handoff_text import check_language
 
 
 VALID_CATEGORIES = {"preference", "background", "decision", "task", "lesson", "knowledge"}
@@ -1066,10 +1067,11 @@ def submit_structured_distillation(
     }
 
 
-_IMPLICIT_SIGNAL_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
+_IMPLICIT_SIGNAL_PATTERNS: list[tuple[str, str, str, re.Pattern[str]]] = [
     (
         "preference",
         "用户偏好与规范",
+        "User preference",
         re.compile(
             r"(?:以后都|默认使用|我习惯|我喜欢|不要使用|禁止使用|不要用|请始终|始终使用|统一使用|代码风格|偏好[:：]|记住[:：]|always use|never use|prefer to|do not use|must use)",
             re.IGNORECASE,
@@ -1078,6 +1080,7 @@ _IMPLICIT_SIGNAL_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
     (
         "decision",
         "技术与架构决策",
+        "Technical decision",
         re.compile(
             r"(?:决定采用|架构决策|技术选型|确定使用|方案定为|契约规定|统一采用|最终决定|决策[:：]|改用|切换为|we decided to|architecture decision|chosen approach)",
             re.IGNORECASE,
@@ -1086,6 +1089,7 @@ _IMPLICIT_SIGNAL_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
     (
         "lesson",
         "踩坑经验与教训",
+        "Lesson learned",
         re.compile(
             r"(?:踩坑|根本原因|原因是|根因是|教训[:：]|避坑|注意不要|排查发现|修复了.*问题|导致.*报错|root cause|pitfall|lesson learned|bug was caused by)",
             re.IGNORECASE,
@@ -1094,6 +1098,7 @@ _IMPLICIT_SIGNAL_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
     (
         "background",
         "项目背景与上下文",
+        "Project background",
         re.compile(
             r"(?:项目背景|本项目是|技术栈是|运行环境是|目录结构是|背景[:：]|服务端口|部署在|project background|tech stack is)",
             re.IGNORECASE,
@@ -1102,14 +1107,39 @@ _IMPLICIT_SIGNAL_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
 ]
 
 
+def _text_language(text: str) -> str | None:
+    """Estimate the language of prose, excluding standalone commands, code, and quotes."""
+    prose = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+    prose = re.sub(r"`[^`]*`", "", prose)
+    prose = "\n".join(line for line in prose.splitlines() if not line.lstrip().startswith((">", "/")))
+    prose = re.sub(r"https?://\S+|「[^」]*」|“[^”]*”|\"[^\"]*\"", "", prose).strip()
+    if prose.casefold().rstrip("。.!！？?") in _BARE_ACKNOWLEDGEMENTS:
+        return None
+    han = len(re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]", prose))
+    latin_words = len(re.findall(r"[A-Za-z]+", prose))
+    if han >= max(2, 2 * latin_words) and not re.search(r"[\u3040-\u30ff]", prose):
+        return "zh"
+    return "en" if latin_words >= 2 else None
+
+
+def _message_language(messages: list[dict[str, Any]]) -> str | None:
+    for message in reversed(messages):
+        if isinstance(message, dict) and str(message.get("role") or "").strip().lower() == "user":
+            if language := _text_language(str(message.get("content") or "")):
+                return language
+    return None
+
+
 def extract_implicit_memories_from_messages(
     messages: list[dict[str, Any]],
     *,
     existing_summary: str = "",
+    language: str | None = None,
 ) -> dict[str, Any]:
     """Extract companion implicit memories, temporary task constraints, and a concise session summary from dialogue turns."""
     from app.services import governance_guardrails
 
+    locale = check_language(language) if language is not None else (_message_language(messages or []) or "en")
     extracted: list[dict[str, Any]] = []
     temp_constraints: list[str] = []
     seen_keys: set[tuple[str, str]] = set()
@@ -1156,7 +1186,7 @@ def extract_implicit_memories_from_messages(
             if not verdict["allowed"] or len(seg) < 6:
                 continue
 
-            for category, label_prefix, pattern in _IMPLICIT_SIGNAL_PATTERNS:
+            for category, label_zh, label_en, pattern in _IMPLICIT_SIGNAL_PATTERNS:
                 if pattern.search(seg) or (category == "preference" and (rule_topic(clean_seg) or "").startswith("language:")):
                     stance = category if category in {"decision", "preference"} else "fact"
                     if re.search(r"引用|转述|^\s*>|\bquoted?\b", text, re.IGNORECASE):
@@ -1175,7 +1205,9 @@ def extract_implicit_memories_from_messages(
                     if stance in NON_DECISION_STANCES and stance != "fact":
                         category = "knowledge"
                     short_title = clean_seg[:48].rstrip("，,:： ")
-                    title = f"{label_prefix}：{short_title}"
+                    title_zh = f"{label_zh}：{short_title}"
+                    title_en = f"{label_en}: {short_title}"
+                    title, alternate_title = (title_en, title_zh) if locale == "en" else (title_zh, title_en)
                     dedupe = (category, short_title.lower())
                     if dedupe not in seen_keys:
                         seen_keys.add(dedupe)
@@ -1185,6 +1217,7 @@ def extract_implicit_memories_from_messages(
                                 "category": category,
                                 "stance": stance,
                                 "title": title[:120],
+                                "_alternate_title": alternate_title[:120],
                                 "content": clean_seg,
                                 "tags": [*tags, f"message_index:{message_index}"],
                                 "quote": seg,
@@ -1198,9 +1231,11 @@ def extract_implicit_memories_from_messages(
     if existing_summary and existing_summary.strip():
         summary_parts.append(existing_summary.strip())
     if user_points:
-        summary_parts.append(f"用户目标/提问：{user_points[0]}" + (f" -> {user_points[-1]}" if len(user_points) > 1 else ""))
+        label = "User goal or question: " if locale == "en" else "用户目标/提问："
+        summary_parts.append(f"{label}{user_points[0]}" + (f" -> {user_points[-1]}" if len(user_points) > 1 else ""))
     if assistant_points:
-        summary_parts.append(f"最近进展：{assistant_points[-1]}")
+        label = "Latest progress: " if locale == "en" else "最近进展："
+        summary_parts.append(f"{label}{assistant_points[-1]}")
     process_summary = " | ".join(dict.fromkeys(p for p in summary_parts if p))[:600]
 
     return {
@@ -1322,7 +1357,8 @@ def _agent_summary_eligible(mem: dict[str, Any]) -> bool:
     return mem.get("category") in VALID_CATEGORIES
 
 
-def _apply_agent_supplied_summary(conn, *, project_id, conversation_id, actor, mem, cwd: str | None = None) -> dict[str, Any]:
+def _apply_agent_supplied_summary(conn, *, project_id, conversation_id, actor, mem, cwd: str | None = None,
+                                  language: str) -> dict[str, Any]:
     from app.services import content_service
 
     reconcile_res = content_service.reconcile_long_term_memory(
@@ -1341,6 +1377,7 @@ def _apply_agent_supplied_summary(conn, *, project_id, conversation_id, actor, m
         source_kind="conversation" if conversation_id else None,
         quote=mem.get("quote"),
         cwd=cwd,
+        language=language,
         _connection=conn,
     )
     rec_action = reconcile_res.get("action")
@@ -1414,6 +1451,7 @@ def auto_summarize_memory(
     cwd: str | None = None,
     actor: str = "host_agent",
     auto_extract_from_messages: bool = True,
+    language: str | None = None,
 ) -> dict[str, Any]:
     """Companion implicit automatic memory summarization & session checkpoint.
 
@@ -1423,6 +1461,8 @@ def auto_summarize_memory(
     """
     from app.services import conversation_service, project_service, working_memory_service
 
+    if language is not None:
+        check_language(language)
     conv: dict[str, Any] | None = None
     message_index_offset = 0
     if conversation_id:
@@ -1456,10 +1496,13 @@ def auto_summarize_memory(
     elif conv and isinstance(conv.get("messages"), list):
         effective_messages = conv["messages"]
 
+    locale = language or _message_language(effective_messages) or (
+        _message_language(conv.get("messages") or []) if conv else None
+    ) or _text_language(session_summary or "")
     batch_extracted_memories: list[dict[str, Any]] = []
     batch_temp_constraints: list[dict[str, Any]] = []
     batch_summaries: list[str] = []
-    archive_source: tuple[Any, str, int] | None = None
+    archive_source: tuple[Any, str, int, str] | None = None
     if not effective_messages and auto_extract_from_messages and not conversation_id:
         from app.services import governance_guardrails
 
@@ -1484,9 +1527,14 @@ def auto_summarize_memory(
                     row_msgs = []
                 if not isinstance(row_msgs, list) or not row_msgs:
                     continue
+                source_language = language or _message_language(row_msgs)
+                if locale is None:
+                    locale = source_language
+                row_locale = source_language or locale or "en"
                 h_res = extract_implicit_memories_from_messages(
                     row_msgs,
                     existing_summary=str(row["process_summary"] or ""),
+                    language=row_locale,
                 )
                 row_summary = (h_res.get("process_summary") or "").strip()
                 if row_summary:
@@ -1502,14 +1550,14 @@ def auto_summarize_memory(
                         if not u_text:
                             continue
                         chk = governance_guardrails.classify_write_candidate(
-                            title=str(row["title"] or "会话观察")[:48],
+                            title=str(row["title"] or ("Conversation observation" if row_locale == "en" else "会话观察"))[:48],
                             content=u_text,
                             category="background",
                             is_agent_write=True,
                             actor=actor,
                         )
                         if chk["allowed"]:
-                            archive_source = (row, u_text, m_idx)
+                            archive_source = (row, u_text, m_idx, row_locale)
                             break
                 row_mems = h_res.get("memories") or []
                 for m_item in row_mems:
@@ -1527,15 +1575,20 @@ def auto_summarize_memory(
                             "constraint": tc,
                             "project_id": row["project_id"] or resolved_project_id,
                             "cwd": row["cwd"] or effective_cwd,
+                            "language": row_locale,
                         }
                     )
             if not batch_extracted_memories and not batch_temp_constraints and archive_source is not None:
-                src_row, src_user_text, src_msg_idx = archive_source
-                conv_title = str(src_row["title"] or "近期会话").strip()[:48]
+                src_row, src_user_text, src_msg_idx, row_locale = archive_source
+                conv_title = str(src_row["title"] or "").strip()[:48]
+                title_zh = f"会话观察归档：{conv_title or '近期会话'}"
+                title_en = f"Conversation observation: {conv_title or 'Recent conversation'}"
+                title, alternate_title = (title_en, title_zh) if row_locale == "en" else (title_zh, title_en)
                 batch_extracted_memories.append(
                     {
                         "category": "background",
-                        "title": f"会话观察归档：{conv_title}",
+                        "title": title,
+                        "_alternate_title": alternate_title,
                         "content": src_user_text[:400],
                         "quote": src_user_text,
                         "source_message_index": src_msg_idx,
@@ -1548,10 +1601,12 @@ def auto_summarize_memory(
                     }
                 )
 
+    locale = locale or "en"
     heuristic = (
         extract_implicit_memories_from_messages(
             effective_messages,
             existing_summary=str((conv or {}).get("process_summary") or ""),
+            language=locale,
         )
         if auto_extract_from_messages and effective_messages
         else {
@@ -1570,7 +1625,7 @@ def auto_summarize_memory(
         # Create or upsert a lightweight session conversation record so relay can also see it
         created_conv = conversation_service.upsert_conversation(
             agent=actor,
-            title=(session_summary or "自动记忆检查点会话")[:80],
+            title=(session_summary or ("Memory checkpoint" if locale == "en" else "自动记忆检查点会话"))[:80],
             project_id=resolved_project_id,
             cwd=effective_cwd,
             messages=effective_messages,
@@ -1598,6 +1653,7 @@ def auto_summarize_memory(
                 "constraint": tc_str,
                 "project_id": resolved_project_id,
                 "cwd": effective_cwd,
+                "language": locale,
             }
         )
     for tc_item in pending_tcs:
@@ -1612,6 +1668,7 @@ def auto_summarize_memory(
                 cwd=tc_item.get("cwd") or effective_cwd,
                 title_hint=(conv or {}).get("title") or None,
                 agent=actor,
+                language=tc_item["language"],
             )
             routed_entry = {
                 "category": "temp_constraint",
@@ -1685,6 +1742,7 @@ def auto_summarize_memory(
                 "_source_version": item.get("_source_version"),
                 "_agent_supplied": supplied,
                 "_archive_only": bool(item.get("_archive_only")),
+                "_alternate_title": item.get("_alternate_title") if not supplied else None,
             }
         )
 
@@ -1711,17 +1769,31 @@ def auto_summarize_memory(
             dedupe_pid = eff_pid
             if cat == "preference" and personal_declaration(mem.get("quote")):
                 dedupe_pid = None
+            # Locale changes the generated heading, never the identity of the same claim.
+            candidate_titles = (mem["title"], mem.get("_alternate_title") or mem["title"])
             existing = conn.execute(
-                "SELECT id,version FROM contents WHERE project_id IS ? AND category=? AND title=? AND content=? AND status='active'",
-                (dedupe_pid, cat, mem["title"], mem["content"]),
+                """SELECT id, version, title, content FROM contents
+                   WHERE project_id IS ? AND category=? AND title IN (?, ?)
+                     AND (status='active' OR (? AND status='historical'))
+                   ORDER BY (content = ?) DESC, (status='active') DESC, (title = ?) DESC, updated_at DESC, id
+                   LIMIT 1""",
+                (dedupe_pid, cat, *candidate_titles, mem["_archive_only"],
+                 mem["content"], mem["title"]),
             ).fetchone()
-            if existing:
-                saved_items.append({"id": existing["id"], "category": cat, "title": mem["title"], "content": mem["content"],
+            if existing and existing["content"] == mem["content"]:
+                saved_items.append({"id": existing["id"], "category": cat, "title": existing["title"], "content": mem["content"],
                                     "action": "unchanged", "version": existing["version"], "supersedes_id": None})
                 continue
-            if _has_content_tombstone(conn, eff_pid, cat, mem["title"], mem["content"]):
+            if any(
+                _has_content_tombstone(conn, scope_id, cat, candidate_title, mem["content"])
+                for scope_id in dict.fromkeys((eff_pid, dedupe_pid))
+                for candidate_title in dict.fromkeys(candidate_titles)
+            ):
                 skipped_items.append({"category": cat, "title": mem["title"], "action": "skipped_tombstoned"})
                 continue
+            if existing and not mem["_archive_only"]:
+                # Preserve same-title governance when an earlier locale created the item.
+                mem["title"] = existing["title"]
             if _agent_summary_eligible(mem):
                 applied = _apply_agent_supplied_summary(
                     conn,
@@ -1730,6 +1802,7 @@ def auto_summarize_memory(
                     actor=actor,
                     mem=mem,
                     cwd=effective_cwd,
+                    language=locale,
                 )
                 was_saved = bool(applied.pop("_saved", True))
                 if was_saved:
@@ -1785,14 +1858,20 @@ def auto_summarize_memory(
     unchanged_count = sum(1 for item in saved_items if item["action"] == "unchanged")
 
     if saved_items:
-        titles_preview = "、".join(f"[{m['category']}] {m['title']}" for m in saved_items[:4])
-        summary_note = f"💡 已自动隐性总结并更新 {len(saved_items)} 条记忆：{titles_preview}"
+        count = len(saved_items)
+        items = "item" if count == 1 else "items"
+        summary_note = (f"Memory checkpoint includes {count} {items}." if locale == "en"
+                        else f"记忆检查点包含 {count} 条记忆。")
     elif routed_temp_constraints:
-        summary_note = f"💡 已将 {len(routed_temp_constraints)} 条临时约束写入当前工作任务（未污染长期记忆）。"
+        count = len(routed_temp_constraints)
+        constraints = "constraint" if count == 1 else "constraints"
+        summary_note = (f"Added {count} temporary {constraints} to the current working task." if locale == "en"
+                        else f"已将 {count} 条临时约束记录到当前工作任务。")
     elif final_summary:
-        summary_note = f"💡 已自动更新当前会话过程总结：{final_summary[:80]}"
+        summary_note = "Conversation checkpoint updated." if locale == "en" else "已更新当前会话的过程总结。"
     else:
-        summary_note = "当前对话轮次未检测到新的显式偏好、决策或阶段性记忆。"
+        summary_note = ("No new explicit preferences, decisions, or reusable task notes were found." if locale == "en"
+                        else "当前对话轮次未发现新的显式偏好、决策或阶段性记忆。")
 
     return {
         "ok": True,

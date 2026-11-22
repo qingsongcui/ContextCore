@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Any
+from typing import Any, Literal
 from fastapi import HTTPException
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -18,6 +18,7 @@ from app.services import (
 )
 from app.database import db
 from app.security import authenticated_agent
+from app.services.handoff_text import check_language
 
 
 READ_ONLY_ANNOTATIONS = ToolAnnotations(
@@ -42,12 +43,14 @@ def _observe(capability: str, tool_name: str) -> None:
         record_observation(agent_id, capability, detail={"tool_name": tool_name, "transport": "mcp"})
 
 
-def _build_applicability_warning(applicability: dict[str, Any] | None) -> str | None:
+def _build_applicability_warning(applicability: dict[str, Any] | None, language: str) -> str | None:
     norm = governance_guardrails.normalize_applicability(applicability)
     if not governance_guardrails.has_non_empty_applicability(norm):
         return None
-    parts = [f"{k}={v}" for k, v in norm.items()]
-    return f"仅在匹配适用条件时参考（{'; '.join(parts)}）；落地前请核对当前环境与版本。"
+    conditions = "; ".join(f"{key}={value}" for key, value in norm.items())
+    if language == "zh":
+        return f"仅在匹配适用条件时参考（{conditions}）；落地前请核对当前环境与版本。"
+    return f"Apply only when these conditions match ({conditions}). Verify the environment and version first."
 
 
 def _fallback_bootstrap_working_memory(
@@ -60,6 +63,7 @@ def _fallback_bootstrap_working_memory(
     session_key: str | None = None,
     max_tokens: int = 12000,
     new_task: bool = False,
+    language: str = "en",
 ) -> dict[str, Any]:
     """Degraded bootstrap path that still honours the protected-budget contract.
 
@@ -105,7 +109,7 @@ def _fallback_bootstrap_working_memory(
             "pinned": bool(item.get("pinned")) or "pinned" in tags,
             "origin_authority": item.get("origin_authority") or "manual",
             "applicability": applicability,
-            "applicability_warning": _build_applicability_warning(applicability),
+            "applicability_warning": _build_applicability_warning(applicability, language),
             "evidence_id": retrieval_service.evidence_id(item["id"], version),
         }
 
@@ -179,7 +183,7 @@ def _fallback_bootstrap_working_memory(
     # 3. Relevant lessons / background / knowledge (whole text; budget trims them)
     lesson_candidates: list[dict[str, Any]] = []
     if (query or "").strip():
-        s_res = retrieval_service.search(query=query.strip(), project_id=resolved_pid, limit=25)
+        s_res = retrieval_service.search(query=query.strip(), project_id=resolved_pid, limit=25, language=language)
         cand_ids = [
             r["id"]
             for r in (s_res.get("items") or s_res.get("results") or [])
@@ -250,7 +254,7 @@ def _fallback_bootstrap_working_memory(
         "omitted_conflicts_count": 0,
         "tasks_truncated": False,
     }
-    fitted = retrieval_service.bound_bootstrap_payload(payload, max_tokens)
+    fitted = retrieval_service.bound_bootstrap_payload(payload, max_tokens, language=language)
     if fitted.get("status") != "ready":
         # Nothing was delivered, so no memory may be reported as provided.
         return fitted
@@ -275,11 +279,15 @@ def _fallback_bootstrap_working_memory(
 contextcore_mcp = FastMCP(
     "ContextCore",
     instructions=(
-        "ContextCore (续境) is the cross-agent working memory & continuation engine for Claude Code, Codex, Cursor, OpenCode, OMP, and Antigravity. "
+        "ContextCore is the cross-agent working memory and continuation engine for Claude Code, Codex, Cursor, OpenCode, OMP, and Antigravity. "
+        "Use the user's requested reply language, or otherwise the current conversation language. Keep that language across command-only or ID-only turns. "
+        "Use language='en' for English or language='zh' for Chinese on tools that accept it. "
+        "Localize headings, options, warnings and receipts. Preserve original names, paths, identifiers and verbatim source quotes. "
+        "Do not copy mixed-language tool text into the reply.\n"
         "All 6 hosts follow the Cross-Agent Working Memory Contract:\n"
         "1. Proactive Scoped Read: Before starting substantive coding/debugging/design work in a project, switching tasks/projects/Agents, "
-        "when the user mentions '上次'/'按之前的'/'继续之前', hitting a potential pitfall, or recovering after context compaction, "
-        "call `bootstrap_working_memory(cwd=..., query=...)` first. Skip calling it for trivial 1-turn Q&A (e.g. '现在有几个分支', 'git status').\n"
+        "when the user refers to prior work, hitting a potential pitfall, or recovering after context compaction, "
+        "call `bootstrap_working_memory(cwd=..., query=..., language=...)` first. Skip unrelated small talk and simple factual questions.\n"
         "For clearly separate new work, pass `new_task=True` to load project and personal rules without old working tasks. "
         "For continuation or an unclear task relationship, use the default and honor task selection.\n"
         "2. Read != Execution Permission: If `bootstrap_working_memory`, `relay_conversation`, or `read_handoff` returns `must_not_execute=True` "
@@ -288,7 +296,7 @@ contextcore_mcp = FastMCP(
         "If `task_selection_required=True` (multiple active tasks) or `pending_conflicts` are present, ask the user before assuming one.\n"
         "3. Restrained 4-Event Writes (Zero Noise): Write ONLY on these 4 triggers: "
         "(a) User explicit decision, coding preference, or correction -> `save_memory(..., is_user_correction=...)`; "
-        "(b) Task stage completion (with verification evidence), blocker, failed attempt, or one-off constraint ('这次先别...') -> `upsert_working_task(...)`; "
+        "(b) Task stage completion (with verification evidence), blocker, failed attempt, or one-off constraint ('for this run only') -> `upsert_working_task(...)`; "
         "(c) Validated reusable conditional lesson/pitfall -> `promote_task_lesson(task_id=..., applicability=...)` or `save_memory(..., category='lesson', applicability=...)`; "
         "(d) User states an old rule/conclusion is obsolete -> `mark_memory_outdated(memory_id=..., reason=...)`. "
         "NEVER save unconfirmed AI proposals, unverified debugging guesses, or raw command/traceback logs as long-term memory.\n"
@@ -319,12 +327,13 @@ def bootstrap_working_memory(
     session_key: str | None = None,
     max_tokens: int = 12000,
     new_task: bool = False,
+    language: Literal["en", "zh"] = "en",
 ) -> dict[str, Any]:
     """Load project-scoped constraints, relevant lessons, and pending conflicts before substantive work.
 
     Set new_task only when the user starts clearly separate work. It omits active task
     state and temporary constraints. An explicit task_id takes precedence. Unconfirmed
-    handoffs still require confirmation.
+    handoffs still require confirmation. Use language for generated notices and labels.
     """
     if type(max_tokens) is not int or not 1 <= max_tokens <= 32000:
         raise ValueError("max_tokens must be between 1 and 32000")
@@ -343,6 +352,7 @@ def bootstrap_working_memory(
             session_key=session_key,
             max_tokens=max_tokens,
             new_task=new_task,
+            language=language,
         )
         if isinstance(res, dict) and "ok" not in res:
             res = {"ok": True, **res}
@@ -356,6 +366,7 @@ def bootstrap_working_memory(
         session_key=session_key,
         max_tokens=max_tokens,
         new_task=new_task,
+        language=language,
     )
 
 
@@ -368,8 +379,9 @@ def search_memory(
     project_id: str | None = None,
     category: str | None = None,
     limit: int = 10,
+    language: Literal["en", "zh"] = "en",
 ) -> dict[str, Any]:
-    """Search active ContextCore memories and documents (FTS5/hybrid ranked, zero read_count boost)."""
+    """Search active memories and documents. The requested language affects generated labels only."""
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError('limit must be between 1 and 100')
     _observe("memory_read", "search_memory")
@@ -382,6 +394,7 @@ def search_memory(
         project_id=project_id,
         limit=min(100, max(limit * 4, limit)),
         mode=search_mode,
+        language=language,
     )
     ranked_ids: list[str] = []
     for hit in (ranked_pack.get("items") or ranked_pack.get("results") or []):
@@ -460,7 +473,7 @@ def search_memory(
             "version": item["version"],
             "origin_authority": item.get("origin_authority", "manual"),
             "applicability": app_cond,
-            "applicability_warning": _build_applicability_warning(app_cond),
+            "applicability_warning": _build_applicability_warning(app_cond, language),
             "conflict": item["id"] in conflicted_ids,
         })
 
@@ -485,6 +498,7 @@ def assemble_context(
     max_tokens: int = 24000,
     handoff_id: str | None = None,
     context_mode: str = "compressed",
+    language: Literal["en", "zh"] = "en",
 ) -> dict[str, Any]:
     """Assemble traceable relevant context; character estimates are not billed tokens."""
     from app.services import retrieval_service
@@ -498,6 +512,7 @@ def assemble_context(
         budget_tokens=max_tokens,
         consumer_id=consumer,
         handoff_id=handoff_id,
+        language=language,
     )
     blocks = [{"id": e["id"], "project_id": e.get("project_id"), "kind": e.get("kind"),
                "category": e.get("category"), "title": e["title"], "content": e["text"],
@@ -519,7 +534,8 @@ def assemble_context(
         "coverage": "partial" if blocks else "empty",
         "retrieval_coverage": pack.get("coverage"),
         "omitted_matching_items": len(pack["omitted"]),
-        "coverage_note": "Retrieved context does not establish complete task coverage.",
+        "coverage_note": ("检索结果可能只覆盖部分任务。" if language == "zh"
+                          else "Retrieved context does not establish complete task coverage."),
         "continuation": continuation,
         "trigger": "opt_in_mcp",
     }
@@ -528,6 +544,7 @@ def assemble_context(
             consumer=consumer if consumer != "mcp" else None,
             limit=10,
             sync_first=True,
+            language=language,
         )
         result["relay_required"] = True
         result["relay_status"] = "selection_required"
@@ -537,9 +554,9 @@ def assemble_context(
         relay_mode = "full" if (context_mode or "").strip().lower() == "full" else (context_mode or "compressed")
         return handoff_service.relay_project(
             project_id=project_id, consumer=_actor(), context_mode=relay_mode,
-            query=task_query, max_tokens=max_tokens, sync_first=False,
+            query=task_query, max_tokens=max_tokens, sync_first=False, language=language,
         )
-    return retrieval_service.bound_context_response(result, max_tokens)
+    return retrieval_service.bound_context_response(result, max_tokens, language=language)
 
 
 @contextcore_mcp.tool(
@@ -646,7 +663,7 @@ def start_handoff(
     conversation_id: str | None = None,
     query: str | None = None,
     source_agent: str | None = None,
-    language: str = 'zh',
+    language: Literal["en", "zh"] = "en",
 ) -> dict[str, Any]:
     """Create a structured handoff card for target agent. Status remains awaiting_confirmation until explicitly confirmed."""
     caller = _actor()
@@ -675,7 +692,9 @@ def start_handoff(
                 **exc.detail,
             }
             if code == handoff_service.AMBIGUOUS_PROJECT_CODE:
-                discovery = handoff_service.discover_relay_projects(consumer=caller, limit=10, sync_first=False)
+                discovery = handoff_service.discover_relay_projects(
+                    consumer=caller, limit=10, sync_first=False, language=language,
+                )
                 payload["relay_candidates"] = discovery["candidates"]
                 payload["question_prompt"] = discovery["question_prompt"]
             return payload
@@ -686,8 +705,9 @@ def start_handoff(
         "card": h["card"],
         "source_ids": h["source_ids"],
         "must_confirm": True,
-        "continuation": handoff_service.continuation_contract(h, caller if caller == h.get("target_agent") else h.get("target_agent")),
-        "message": "Handoff card created in awaiting_confirmation state. User must confirm before proceeding. Hooks do not inject this card.",
+        "continuation": handoff_service.continuation_contract(h, h.get("target_agent"), language=language),
+        "message": ("已创建接棒卡，等待用户确认后继续。" if language == "zh"
+                    else "Handoff awaits user confirmation. Obtain confirmation before proceeding."),
     }
 
 
@@ -695,26 +715,32 @@ def start_handoff(
     title="Confirm handoff",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
 )
-def confirm_handoff(handoff_id: str, confirmed: StrictBool = False) -> dict[str, Any]:
+def confirm_handoff(
+    handoff_id: str, confirmed: StrictBool = False, language: Literal["en", "zh"] = "en",
+) -> dict[str, Any]:
     """Confirm a handoff card to transition status from awaiting_confirmation to confirmed."""
+    check_language(language)
     if confirmed is not True:
-        return {"ok": False, "error": "Confirmation requires confirmed=True"}
+        return {"ok": False, "error": "确认接棒需要 confirmed=True。" if language == "zh"
+                else "Confirmation requires confirmed=True"}
     caller = _actor()
-    handoff = handoff_service.get_handoff(handoff_id)
+    handoff = handoff_service.get_handoff(handoff_id, language)
     if handoff.get("target_agent", "").strip().lower() != caller.strip().lower():
         return {
             "ok": False,
             "error": f"Unauthorized: confirming agent '{caller}' does not match handoff target agent '{handoff.get('target_agent')}'",
         }
-    h = handoff_service.confirm_handoff(handoff_id, confirmed=True, actor=caller)
-    continuation = handoff_service.continuation_contract(h, caller)
+    h = handoff_service.confirm_handoff(handoff_id, confirmed=True, actor=caller, language=language)
+    continuation = handoff_service.continuation_contract(h, caller, language=language)
     return {
         "ok": True,
         "handoff_id": h["id"],
         "status": "confirmed",
         "card": h.get("card"),
         "continuation": continuation,
-        "message": "Handoff confirmed. Continue from continuation.resume_from; do not redo completed work or switch to parallel tasks.",
+        "message": ("接棒已确认。请从 continuation.resume_from 继续，避免重复已完成步骤或切换到别的任务。"
+                    if language == "zh" else
+                    "Handoff confirmed. Continue from continuation.resume_from; do not redo completed work or switch to parallel tasks."),
     }
 
 
@@ -722,7 +748,7 @@ def confirm_handoff(handoff_id: str, confirmed: StrictBool = False) -> dict[str,
     title="Read confirmed handoff",
     annotations=READ_ONLY_ANNOTATIONS,
 )
-def read_handoff(handoff_id: str, language: str = 'zh') -> dict[str, Any]:
+def read_handoff(handoff_id: str, language: Literal["en", "zh"] = "en") -> dict[str, Any]:
     """Read a handoff card addressed to this Agent. Unconfirmed cards return a readback-only payload; never confirms on its own."""
     _observe("memory_read", "read_handoff")
     handoff = handoff_service.get_handoff(handoff_id, language)
@@ -734,7 +760,7 @@ def read_handoff(handoff_id: str, language: str = 'zh') -> dict[str, Any]:
         raise ValueError(f"Handoff is {status or 'invalidated'} and cannot be read")
     with db() as conn:
         handoff_service.validate_source_revisions(conn, handoff)
-    continuation = handoff_service.continuation_contract(handoff, caller)
+    continuation = handoff_service.continuation_contract(handoff, caller, language=language)
     if status == "awaiting_confirmation":
         return {
             "ok": False,
@@ -750,7 +776,9 @@ def read_handoff(handoff_id: str, language: str = 'zh') -> dict[str, Any]:
             "readback": handoff.get("readback"),
             "summary": handoff.get("summary") or handoff["card"].get("goal"),
             "source_ids": handoff.get("source_ids"),
-            "instructions": "Read back all 6 fields to the user and wait for explicit confirmation before calling confirm_handoff or modifying code.",
+            "instructions": ("向用户完整回读六项内容，明确确认后再调用 confirm_handoff 或修改代码。"
+                             if language == "zh" else
+                             "Read back all 6 fields to the user and wait for explicit confirmation before calling confirm_handoff or modifying code."),
             "continuation": continuation,
         }
     result = dict(handoff)
@@ -762,8 +790,11 @@ def read_handoff(handoff_id: str, language: str = 'zh') -> dict[str, Any]:
     title="Read memory",
     annotations=READ_ONLY_ANNOTATIONS,
 )
-def read_memory(id: str) -> dict[str, Any]:
+def read_memory(id: str, language: Literal["en", "zh"] = "en") -> dict[str, Any]:
     """Read complete content, provenance and current version before editing."""
+    from app.services import retrieval_service
+
+    check_language(language)
     _observe("memory_read", "read_memory")
     item = content_service.get_content(id)
     telemetry_service.record_provided(
@@ -774,6 +805,7 @@ def read_memory(id: str) -> dict[str, Any]:
         content_versions={id: item.get("version", 1)},
     )
     item["usage_summary"] = telemetry_service.get_usage_summary(id)
+    item["sources"] = retrieval_service.localized_sources(item["sources"], language)
     return item
 
 
@@ -825,8 +857,11 @@ def save_memory(
     origin_authority: str | None = None,
     is_user_correction: bool = False,
     cited_memory_ids: list[str] | None = None,
+    language: Literal["en", "zh"] = "en",
 ) -> dict[str, Any]:
-    """Save a governed long-term memory item. Routes temporary task constraints ('这次先别...') to working_tasks and blocks unconfirmed proposals/guesses/raw logs."""
+    """Save governed long-term memory. Temporary constraints are routed to working tasks. Language selects the receipt language."""
+    check_language(language)
+    current_task_title = "当前会话任务" if language == "zh" else "Current conversation task"
     caller = _actor()
     _observe("memory_write", "save_memory")
     is_global = str(scope or "").strip().lower() == "global"
@@ -863,6 +898,7 @@ def save_memory(
             agent=caller,
             last_agent=caller,
             cited_memory_ids=cited_memory_ids,
+            language=language,
         )
         return {
             "ok": True,
@@ -873,7 +909,8 @@ def save_memory(
             "project_id": resolved_project_id,
             "scope": effective_scope,
             "working_task": routed_task,
-            "summary_note": f"💡 短期任务进展已记入当前工作任务：{clean_title}",
+            "summary_note": (f"已记录短期任务进展：{clean_title}" if language == "zh"
+                             else f"Task progress recorded: {clean_title}"),
         }
 
     # MCP save_memory is an unverified agent tool call; never let caller flags
@@ -901,6 +938,7 @@ def save_memory(
         ambiguous=ambiguous,
         cwd=cwd,
         auto_route_temp_constraint=True,
+        language=language,
     )
 
     rec_action = reconciled.get("action")
@@ -908,13 +946,14 @@ def save_memory(
         wt = reconciled.get("working_task")
         if wt is None:
             wt = working_memory_service.upsert_working_task(
-                title=clean_title if not working_memory_service.is_trivial_qa(clean_title) else "当前会话任务",
+                title=clean_title if not working_memory_service.is_trivial_qa(clean_title) else current_task_title,
                 project_id=resolved_project_id,
                 cwd=cwd,
                 temp_constraints=[clean_content],
                 agent=caller,
                 last_agent=caller,
                 cited_memory_ids=cited_memory_ids,
+                language=language,
             )
         elif cited_memory_ids:
             telemetry_service.record_cited(
@@ -935,7 +974,8 @@ def save_memory(
             "project_id": resolved_project_id,
             "scope": effective_scope,
             "working_task": wt,
-            "summary_note": f"💡 单次临时约束已记入当前工作任务（未写入长期记忆）：{clean_title}",
+            "summary_note": (f"临时要求已记入当前任务：{clean_title}" if language == "zh"
+                             else f"Temporary requirement added to the current task: {clean_title}"),
         }
 
     if rec_action == "DROP_TOMBSTONED":
@@ -970,7 +1010,8 @@ def save_memory(
             "status": "conflict_pending",
             "version": existing_item.get("version", 1),
             "action": "conflict_recorded",
-            "summary_note": f"💡 存在待确认记忆冲突，已收入「待确认」列表：[{category}] {clean_title}",
+            "summary_note": (f"记忆冲突待确认：{clean_title}" if language == "zh"
+                             else f"Memory conflict awaiting review: {clean_title}"),
         }
 
     mem = reconciled.get("memory") or {}
@@ -995,7 +1036,8 @@ def save_memory(
             "status": mem.get("status", "active"),
             "version": mem.get("version", 1),
             "action": "unchanged",
-            "summary_note": f"💡 已记入续境记忆：[{category}] {clean_title}",
+            "summary_note": (f"已有相同记忆：{clean_title}" if language == "zh"
+                             else f"Matching memory already exists: {clean_title}"),
         }
 
     eff_superseded = (
@@ -1018,7 +1060,7 @@ def save_memory(
         "action": "updated" if (rec_action == "SUPERSEDE" or eff_superseded) else "created",
         "supersedes_id": eff_superseded,
         "superseded_id": eff_superseded,
-        "summary_note": f"💡 已自动记入续境记忆：[{category}] {clean_title}",
+        "summary_note": f"已保存记忆：{clean_title}" if language == "zh" else f"Memory saved: {clean_title}",
     }
 
 
@@ -1050,8 +1092,10 @@ def upsert_working_task(
     citation_note: str | None = None,
     continue_branch_task: bool = False,
     expected_version: int | None = None,
+    language: Literal["en", "zh"] = "en",
 ) -> dict[str, Any]:
     """Create or update a short-term working task (6 structured slots, execution_mode, and cited_memory_ids)."""
+    check_language(language)
     caller = _actor()
     _observe("memory_write", "upsert_working_task")
     resolved_pid = project_id
@@ -1092,6 +1136,7 @@ def upsert_working_task(
         continue_branch_task=continue_branch_task,
         expected_version=expected_version,
         allow_skip_trivial=True,
+        language=language,
     )
     if res.get("skipped"):
         return {
@@ -1129,6 +1174,7 @@ def promote_task_lesson(
     tags: list[str] | None = None,
     pinned: bool = False,
     complete_task: bool = False,
+    language: Literal["en", "zh"] = "en",
 ) -> dict[str, Any]:
     """Promote a verified task outcome into conditional long-term memory (requires non-empty applicability).
 
@@ -1137,6 +1183,7 @@ def promote_task_lesson(
     promotions are recorded as `source_backed`; a conflicting promotion returns
     `promoted=False` and leaves the task unchanged.
     """
+    check_language(language)
     caller = _actor()
     _observe("memory_write", "promote_task_lesson")
     res = working_memory_service.promote_task_conclusion(
@@ -1167,9 +1214,9 @@ def promote_task_lesson(
         "memory": mem,
         "conflict": conflict,
         "summary_note": (
-            f"💡 已从任务提炼条件经验：[{category}] {title}"
-            if promoted
-            else f"💡 提炼经验与现有规则冲突，已转入待确认：{title}"
+            (f"已保存任务经验：{title}" if language == "zh" else f"Task lesson saved: {title}")
+            if promoted else
+            (f"经验冲突待确认：{title}" if language == "zh" else f"Lesson conflict awaiting review: {title}")
         ),
     }
 
@@ -1222,8 +1269,10 @@ def mark_memory_outdated(
     memory_id: str,
     reason: str = "",
     expected_version: int | None = None,
+    language: Literal["en", "zh"] = "en",
 ) -> dict[str, Any]:
     """Mark an obsolete memory item as outdated so it stops being injected while remaining traceable."""
+    check_language(language)
     caller = _actor()
     _observe("memory_write", "mark_memory_outdated")
     updated = content_service.mark_outdated(
@@ -1241,7 +1290,8 @@ def mark_memory_outdated(
         "version": updated["version"],
         "outdated_reason": updated.get("outdated_reason"),
         "memory": updated,
-        "summary_note": f"💡 已将旧记忆标记为过时：{updated['title']}",
+        "summary_note": (f"已将记忆标记为过时：{updated['title']}" if language == "zh"
+                         else f"Memory marked outdated: {updated['title']}"),
     }
 
 
@@ -1402,11 +1452,13 @@ def get_system_status() -> dict[str, Any]:
     title="Read context evidence",
     annotations=READ_ONLY_ANNOTATIONS,
 )
-def read_evidence(evidence_id: str, offset: int = 0, limit: int = 2000) -> dict[str, Any]:
+def read_evidence(
+    evidence_id: str, offset: int = 0, limit: int = 2000, language: Literal["en", "zh"] = "en",
+) -> dict[str, Any]:
     """Read a versioned evidence passage; stale or deleted sources cannot be revived."""
     from app.services import retrieval_service
     _observe("memory_read", "read_evidence")
-    return retrieval_service.read_evidence(evidence_id, offset, limit)
+    return retrieval_service.read_evidence(evidence_id, offset, limit, language=language)
 
 
 _MAX_MCP_TRANSCRIPT_PAGE_BYTES = 48_000
@@ -1561,7 +1613,7 @@ def read_conversation_messages(
 )
 def discover_relay_conversations(
     limit: int = 15,
-    language: str = 'zh',
+    language: Literal["en", "zh"] = "en",
     cwd: str | None = None,
     project_id: str | None = None,
     offset: int = 0,
@@ -1588,7 +1640,7 @@ def discover_relay_conversations(
 )
 def list_relay_conversations(
     limit: int = 15,
-    language: str = 'zh',
+    language: Literal["en", "zh"] = "en",
     cwd: str | None = None,
     project_id: str | None = None,
     offset: int = 0,
@@ -1617,7 +1669,7 @@ def relay_conversation(
     conversation_id: str | None = None,
     query: str | None = None,
     max_tokens: int = 12000,
-    language: str = 'zh',
+    language: Literal["en", "zh"] = "en",
     cwd: str | None = None,
     project_id: str | None = None,
     limit: int = 25,
@@ -1658,7 +1710,7 @@ def relay_conversation(
     title="List relay projects across agents",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
 )
-def list_relay_projects(limit: int = 10, language: str = 'zh') -> dict[str, Any]:
+def list_relay_projects(limit: int = 10, language: Literal["en", "zh"] = "en") -> dict[str, Any]:
     """Sync recent conversations across all supported agents and return a summarized candidate list of projects for relay."""
     if type(limit) is not int or not 1 <= limit <= 50:
         raise ValueError("limit must be between 1 and 50")
@@ -1683,7 +1735,7 @@ def relay_project(
     conversation_id: str | None = None,
     query: str | None = None,
     max_tokens: int = 32000,
-    language: str = 'zh',
+    language: Literal["en", "zh"] = "en",
 ) -> dict[str, Any]:
     """
     Relay a project from recent cross-agent conversations.
@@ -1718,6 +1770,7 @@ def auto_summarize_memory(
     memories: list[dict[str, Any]] | None = None,
     messages: list[dict[str, Any]] | None = None,
     cwd: str | None = None,
+    language: Literal["en", "zh"] | None = None,
 ) -> dict[str, Any]:
     """
     Companion implicit automatic memory summarization during conversation.
@@ -1735,4 +1788,5 @@ def auto_summarize_memory(
         cwd=cwd,
         actor=caller,
         auto_extract_from_messages=True,
+        language=language,
     )

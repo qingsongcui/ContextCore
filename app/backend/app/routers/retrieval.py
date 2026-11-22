@@ -18,6 +18,7 @@ class SearchRequest(StrictRequest):
     project_id: str | None = None
     limit: int = Field(default=15, ge=1, le=100)
     mode: Literal["lexical", "hybrid", "semantic"] = "lexical"
+    language: Literal["en", "zh"] = "zh"
 
 
 class ProtectedEntry(StrictRequest):
@@ -33,6 +34,7 @@ class AssembleRequest(StrictRequest):
     consumer_id: str | None = Field(default=None, min_length=1, max_length=200)
     protected: list[ProtectedEntry] = Field(default_factory=list, max_length=100)
     limit: int = Field(default=15, ge=1, le=100)
+    language: Literal["en", "zh"] = "zh"
 
 
 class SettingsPatch(StrictRequest):
@@ -101,13 +103,16 @@ def assemble_endpoint(request: AssembleRequest):
     payload = request.model_dump()
     payload["consumer_id"] = authenticated_agent.get() or "web"
     return retrieval_service.bound_context_response(
-        retrieval_service.assemble_context(**payload), request.budget_tokens,
+        retrieval_service.assemble_context(**payload), request.budget_tokens, language=request.language,
     )
 
 
 @router.get("/evidence/{evidence_id}")
-def evidence_endpoint(evidence_id: str, offset: int = Query(0, ge=0), limit: int = Query(2000, ge=1, le=8000)):
-    return retrieval_service.read_evidence(evidence_id, offset, limit)
+def evidence_endpoint(
+    evidence_id: str, offset: int = Query(0, ge=0), limit: int = Query(2000, ge=1, le=8000),
+    language: Literal["en", "zh"] = "zh",
+):
+    return retrieval_service.read_evidence(evidence_id, offset, limit, language=language)
 
 
 @router.post("/packs/{pack_id}/ack")

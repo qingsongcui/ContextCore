@@ -85,6 +85,73 @@ def test_independent_memory_survives_source_deletion_and_disabled_host(store):
     assert retrieval.read_evidence(result["items"][0]["evidence_id"])["text"] == item["content"]
 
 
+@pytest.mark.parametrize(
+    ("language", "warning_label", "source_prefix", "deleted_title", "feedback_label", "budget_label"),
+    [
+        ("en", "Applicability conditions", "Sources", "Deleted source",
+         "Long-term constraints loaded", "The budget is too small"),
+        ("zh", "适用条件", "来源", "已删除来源", "已加载", "预算不足"),
+    ],
+)
+def test_retrieval_localizes_generated_guidance_and_preserves_sources(
+    store, language, warning_label, source_prefix, deleted_title, feedback_label, budget_label,
+):
+    with db() as conn:
+        conn.execute("""INSERT INTO conversations(id,agent,title,started_at,updated_at,created_at,messages)
+            VALUES ('conv','codex','原聊天',?,?,?,?)""", (now_iso(), now_iso(), now_iso(), encode([])))
+    item = memory(
+        title="数据库上线规则", body="涉密任务只读，不要覆盖凭据。", category="decision",
+        applicability={"env": "生产环境"}, source_id="conv", source_kind="conversation", quote="数据库上线规则",
+    )
+    before = retrieval.search("数据库上线规则", language=language)["items"][0]
+    assert before["sources"][0]["title"] == "原聊天"
+    with db() as conn:
+        conn.execute("DELETE FROM conversations WHERE id='conv'")
+
+    hit = retrieval.search("数据库上线规则", language=language)["items"][0]
+    assert hit["title"] == item["title"] and hit["snippet"] == item["content"]
+    assert hit["applicability"] == {"env": "生产环境"}
+    assert hit["applicability_warning"].startswith(warning_label)
+    assert hit["sources"][0]["title"] == deleted_title
+    evidence = retrieval.read_evidence(hit["evidence_id"], language=language)
+    assert evidence["text"] == item["content"]
+    assert evidence["sources"][0]["title"] == deleted_title
+    pack = retrieval.assemble_context("数据库上线规则", language=language)
+    assert f"{source_prefix}: {deleted_title}" in pack["text"]
+    assert item["content"] in pack["text"]
+    assert retrieval.record_injection(pack["id"])["status"] == "emitted"
+    ready = retrieval.bootstrap_working_memory(language=language)
+    assert feedback_label in ready["feedback_summary"]
+    assert ready["applicable_constraints"][0]["content"] == item["content"]
+    refused = retrieval.bootstrap_working_memory(max_tokens=1, language=language)
+    assert refused["status"] == "insufficient_budget"
+    assert refused["must_not_execute"] is True
+    assert refused["message"].startswith(budget_label)
+    assert "数据库上线规则" not in json.dumps(refused, ensure_ascii=False)
+
+
+def test_localized_pack_acknowledges_the_source_snapshot_actually_returned(store, monkeypatch):
+    with db() as conn:
+        conn.execute("""INSERT INTO conversations(id,agent,title,started_at,updated_at,created_at,messages)
+            VALUES ('conv','codex','原聊天',?,?,?,?)""", (now_iso(), now_iso(), now_iso(), encode([])))
+    item = memory(source_id="conv", source_kind="conversation")
+    run_search = retrieval._search
+
+    def search_then_delete(*args, **kwargs):
+        result = run_search(*args, **kwargs)
+        with db() as conn:
+            conn.execute("DELETE FROM conversations WHERE id='conv'")
+        return result
+
+    monkeypatch.setattr(retrieval, "_search", search_then_delete)
+    pack = retrieval.assemble_context("共享", language="en")
+    assert pack["entries"][0]["id"] == item["id"]
+    assert pack["entries"][0]["sources"][0]["title"] == "原聊天"
+    with pytest.raises(HTTPException) as stale:
+        retrieval.record_injection(pack["id"])
+    assert stale.value.status_code == 409
+
+
 def test_protected_budget_fails_explicitly_without_truncation_or_ledger(store):
     memory()
     result = retrieval.assemble_context("", budget_tokens=5, protected=[{"id": "constraint", "text": "必须保留明确授权和精确资源标识"}])

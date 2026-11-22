@@ -1,5 +1,5 @@
 import hashlib
-from typing import Any
+from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Request, Body
 from app.models import Connection, ConnectionPatch
 from app.services import connection_service, conversation_service, project_service
@@ -178,8 +178,8 @@ def one_click_disconnect_endpoint(connection_id: str, request: Request, payload:
 
 
 @router.get("", response_model=list[Connection])
-def list_connections_endpoint():
-    return connection_service.list_connections()
+def list_connections_endpoint(language: Literal["zh", "en"] = "zh"):
+    return connection_service.list_connections(language=language)
 
 
 @router.post("/discover", response_model=list[Connection])

@@ -735,6 +735,7 @@ def upsert_working_task(
     expected_version: int | None = None,
     allow_skip_trivial: bool = False,
     conn: sqlite3.Connection | None = None,
+    language: str = "zh",
 ) -> dict[str, Any]:
     """Create or converge onto an existing active working task with 6 bounded slots & CAS."""
     clean_title = _bound_str(title, MAX_TITLE_CHARS)
@@ -840,12 +841,11 @@ def upsert_working_task(
                 eff_mode = "approved"
 
             eff_goal = _bound_str(goal if goal is not None else clean_title, MAX_GOAL_CHARS)
-            eff_state = _bound_str(
-                current_state
-                if current_state is not None
-                else ("正在讨论方案，尚未授权改代码" if eff_mode == "discussion_only" else ""),
-                MAX_CURRENT_STATE_CHARS,
-            )
+            default_state = ""
+            if eff_mode == "discussion_only":
+                default_state = ("正在讨论方案，尚未授权改代码" if language == "zh"
+                                 else "Discussion in progress. Code changes await authorization.")
+            eff_state = _bound_str(current_state if current_state is not None else default_state, MAX_CURRENT_STATE_CHARS)
 
             steps_list = _normalize_completed_steps(completed_steps, actor, now)
             if add_completed_step is not None:
@@ -1168,6 +1168,7 @@ def add_temp_constraint_to_active_task(
     title_hint: str | None = None,
     agent: str | None = None,
     conn: sqlite3.Connection | None = None,
+    language: str = "zh",
 ) -> dict[str, Any]:
     """Attach a temporary constraint (`这次先别...`) to the current active task without touching long-term memory."""
     clean_constraint = _bound_str(constraint, MAX_ITEM_CHARS)
@@ -1207,9 +1208,10 @@ def add_temp_constraint_to_active_task(
                 agent=agent,
                 conn=active_conn,
             )
-        fallback_title = _bound_str(title_hint or "当前会话任务", MAX_TITLE_CHARS)
+        default_title = "当前会话任务" if language == "zh" else "Current conversation task"
+        fallback_title = _bound_str(title_hint or default_title, MAX_TITLE_CHARS)
         if is_trivial_qa(fallback_title):
-            fallback_title = "当前会话任务"
+            fallback_title = default_title
         return upsert_working_task(
             project_id=project_id,
             cwd=cwd,
@@ -1219,6 +1221,7 @@ def add_temp_constraint_to_active_task(
             temp_constraints=[clean_constraint],
             agent=agent,
             conn=active_conn,
+            language=language,
         )
 
 
