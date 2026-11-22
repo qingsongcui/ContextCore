@@ -2,6 +2,11 @@
 
 All notable changes to ContextCore will be documented in this file.
 
+## [1.0.0-beta.6] - 2026-11-22
+
+- Stop the local service from waiting forever when a Git checkout's `HEAD` is not a regular file, such as a named pipe. That checkout is reported without a branch instead of blocking memory startup.
+- The previous production hang still has no recorded file path. Replaying memory startup against a copy of that database did not reproduce it, so this release does not claim to have identified that incident.
+
 ## [1.0.0-beta.5] - 2026-11-22
 
 - Reorganize the local workbench around projects, personal memory, Agent profiles, collaboration drafts, and a shared resource library.

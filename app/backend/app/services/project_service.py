@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import hashlib
 import os
 import re
+import stat
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -764,7 +765,18 @@ def read_git_checkout(path: str | None) -> dict[str, Any] | None:
                 git_dir = root / git_dir
         else:
             return None
-        head_text = (git_dir / "HEAD").read_text(encoding="utf-8", errors="replace").strip()
+        # A malformed checkout can contain a FIFO or device at HEAD. Opening a
+        # FIFO for reading normally waits forever for a writer.
+        fd = os.open(git_dir / "HEAD", os.O_RDONLY | os.O_NONBLOCK)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                return None
+            with os.fdopen(fd, "r", encoding="utf-8", errors="replace") as head:
+                fd = -1
+                head_text = head.read(4096).strip()
+        finally:
+            if fd != -1:
+                os.close(fd)
     except (OSError, UnicodeError):
         return None
     if head_text.startswith("ref:"):

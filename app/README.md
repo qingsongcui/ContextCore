@@ -184,8 +184,8 @@ An explicit standalone database path does not grant ownership of its parent.
 These controls protect other OS accounts; they do not hide data from the same
 OS user, privileged processes, or copies already made elsewhere.
 
-Release identities use an explicit mapping: frontend/tag `1.0.0-beta.5` /
-`v1.0.0-beta.5`, Python/wheel `1.0.0b5`, and native short version `1.0.0` plus
+Release identities use an explicit mapping: frontend/tag `1.0.0-beta.6` /
+`v1.0.0-beta.6`, Python/wheel `1.0.0b6`, and native short version `1.0.0` plus
 a numeric build number. `BUILD.json` retains all mapped versions. Stable
 versions retain `MAJOR.MINOR.PATCH` throughout. Unknown suffixes, mismatched
 tags and wrong wheel metadata block packaging. This mapping does not select
