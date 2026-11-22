@@ -37,7 +37,7 @@ The native macOS bundle ships a self-contained Python runtime, backend service (
   3. You expect **cross-host session capture or `/contextcore` relay for the 9 extended config hosts** (`Claude Desktop`, `Gemini CLI`, `Grok Build`, `Kimi Code`, `MiniMax Code`, `Pi`, `Hermes`, `OpenClaw`, `agy`) — those 9 hosts only support previewed configuration management.
   4. You require a **zero-prompt Apple-notarized installer** — Public Beta builds are ad-hoc signed, so first launch requires running `xattr -cr /Applications/Senrelay.app` once.
 
-### Install Beta.4 from ZIP
+### Install Beta.6 from ZIP
 
 1. Download `Senrelay-macOS.zip` from [`v1.0.0-beta.6`](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.6), extract it, and move `Senrelay.app` to `/Applications`;
 2. Run `xattr -cr /Applications/Senrelay.app` in Terminal (or allow it under **System Settings → Privacy & Security → Open Anyway**; source checkouts also include `app/macos/install-macos.sh`).
@@ -137,7 +137,7 @@ app/backend/.venv/bin/contextcore generate-plist --data-dir "$HOME/.contextcore/
 
 ## Verification gates and boundaries
 
-The [Beta.4 verification record](docs/release-readiness.md#beta4-verification) links the release CI, current suite counts, and native clean-install and upgrade checks. The [evidence register](docs/evidence.md) documents historical host results and the scope of each check.
+The [Beta.6 verification record](docs/release-readiness.md#beta6-verification) identifies the current public release, its CI run, and the in-place upgrade checked on the maintainer Mac. The [Beta.4 verification record](docs/release-readiness.md#beta4-verification) keeps that earlier suite count. The [evidence register](docs/evidence.md) documents historical host results and the scope of each check.
 
 
 ## Security

@@ -167,7 +167,7 @@ app/backend/.venv/bin/contextcore generate-plist --data-dir "$HOME/.contextcore/
 REST 版本化变更需要当前 `expected_version`；批量内容删除/合并提供完整 `expected_versions`。冲突返回 409 后重读，不能静默覆盖。MCP 永久删除需要 `confirmed=True` 和正整数 `expected_version`。初始创建与不同接口的版本要求按真实 API 契约，不将“所有操作都有 CAS”泛化到未实现接口。
 
 ## 验证状态
-验证命令见 [CONTRIBUTING](../CONTRIBUTING.md)。当前发行版的测试数、打包和安装验证见 [Beta.4 验证记录](../docs/release-readiness.md#beta4-verification)。历史参考记录包含 4 家 `live_host` 接棒、2 家 `live_protocol` 与 3 笔合成输入测试记录；随包参考记录不代表所有界面、所有记忆写入、语义质量或更广宿主配置管理完整等价，也不替代用户本机环境、真实外部账号、付费模型调用或全新 Mac 设备的独立验收。
+验证命令见 [CONTRIBUTING](../CONTRIBUTING.md)。当前发行版见 [Beta.6 验证记录](../docs/release-readiness.md#beta6-verification)。Beta.4 的测试数保留在 [Beta.4 验证记录](../docs/release-readiness.md#beta4-verification)。历史参考记录包含 4 家 `live_host` 接棒、2 家 `live_protocol` 与 3 笔合成输入测试记录；随包参考记录不代表所有界面、所有记忆写入、语义质量或更广宿主配置管理完整等价，也不替代用户本机环境、真实外部账号、付费模型调用或全新 Mac 设备的独立验收。
 
 ## macOS 桌面 App
 

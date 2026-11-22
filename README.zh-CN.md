@@ -37,7 +37,7 @@ https://github.com/user-attachments/assets/c5c3e97b-0226-43bb-bff7-3eeed605c0bd
   3. 你期望为 **九类扩展宿主**（`Claude Desktop`、`Gemini CLI`、`Grok Build`、`Kimi Code`、`MiniMax Code`、`Pi`、`Hermes`、`OpenClaw`、`agy`）开启会话采集或 `/contextcore` 跨助手接力：上述 9 类仅支持在「Agent 管理」中预览与写入配置文件，不含会话接力与自动记忆。
   4. 你要求 **完全免终端指令的双击零弹窗安装**：公开测试版采用 ad-hoc 签名、暂未执行 Apple 公证，首次安装后需执行一次 `xattr -cr /Applications/Senrelay.app`。
 
-### 下载 ZIP 安装 Beta.4
+### 下载 ZIP 安装 Beta.6
 
 1. 从 [`v1.0.0-beta.6` 发布页](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.6) 下载并解压 `Senrelay-macOS.zip`，将 `Senrelay.app` 移入 `/Applications`；
 2. 在终端执行 `xattr -cr /Applications/Senrelay.app`（或在「系统设置 → 隐私与安全性 → 仍要打开」中放行；源码检出目录亦提供 `app/macos/install-macos.sh`）。
@@ -137,7 +137,7 @@ app/backend/.venv/bin/contextcore generate-plist --data-dir "$HOME/.contextcore/
 
 ## 验证门禁与已知边界
 
-[Beta.4 验证记录](docs/release-readiness.md#beta4-verification)汇总发布 CI、测试数、原生应用首次安装及升级检查。[公开证据摘要](docs/evidence.md)记录历史宿主验收及各项检查的适用范围。
+[Beta.6 验证记录](docs/release-readiness.md#beta6-verification)标明当前公开版本、对应 CI，以及在维护者这台 Mac 上做过的原地升级检查。[Beta.4 验证记录](docs/release-readiness.md#beta4-verification)保留那一版的测试数。[公开证据摘要](docs/evidence.md)记录历史宿主验收及各项检查的适用范围。
 
 
 ## 安全

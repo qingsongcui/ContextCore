@@ -2,9 +2,19 @@
 
 Requirements: [public specification](SPECIFICATION.md). Verification summary and historical observations: [evidence register](evidence.md). Operational commands: [application guide](../app/README.md).
 
-**Public release: `1.0.0-beta.4` (macOS 14.0+ on Apple Silicon, ad-hoc signed).** The [release tag and asset receipts](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.4) identify source commit `1f51e0b` and the published archive.
+**Public release: `1.0.0-beta.6` (macOS 14.0+ on Apple Silicon, ad-hoc signed).** The [release tag and asset receipts](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.6) identify source commit `8d9e2a4`. The download named `Senrelay-macOS.zip` is native build 15. Its SHA-256 is `0064b908a0573102eb02ae123e0ad250bd8b8118dc7dff7017e8217c9f1ed152`.
+
+## Beta.6 verification
+
+The [Beta.6 release CI](https://github.com/qingsongcui/ContextCore/actions/runs/45003075534) passed the required backend, frontend, website, dependency, and macOS lifecycle gates on commit `8d9e2a4`, then produced the portable source archive, Python wheel, and a separate native candidate. Those CI files are attached beside the build-15 app archive. The CI native candidate is `Senrelay-1.0.0-beta.6-macOS-arm64.zip` (build 10). It is the gated runner build, not a replacement for `Senrelay-macOS.zip`.
+
+On the maintainer Mac, Beta.5 build 14 was replaced with build 15. The existing database remained: 55 projects, 2,977 conversations, 199 contents, and 16 working tasks, with SQLite `quick_check` ok. That upgrade does not replace a clean-Mac Gatekeeper check or Apple notarization.
+
+A Git checkout whose `HEAD` is not a regular file no longer blocks service startup; that checkout is reported without a branch. The 2026-11-22 service hang has no recorded file path and was not reproduced from a database copy, so this release does not identify that incident.
 
 ## Beta.4 verification
+
+These counts belong to `1.0.0-beta.4`, not the current public release.
 
 | Gate | Result |
 |---|---|
