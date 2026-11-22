@@ -285,7 +285,7 @@
     <section class="guide-section" id="core-hosts">
       <span class="section-kicker">01 · SIX CORE RELAY HOSTS</span>
       <h2>六大核心接力宿主：配置路径、格式与特殊约束</h2>
-      <p>以下 6 个宿主同时接入 Senrelay（续境）的本地配置同步与对话捕获管线。点击工作台「一键接入续境」时，后台会在本机文件中按统一键名 <code>contextcore</code> 写入 <code>http://127.0.0.1:8420/mcp/</code>，并按需写入伴生 Hook 与 Skill。</p>
+      <p>以下 6 个核心宿主可连接 Senrelay（续境）的本地记忆与对话接力。各宿主读取历史与记录新对话的方式不同，自动调用记忆也取决于宿主与模型。通过工作台「一键接入续境」，可按预览将 <code>contextcore</code> MCP、相关 Hook 与 Skill 写入受支持的本机配置。</p>
       <div class="host-matrix-wrap">
         <table class="host-matrix-table">
           <caption>表 1 · 六大核心宿主的真实配置文件路径与格式（2026-11-15 核对源码）</caption>
@@ -476,7 +476,7 @@ curl -s http://127.0.0.1:8420/health</code></pre>
       <div class="guide-faq">
         <details>
           <summary>为什么 9 类扩展宿主无法使用 /contextcore 跨 Agent 接力？<span aria-hidden="true">+</span></summary>
-          <p>每个工具的本地对话存储结构各异。只有 Claude Code、Codex、Cursor、Antigravity、OMP 与 OpenCode 六大核心宿主实现了对话增量索引、Worktree 消歧与 <code>/contextcore</code> 全文读取管线；其余 9 个扩展宿主仅接入配置格式转换与写前快照，官网不会将其包装为已打通接力。</p>
+          <p>每个工具的本地对话存储结构各异。Claude Code、Codex、Cursor、Antigravity、OMP 与 OpenCode 六大核心宿主提供对话索引与 <code>/contextcore</code> 接力，具体历史来源、记录覆盖和 Worktree 信息随宿主而异；其余 9 个扩展宿主仅接入配置格式转换与写前快照，官网不会将其包装为已打通接力。</p>
         </details>
         <details>
           <summary>OpenCode 和 OpenClaw 在配置同步时最容易踩什么坑？<span aria-hidden="true">+</span></summary>
@@ -518,7 +518,7 @@ curl -s http://127.0.0.1:8420/health</code></pre>
     <section class="guide-section" id="core-hosts">
       <span class="section-kicker">01 · SIX CORE RELAY HOSTS</span>
       <h2>6 Core Relay Hosts: Config Paths, Formats &amp; Caveats</h2>
-      <p>These six clients connect to both Senrelay's configuration manager and local conversation capture pipeline. Clicking One-Click Connect writes the <code>contextcore</code> entry pointing to <code>http://127.0.0.1:8420/mcp/</code> plus companion hooks and the <code>/contextcore</code> skill.</p>
+      <p>These six core hosts can connect to Senrelay's local memory and conversation relay. History sources, capture coverage, and automatic memory calls vary by host and model. One-Click Connect previews and installs the <code>contextcore</code> MCP entry and supported companion hooks and Skills into local configuration.</p>
       <div class="host-matrix-wrap">
         <table class="host-matrix-table">
           <caption>Table 1 · Verified Config Paths Across the 6 Core Context Hosts (Checked 2026-11-15)</caption>
