@@ -1,6 +1,6 @@
 # Public evidence register
 
-Source package version: `1.0.0-beta.4` (Python package `1.0.0b4`, native macOS short version `1.0.0` plus numeric build number). Surface limits are documented in [support-matrix](support-matrix.md). Requirements: [specification](SPECIFICATION.md). Delivery boundaries: [release readiness](release-readiness.md) and [known issues](known-issues.md).
+Source package version: `1.0.0-beta.5` (Python package `1.0.0b5`, native macOS short version `1.0.0` plus numeric build number). Surface limits are documented in [support-matrix](support-matrix.md). Requirements: [specification](SPECIFICATION.md). Delivery boundaries: [release readiness](release-readiness.md) and [known issues](known-issues.md).
 
 The sections below summarize **verified automated release gates** and **sanitized historical reference records** without publishing private transcripts, credentials, or raw machine dumps.
 

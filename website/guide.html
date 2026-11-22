@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#121412">
   <meta name="robots" content="noindex, nofollow">
   <title>Senrelay · 续境 — 本地运行与使用指南</title>
-  <meta name="description" content="Senrelay（续境）macOS 本地运行指南：Beta.4 下载与首次启动、/contextcore 对话接力、共享记忆及 MCP 配置同步。">
+  <meta name="description" content="Senrelay（续境）macOS 本地运行指南：Beta.5 下载与首次启动、/contextcore 对话接力、共享记忆及 MCP 配置同步。">
   <meta property="og:type" content="article">
   <meta property="og:locale" content="zh_CN">
   <meta property="og:site_name" content="Senrelay · 续境">
   <meta property="og:title" content="Senrelay · 续境 — 本地运行与使用指南">
-  <meta property="og:description" content="Senrelay（续境）macOS 本地运行指南：Beta.4 下载与首次启动、/contextcore 对话接力、共享记忆及 MCP 配置同步。">
+  <meta property="og:description" content="Senrelay（续境）macOS 本地运行指南：Beta.5 下载与首次启动、/contextcore 对话接力、共享记忆及 MCP 配置同步。">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Senrelay · 续境 — 本地运行与使用指南">
   <meta name="twitter:description" content="macOS 14.0+（Apple Silicon）本地安装、首次启动 xattr 指引、源码运行与跨 Agent 接力实战指南。">
@@ -269,8 +269,8 @@
     <section class="guide-section" id="download-requirements">
       <span class="section-kicker">01 · DOWNLOAD &amp; REQUIREMENTS</span>
       <h2>下载安装与运行环境</h2>
-      <p><a class="inline-link" data-macos-download href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.4/Senrelay-macOS.zip">下载 macOS Beta.4</a>。可在<a class="inline-link" href="https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.4">发布页</a>查看更新与验收记录。软件面向 Apple Silicon（<code>arm64</code>）、macOS 14.0 及以上，免费开源（$0，MIT 协议），安装包已内置 Python 后台与前端工作台，无需单独安装运行环境。</p>
-      <p>Public Beta 当前采用 ad-hoc 签名，尚未完成 Apple 公证。按 <a class="inline-link" href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.4/SHA256SUMS"><code>SHA256SUMS</code></a> 核对并解压安装包后，按以下步骤完成首次启动：</p>
+      <p><a class="inline-link" data-macos-download href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.5/Senrelay-macOS.zip">下载 macOS Beta.5</a>。可在<a class="inline-link" href="https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.5">发布页</a>查看更新与验收记录。软件面向 Apple Silicon（<code>arm64</code>）、macOS 14.0 及以上，免费开源（$0，MIT 协议），安装包已内置 Python 后台与前端工作台，无需单独安装运行环境。</p>
+      <p>Public Beta 当前采用 ad-hoc 签名，尚未完成 Apple 公证。按 <a class="inline-link" href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.5/SHA256SUMS"><code>SHA256SUMS</code></a> 核对并解压安装包后，按以下步骤完成首次启动：</p>
       <ol>
         <li>将 <code>Senrelay.app</code> 移入 <code>/Applications</code> 目录。</li>
         <li>在终端执行 <code>xattr -cr /Applications/Senrelay.app</code> 清理隔离属性（或在系统设置「隐私与安全性」中点击仍要打开；仓库内亦附有 <code>app/macos/install-macos.sh</code>）。</li>
@@ -365,7 +365,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
       <div class="boundary-list">
         <div class="boundary-card">
           <h3>适用边界与定价（2026-11-15 核对）</h3>
-          <p>定价为 <strong>$0</strong>（MIT 开源协议，免注册），当前版本 <code>v1.0.0-beta.4</code>。不适用场景：不支持 Windows、Linux 或 Intel Mac；纯单机回环运行（<code>127.0.0.1:8420</code>），无云同步；九类扩展宿主仅管理配置文件（详见<a class="inline-link" href="./#fact-sheet">首页核对表</a>与<a class="inline-link" href="./compare.html">5 种方案对比</a>）。</p>
+          <p>定价为 <strong>$0</strong>（MIT 开源协议，免注册），当前版本 <code>v1.0.0-beta.5</code>。不适用场景：不支持 Windows、Linux 或 Intel Mac；纯单机回环运行（<code>127.0.0.1:8420</code>），无云同步；九类扩展宿主仅管理配置文件（详见<a class="inline-link" href="./#fact-sheet">首页核对表</a>与<a class="inline-link" href="./compare.html">5 种方案对比</a>）。</p>
         </div>
         <div class="boundary-card">
           <h3>作者与许可协议</h3>
@@ -380,7 +380,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
       <div class="guide-faq" id="faq">
         <details>
           <summary>首次打开 Senrelay.app 提示“已损坏”或无法验证开发者怎么办？<span aria-hidden="true">+</span></summary>
-          <p>Public Beta（<code>v1.0.0-beta.4</code>）目前使用 ad-hoc 签名，尚未加入 Apple 公证。将应用移入 <code>/Applications</code> 后执行一次 <code>xattr -cr /Applications/Senrelay.app</code> 即可正常启动，或在系统设置「隐私与安全性」中点击仍要打开。</p>
+          <p>Public Beta（<code>v1.0.0-beta.5</code>）目前使用 ad-hoc 签名，尚未加入 Apple 公证。将应用移入 <code>/Applications</code> 后执行一次 <code>xattr -cr /Applications/Senrelay.app</code> 即可正常启动，或在系统设置「隐私与安全性」中点击仍要打开。</p>
         </details>
         <details>
           <summary>如何在宿主配置文件确认 MCP 服务名称与端口？<span aria-hidden="true">+</span></summary>
@@ -388,7 +388,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
         </details>
         <details>
           <summary>误执行了 pip install contextcore 怎么处理？<span aria-hidden="true">+</span></summary>
-          <p>PyPI 上的 <code>contextcore</code> 属于无关第三方项目，并非本仓库后端。请卸载该包后，改用<a class="inline-link" data-macos-download href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.4/Senrelay-macOS.zip">官方 ZIP</a>安装桌面版，或在仓库根目录执行 <code>app/backend/.venv/bin/python -m pip install -e 'app/backend[test]'</code>。</p>
+          <p>PyPI 上的 <code>contextcore</code> 属于无关第三方项目，并非本仓库后端。请卸载该包后，改用<a class="inline-link" data-macos-download href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.5/Senrelay-macOS.zip">官方 ZIP</a>安装桌面版，或在仓库根目录执行 <code>app/backend/.venv/bin/python -m pip install -e 'app/backend[test]'</code>。</p>
         </details>
       </div>
     </section>
@@ -409,8 +409,8 @@ npm --prefix app/frontend run dev:isolated</code></pre>
     <section class="guide-section" id="download-requirements">
       <span class="section-kicker">01 · DOWNLOAD &amp; REQUIREMENTS</span>
       <h2>Download &amp; System Requirements</h2>
-      <p><a class="inline-link" data-macos-download href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.4/Senrelay-macOS.zip">Download macOS Beta.4</a>. View the <a class="inline-link" href="https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.4">release page</a> for changes and verification records. Built for macOS 14.0+ on Apple Silicon (<code>arm64</code>), Senrelay is 100% free and open source ($0, MIT License, no signup) and bundles a self-contained backend and web workbench.</p>
-      <p>Public Beta builds are ad-hoc signed without Apple notarization. After verifying the archive against <a class="inline-link" href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.4/SHA256SUMS"><code>SHA256SUMS</code></a> and extracting it, follow these first-launch steps:</p>
+      <p><a class="inline-link" data-macos-download href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.5/Senrelay-macOS.zip">Download macOS Beta.5</a>. View the <a class="inline-link" href="https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.5">release page</a> for changes and verification records. Built for macOS 14.0+ on Apple Silicon (<code>arm64</code>), Senrelay is 100% free and open source ($0, MIT License, no signup) and bundles a self-contained backend and web workbench.</p>
+      <p>Public Beta builds are ad-hoc signed without Apple notarization. After verifying the archive against <a class="inline-link" href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.5/SHA256SUMS"><code>SHA256SUMS</code></a> and extracting it, follow these first-launch steps:</p>
       <ol>
         <li>Move <code>Senrelay.app</code> to <code>/Applications</code>.</li>
         <li>Run <code>xattr -cr /Applications/Senrelay.app</code> in Terminal (or allow it in System Settings → Privacy &amp; Security → Open Anyway; source checkouts also include <code>app/macos/install-macos.sh</code>).</li>
@@ -499,7 +499,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
       <div class="boundary-list">
         <div class="boundary-card">
           <h3>Fact Sheet &amp; Limits (Checked 2026-11-15)</h3>
-          <p>Pricing is <strong>$0</strong> (MIT License, no account required), current release <code>v1.0.0-beta.4</code>. Not suitable if you use Windows, Linux, or Intel Macs, need multi-device cloud sync, or need full relay on the 9 config-only extended hosts (see <a class="inline-link" href="./#fact-sheet">fact sheet</a> and <a class="inline-link" href="./compare.html">5-way comparison</a>).</p>
+          <p>Pricing is <strong>$0</strong> (MIT License, no account required), current release <code>v1.0.0-beta.5</code>. Not suitable if you use Windows, Linux, or Intel Macs, need multi-device cloud sync, or need full relay on the 9 config-only extended hosts (see <a class="inline-link" href="./#fact-sheet">fact sheet</a> and <a class="inline-link" href="./compare.html">5-way comparison</a>).</p>
         </div>
         <div class="boundary-card">
           <h3>Creator &amp; License</h3>
@@ -514,7 +514,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
       <div class="guide-faq" id="faq">
         <details>
           <summary>Why does macOS warn that Senrelay.app is damaged or unverified on first launch?<span aria-hidden="true">+</span></summary>
-          <p>Public Beta builds (<code>v1.0.0-beta.4</code>) are ad-hoc signed without Apple Developer ID notarization. Move <code>Senrelay.app</code> to <code>/Applications</code> and run <code>xattr -cr /Applications/Senrelay.app</code> once, or click Open Anyway in System Settings → Privacy &amp; Security.</p>
+          <p>Public Beta builds (<code>v1.0.0-beta.5</code>) are ad-hoc signed without Apple Developer ID notarization. Move <code>Senrelay.app</code> to <code>/Applications</code> and run <code>xattr -cr /Applications/Senrelay.app</code> once, or click Open Anyway in System Settings → Privacy &amp; Security.</p>
         </details>
         <details>
           <summary>Which MCP server key and local port should appear in my host config?<span aria-hidden="true">+</span></summary>
@@ -522,7 +522,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
         </details>
         <details>
           <summary>What if I accidentally ran pip install contextcore?<span aria-hidden="true">+</span></summary>
-          <p>The <code>contextcore</code> package on public PyPI is an unrelated third-party project. Uninstall it, then install from the <a class="inline-link" data-macos-download href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.4/Senrelay-macOS.zip">official ZIP</a> or run <code>app/backend/.venv/bin/python -m pip install -e 'app/backend[test]'</code> inside this repository.</p>
+          <p>The <code>contextcore</code> package on public PyPI is an unrelated third-party project. Uninstall it, then install from the <a class="inline-link" data-macos-download href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.5/Senrelay-macOS.zip">official ZIP</a> or run <code>app/backend/.venv/bin/python -m pip install -e 'app/backend[test]'</code> inside this repository.</p>
         </details>
       </div>
     </section>
@@ -555,7 +555,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
   const enTitle = `${brandPrefix} — Local Setup & Workflow Guide`;
   const metaDesc = document.querySelector('meta[name="description"]');
   const zhDesc = metaDesc ? metaDesc.getAttribute('content') : '';
-  const enDesc = `${brandPrefix} macOS Apple Silicon local guide ($0 MIT): Beta.4 download, xattr first launch, /contextcore relay, shared memory, and MCP sync.`;
+  const enDesc = `${brandPrefix} macOS Apple Silicon local guide ($0 MIT): Beta.5 download, xattr first launch, /contextcore relay, shared memory, and MCP sync.`;
 
   function detectLanguage() {
     const override = new URLSearchParams(window.location.search).get('lang');

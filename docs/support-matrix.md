@@ -1,6 +1,6 @@
 # Support matrix
 
-Public package version `1.0.0-beta.4` (Python `1.0.0b4` / native short version `1.0.0`). This page is a capability limit statement and does not certify an untested host, account, or model call. For daily end-user installation and cross-Agent workflow instructions, see the [Setup Guide (English)](https://senrelay.com/guide.html) and [Setup Guide (中文)](https://senrelay.com/zh/guide.html), and see [5-Way Comparison](https://senrelay.com/compare.html) / [五方横评](https://senrelay.com/zh/compare.html) for architecture tradeoffs.
+Public package version `1.0.0-beta.5` (Python `1.0.0b5` / native short version `1.0.0`). This page is a capability limit statement and does not certify an untested host, account, or model call. For daily end-user installation and cross-Agent workflow instructions, see the [Setup Guide (English)](https://senrelay.com/guide.html) and [Setup Guide (中文)](https://senrelay.com/zh/guide.html), and see [5-Way Comparison](https://senrelay.com/compare.html) / [五方横评](https://senrelay.com/zh/compare.html) for architecture tradeoffs.
 
 Three states stay separate:
 

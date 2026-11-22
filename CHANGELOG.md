@@ -2,6 +2,14 @@
 
 All notable changes to ContextCore will be documented in this file.
 
+## [1.0.0-beta.5] - 2026-11-22
+
+- Reorganize the local workbench around projects, personal memory, Agent profiles, collaboration drafts, and a shared resource library.
+- Manage and distribute shared Skills and MCP configurations across Agents with previews, receipts, and cross-process protection for host configuration writes.
+- Support Agent-led working memory with scoped rules, task state, source-linked recall, and explicit cross-Agent conversation relay.
+- Localize memory workflows, retrieval feedback, and relay responses in Chinese and English.
+- Refine navigation, settings, conflict review, and responsive controls throughout the workbench.
+
 ## [1.0.0-beta.4] - 2026-11-19
 
 - Organize Agent management around six assistants and combine entries that use the same native configuration.
