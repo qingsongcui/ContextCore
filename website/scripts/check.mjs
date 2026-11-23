@@ -172,6 +172,14 @@ await access(path.join(root, 'relay-workflow.md'));
 await access(path.join(root, '404.html'));
 await access(path.join(root, 'llms.txt'));
 await access(path.join(root, 'llms-full.txt'));
+await access(path.join(root, 'assets/events.js'));
+for (const fileName of ['about.html', 'privacy.html', 'contact.html', 'security.html']) {
+  await access(path.join(root, fileName));
+  await access(path.join(root, 'zh', fileName));
+  await access(path.join(root, 'en', fileName));
+  await access(path.join(root, fileName.replace('.html', '.md')));
+  await access(path.join(root, 'zh', fileName.replace('.html', '.md')));
+}
 
 // Run-guide commands must name scripts that actually exist in this checkout.
 const repository = fileURLToPath(new URL('../../', import.meta.url));
@@ -411,6 +419,10 @@ if (production) {
 }
 assert.match(llms, /zh\/index\.md/, 'llms.txt exposes the Chinese homepage mirror');
 assert.match(llmsFull, /zh\/index\.md/, 'llms-full.txt exposes the Chinese homepage mirror');
+for (const name of ['about.html', 'privacy.html', 'contact.html', 'security.html']) {
+  assert.ok(llms.includes(name), `llms.txt lists ${name}`);
+  assert.ok(llmsFull.includes(name), `llms-full.txt lists ${name}`);
+}
 for (const [name, doc] of [['guide', guide], ['compare', compare], ['hosts', hosts], ['relay-workflow', relay]]) {
   const mirror = await readFile(path.join(root, 'zh', name + '.md'), 'utf8');
   const zhOrigin = production ? 'https://senrelay.com/zh/' : './zh/';
@@ -423,7 +435,8 @@ for (const [name, doc] of [['guide', guide], ['compare', compare], ['hosts', hos
 const expectedClarityId = (process.env.CLARITY_ID || '').trim();
 const addedDocs = [];
 const featureGuides = ['agent-management.html', 'ai-coding-usage-tracker.html'];
-for (const fileName of ['claude-code-memory.html', 'mcp-json-vs-toml-config-guide.html', ...featureGuides]) {
+const trustPages = ['about.html', 'privacy.html', 'contact.html', 'security.html'];
+for (const fileName of ['claude-code-memory.html', 'mcp-json-vs-toml-config-guide.html', ...featureGuides, ...trustPages]) {
   for (const prefix of ['', 'zh/']) {
     const doc = await readFile(path.join(root, prefix, fileName), 'utf8');
     assert.equal((doc.match(/<h1\b/g) || []).length, 1, `${prefix}${fileName} has one primary heading`);
@@ -486,6 +499,12 @@ if (production) {
     assert.ok(sitemap.includes('<loc>https://senrelay.com/zh/' + fileName + '</loc>'));
     assert.ok(enHtml.includes('href="./' + fileName + '"') && html.includes('href="./' + fileName + '"'), 'both homepages link to the feature guide');
   }
+  for (const fileName of trustPages) {
+    assert.ok(sitemap.includes('<loc>https://senrelay.com/' + fileName + '</loc>'), `sitemap includes ${fileName}`);
+    assert.ok(sitemap.includes('<loc>https://senrelay.com/zh/' + fileName + '</loc>'), `sitemap includes zh/${fileName}`);
+    assert.ok(enHtml.includes('href="./' + fileName + '"') && html.includes('href="./' + fileName + '"'), `both homepages link to ${fileName}`);
+  }
+  assert.ok(enHtml.includes('assets/events.js') && html.includes('assets/events.js'), 'download event script on both homepages');
   assert.ok(!sitemap.includes('/en/'), 'sitemap excludes legacy /en/ redirect URLs');
   assert.match(sitemap, /xhtml:link rel="alternate" hreflang="en"/);
   const robots = await readFile(path.join(root, 'robots.txt'), 'utf8');

@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const temp = await mkdtemp(path.join(os.tmpdir(), 'contextcore-site-brand-'));
 try {
-  for (const entry of ['index.html', 'guide.html', 'compare.html', 'hosts.html', 'relay-workflow.html', 'claude-code-memory.html', 'mcp-json-vs-toml-config-guide.html', 'agent-management.html', 'ai-coding-usage-tracker.html', '404.html', 'assets', 'scripts', 'brand.config.mjs']) await cp(path.join(root, entry), path.join(temp, entry), { recursive: true });
+  for (const entry of ['index.html', 'guide.html', 'compare.html', 'hosts.html', 'relay-workflow.html', 'claude-code-memory.html', 'mcp-json-vs-toml-config-guide.html', 'agent-management.html', 'ai-coding-usage-tracker.html', 'about.html', 'privacy.html', 'contact.html', 'security.html', '404.html', 'assets', 'scripts', 'brand.config.mjs']) await cp(path.join(root, entry), path.join(temp, entry), { recursive: true });
   const config = (await readFile(path.join(temp, 'brand.config.mjs'), 'utf8'))
     .replace("name: 'Senrelay'", "name: 'Renamed Context'")
     .replace("chineseName: '续境'", "chineseName: '改名境'");

@@ -558,6 +558,25 @@ function buildCompareSchema({ lang, pageUrl, homeUrl, headline, description, faq
   };
 }
 
+const TRUST_PAGES = ['about.html', 'privacy.html', 'contact.html', 'security.html'];
+const TRUST_FOOTER_LINKS = `  <a href="./about.html" data-en="About">关于</a>
+  <a href="./privacy.html" data-en="Privacy">隐私</a>
+  <a href="./contact.html" data-en="Contact">联系</a>
+  <a href="./security.html" data-en="Security">安全</a>
+`;
+
+function injectTrustFooterLinks(html, fileName = '') {
+  if (TRUST_PAGES.includes(fileName)) return html;
+  const footer = html.match(/<footer class="footer wrap">[\s\S]*?<\/footer>/)?.[0] || '';
+  if (footer.includes('href="./about.html"') && footer.includes('href="./privacy.html"')) return html;
+  return html.replace(/(<footer class="footer wrap">[\s\S]*?<div>\s*)/, `$1${TRUST_FOOTER_LINKS}`);
+}
+
+function injectEventsScript(html) {
+  if (html.includes('assets/events.js')) return html;
+  return html.replace('</body>', '  <script src="./assets/events.js" defer></script>\n</body>');
+}
+
 function renderAnalyticsHeadTags() {
   if (!site) return [];
   const tags = [];
@@ -828,7 +847,9 @@ const relayMdHref = site ? new URL('relay-workflow.md', site).href : './relay-wo
 const pricingMdUrl = site ? new URL('pricing.md', site).href : './pricing.md';
 
 // 2. Build Primary Static English Homepage (dist/index.html), Simplified Chinese Homepage (dist/zh/index.html), and Legacy Redirect (dist/en/index.html)
-const baseIndexHtml = applyBrandTokens(await readFile(path.join(root, 'index.html'), 'utf8'));
+const baseIndexHtml = injectEventsScript(
+  injectTrustFooterLinks(applyBrandTokens(await readFile(path.join(root, 'index.html'), 'utf8')), 'index.html'),
+);
 const baseSchema = JSON.parse(baseIndexHtml.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1]);
 const zhSiteDesc = baseSchema['@graph'][0].description;
 const zhAppDesc = baseSchema['@graph'][1].description;
@@ -961,7 +982,9 @@ async function buildBilingualDocPagePair({
   buildSchema,
   proficiencyLevel = 'Beginner',
 }) {
-  const baseDocHtml = applyBrandTokens(await readFile(path.join(root, fileName), 'utf8'));
+  const baseDocHtml = injectEventsScript(
+    injectTrustFooterLinks(applyBrandTokens(await readFile(path.join(root, fileName), 'utf8')), fileName),
+  );
   const zhDesc = decodeHtml(baseDocHtml.match(/<meta name="description" content="([^"]+)">/)[1]);
   const zhMdHref = site ? new URL(mdFileName, zhHref).href : './' + mdFileName;
 
@@ -1139,7 +1162,7 @@ const docPages = [
 ];
 
 const featureGuides = ['agent-management.html', 'ai-coding-usage-tracker.html'];
-for (const fileName of ['claude-code-memory.html', 'mcp-json-vs-toml-config-guide.html', ...featureGuides]) {
+for (const fileName of ['claude-code-memory.html', 'mcp-json-vs-toml-config-guide.html', ...featureGuides, ...TRUST_PAGES]) {
   const source = await readFile(path.join(root, fileName), 'utf8');
   const enTitle = decodeHtml(source.match(/<h1[^>]*data-en="([^"]+)"/)[1]);
   const enDesc = decodeHtml(source.match(/class="guide-lead"[^>]*data-en="([^"]+)"/)[1]);
@@ -1155,6 +1178,7 @@ for (const fileName of ['claude-code-memory.html', 'mcp-json-vs-toml-config-guid
     enHref: href(''),
     mdHref: site ? new URL(mdFileName, site).href : './' + mdFileName,
     ...(featureGuides.includes(fileName) ? { published: '2026-11-19' } : {}),
+    ...(TRUST_PAGES.includes(fileName) ? { published: '2026-11-23' } : {}),
     lastmod: gitLastmod([fileName, 'scripts/build.mjs']),
     buildSchema: buildGuideSchema,
   });
@@ -1331,6 +1355,7 @@ ${brand.name} (${brand.chineseName}) runs natively on macOS 14.0+ (Sonoma or lat
 - [GitHub Repository](${brand.github}): Source code, architecture contracts, and automated verification gates.
 - [Release v${RELEASE_VERSION}](${releaseTagHref}): [Download the macOS ZIP](${releaseDownloadUrl}) and review \`SHA256SUMS\`.
 - [License](${brand.github}/blob/main/LICENSE): MIT License.
+- [About](${resourceHref('about.html')}) · [Privacy](${resourceHref('privacy.html')}) · [Contact](${resourceHref('contact.html')}) · [Security](${resourceHref('security.html')}): Author, website analytics (Microsoft Clarity on senrelay.com), GitHub contact routes, and private vulnerability reporting. Chinese editions: [关于](${resourceHref('zh/about.html')}) · [隐私](${resourceHref('zh/privacy.html')}) · [联系](${resourceHref('zh/contact.html')}) · [安全](${resourceHref('zh/security.html')}).
 `;
 
 const llmsFullContent = `${llmsContent}

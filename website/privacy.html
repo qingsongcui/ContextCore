@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121412">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Senrelay 隐私说明 — 网站分析与本机应用</title>
+  <meta name="description" content="说明 senrelay.com 使用的 Microsoft Clarity 与 GitHub Pages 日志，以及本机 Senrelay 应用把数据留在 Mac 上的边界。">
+  <meta property="og:type" content="article">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:site_name" content="Senrelay · 续境">
+  <meta property="og:title" content="Senrelay 隐私说明 — 网站分析与本机应用">
+  <meta property="og:description" content="说明 senrelay.com 使用的 Microsoft Clarity 与 GitHub Pages 日志，以及本机 Senrelay 应用把数据留在 Mac 上的边界。">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Senrelay 隐私说明 — 网站分析与本机应用">
+  <meta name="twitter:description" content="senrelay.com 可能使用 Microsoft Clarity；本机应用不上传会话。无账号、不卖数据。">
+  <!-- deployment-metadata -->
+  <link rel="icon" href="./favicon.ico" sizes="48x48">
+  <link rel="icon" href="./assets/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" sizes="180x180">
+  <link rel="stylesheet" href="./assets/site.css">
+  <link rel="stylesheet" href="./assets/workbench-guides.css">
+</head>
+<body>
+  <a class="skip" href="#main" data-en="Skip to main content">跳到主要内容</a>
+  <header class="site-header">
+    <div class="header wrap">
+      <a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-en="Senrelay home">
+        <img class="brand-symbol" src="./assets/senrelay-logo-display-v1.png" width="28" height="35" decoding="async" alt="" aria-hidden="true">
+        Senrelay<span class="brand-cn" data-en="">· 续境</span>
+      </a>
+      <nav aria-label="页面导航" data-aria-en="Page navigation">
+        <a href="./" data-en="Home">首页</a>
+        <a href="./about.html" data-en="About">关于</a>
+        <a href="./contact.html" data-en="Contact">联系</a>
+        <a href="./guide.html" data-en="Setup Guide">运行指南</a>
+      </nav>
+      <div class="header-tools"><div class="language-switch" role="group" aria-label="语言">
+        <a href="./privacy.html" data-lang="zh" aria-current="page" lang="zh-CN">中</a>
+        <a href="./en/privacy.html" data-lang="en" lang="en">EN</a>
+      </div></div>
+    </div>
+  </header>
+  <main id="main" class="wrap workbench-guide">
+    <header class="workbench-guide-header">
+      <h1 data-en="Privacy — This Website and the Local App">Senrelay 隐私说明 — 网站与本机应用</h1>
+      <p class="guide-lead" data-en="This page covers two separate surfaces: the static marketing site at senrelay.com, and the local Senrelay app on your Mac. The website has no accounts. The app does not upload chats or code.">本页分开说明两件事：静态官网 senrelay.com，以及你 Mac 上的本机 Senrelay 应用。网站无账号；应用不上传会话或代码。</p>
+      <p class="workbench-updated" data-en="Updated November 23, 2026 · Qingsong Cui (George O'Nair)">更新于 2026-11-23 · Qingsong Cui（George O'Nair）</p>
+    </header>
+    <div data-guide-section="zh" lang="zh-CN">
+<section id="website">
+  <h2>本网站（senrelay.com）</h2>
+  <p>官网是静态站点，托管在 GitHub Pages。没有用户账号、没有自建后端、没有邮件订阅表单，我们也不会在站点上出售个人数据。</p>
+  <p>部署到 senrelay.com 时，页面可能加载 <strong>Microsoft Clarity</strong>（页面分析、热力图、会话回放）。Clarity 由 Microsoft 运营，适用 <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noopener noreferrer">Microsoft 隐私声明</a>。预览构建（未设置 <code>CLARITY_ID</code>）不会注入该脚本。</p>
+  <p>GitHub Pages 会记录常规访问日志，适用 <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">GitHub 隐私声明</a>。macOS 安装包从 GitHub Releases 下载，下载记录同样由 GitHub 处理。</p>
+</section>
+<section id="app">
+  <h2>本机应用</h2>
+  <p>Senrelay 应用把 HTTP/MCP 服务绑在 <code>127.0.0.1:8420</code>。会话索引、工作任务、记忆与配置快照存在 <code>~/Library/Application Support/ContextCore</code>（目录 <code>0700</code>，数据库 <code>0600</code>）。API Key 进入 macOS 钥匙串。应用本身不把对话或代码上传到我们的服务器——我们没有这样的服务器。</p>
+  <p>你在 Claude Code、Codex 等宿主里调用的模型，仍会把你发给该供应商的内容送到该供应商。那是你自己的供应商账号，不是 Senrelay 云。</p>
+  <p>安装与数据边界见 <a href="./guide.html">运行指南</a>。</p>
+</section>
+<section id="choices">
+  <h2>你能做什么</h2>
+  <ul>
+    <li>用浏览器拦截或扩展阻止 Clarity；不影响本机应用。</li>
+    <li>卸载应用并删除 <code>~/Library/Application Support/ContextCore</code> 以移除本机数据。这是应用层删除，不是取证级擦除承诺。</li>
+    <li>隐私相关问题走 <a href="./contact.html">联系页</a> 的 GitHub Discussions；安全漏洞走 <a href="./security.html">安全页</a> 的私下报告。</li>
+  </ul>
+</section>
+<section id="faq">
+  <h2>常见问题</h2>
+  <div class="workbench-faq">
+    <details><summary>官网会不会保存我的对话？</summary><p>不会。官网是静态页面，看不到你的本机会话。对话只存在你的 Mac 与你使用的编程助手里。</p></details>
+    <details><summary>为什么还要用 Clarity？</summary><p>用来看哪些页面有人打开、从哪里离开。它不连接本机应用。若未设置部署变量，构建产物里不会出现 Clarity 脚本。</p></details>
+    <details><summary>你们卖数据吗？</summary><p>不卖。本站没有付费分析转售，也没有广告网络。</p></details>
+  </div>
+</section>
+    </div>
+    <div data-guide-section="en" lang="en">
+<section id="website">
+  <h2>This website (senrelay.com)</h2>
+  <p>The site is static and hosted on GitHub Pages. There are no user accounts, no first-party backend, and no newsletter form. We do not sell personal data from this site.</p>
+  <p>When deployed at senrelay.com, pages may load <strong>Microsoft Clarity</strong> (page analytics, heatmaps, session replay). Clarity is operated by Microsoft under the <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noopener noreferrer">Microsoft Privacy Statement</a>. Preview builds without <code>CLARITY_ID</code> do not inject the script.</p>
+  <p>GitHub Pages keeps ordinary access logs under the <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">GitHub Privacy Statement</a>. The macOS ZIP is served from GitHub Releases; GitHub handles those download logs.</p>
+</section>
+<section id="app">
+  <h2>The local app</h2>
+  <p>The Senrelay app binds HTTP/MCP to <code>127.0.0.1:8420</code>. Session indexes, working tasks, memories and config snapshots live in <code>~/Library/Application Support/ContextCore</code> (directory mode <code>0700</code>, database mode <code>0600</code>). API keys go to the macOS Keychain. The app does not upload chats or code to a Senrelay server — there is no such server.</p>
+  <p>Model calls you make inside Claude Code, Codex or other hosts still go to <em>your</em> provider. That is your account, not a Senrelay cloud.</p>
+  <p>See the <a href="./guide.html">setup guide</a> for install and data boundaries.</p>
+</section>
+<section id="choices">
+  <h2>What you can do</h2>
+  <ul>
+    <li>Block Clarity with a browser extension. That does not affect the local app.</li>
+    <li>Uninstall the app and delete <code>~/Library/Application Support/ContextCore</code> to remove application data. That is application-level deletion, not a forensic-erasure claim.</li>
+    <li>Privacy questions go to <a href="./contact.html">GitHub Discussions</a>. Security issues go through the <a href="./security.html">security page</a>.</li>
+  </ul>
+</section>
+<section id="faq">
+  <h2>Frequently asked questions</h2>
+  <div class="workbench-faq">
+    <details><summary>Does the website store my chats?</summary><p>No. The site is static and cannot see local sessions. Chats stay on your Mac and in the coding assistants you use.</p></details>
+    <details><summary>Why is Clarity used at all?</summary><p>To see which pages are opened and where people leave. It is not connected to the local app. Builds without the deployment variable do not include the script.</p></details>
+    <details><summary>Do you sell data?</summary><p>No. There is no paid analytics resale and no ad network on this site.</p></details>
+  </div>
+</section>
+    </div>
+  </main>
+  <footer class="footer wrap">
+    <a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-en="Senrelay home">
+      <img class="brand-symbol" src="./assets/senrelay-logo-display-v1.png" width="26" height="33" loading="lazy" alt="" aria-hidden="true">
+      Senrelay<span class="brand-cn" data-en="">· 续境</span>
+    </a>
+    <div>
+      <a href="./about.html" data-en="About">关于</a>
+      <a href="./contact.html" data-en="Contact">联系</a>
+      <a href="./security.html" data-en="Security">安全</a>
+      <a href="./guide.html" data-en="Setup Guide">运行指南</a>
+      <a href="https://github.com/qingsongcui/ContextCore">GitHub</a>
+    </div>
+  </footer>
+</body>
+</html>

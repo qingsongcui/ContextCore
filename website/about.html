@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121412">
+  <meta name="robots" content="noindex, nofollow">
+  <title>关于 Senrelay 续境 — 作者与产品边界</title>
+  <meta name="description" content="Senrelay（续境）是 macOS 14.0+ Apple Silicon 上的本机多 Agent 工作台。MIT 开源，$0，无注册。作者 Qingsong Cui。">
+  <meta property="og:type" content="article">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:site_name" content="Senrelay · 续境">
+  <meta property="og:title" content="关于 Senrelay 续境 — 作者与产品边界">
+  <meta property="og:description" content="Senrelay（续境）是 macOS 14.0+ Apple Silicon 上的本机多 Agent 工作台。MIT 开源，$0，无注册。作者 Qingsong Cui。">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="关于 Senrelay 续境 — 作者与产品边界">
+  <meta name="twitter:description" content="Senrelay（续境）是 macOS 14.0+ Apple Silicon 上的本机多 Agent 工作台。MIT 开源，$0，无注册。">
+  <!-- deployment-metadata -->
+  <link rel="icon" href="./favicon.ico" sizes="48x48">
+  <link rel="icon" href="./assets/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" sizes="180x180">
+  <link rel="stylesheet" href="./assets/site.css">
+  <link rel="stylesheet" href="./assets/workbench-guides.css">
+</head>
+<body>
+  <a class="skip" href="#main" data-en="Skip to main content">跳到主要内容</a>
+  <header class="site-header">
+    <div class="header wrap">
+      <a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-en="Senrelay home">
+        <img class="brand-symbol" src="./assets/senrelay-logo-display-v1.png" width="28" height="35" decoding="async" alt="" aria-hidden="true">
+        Senrelay<span class="brand-cn" data-en="">· 续境</span>
+      </a>
+      <nav aria-label="页面导航" data-aria-en="Page navigation">
+        <a href="./" data-en="Home">首页</a>
+        <a href="./guide.html" data-en="Setup Guide">运行指南</a>
+        <a href="./privacy.html" data-en="Privacy">隐私</a>
+        <a href="./contact.html" data-en="Contact">联系</a>
+      </nav>
+      <div class="header-tools"><div class="language-switch" role="group" aria-label="语言">
+        <a href="./about.html" data-lang="zh" aria-current="page" lang="zh-CN">中</a>
+        <a href="./en/about.html" data-lang="en" lang="en">EN</a>
+      </div></div>
+    </div>
+  </header>
+  <main id="main" class="wrap workbench-guide">
+    <header class="workbench-guide-header">
+      <h1 data-en="About Senrelay — Author, Product and Limits">关于 Senrelay 续境 — 作者与产品边界</h1>
+      <p class="guide-lead" data-en="Senrelay is a local, MIT-licensed macOS workbench for cross-agent conversation relay, companion memory and multi-host MCP configuration. It is free ($0), requires no account, and runs only on Apple Silicon.">Senrelay（续境）是运行在 macOS 14.0+（Apple Silicon）上的本机工作台：跨 Agent 对话接力、伴生记忆，以及多宿主 MCP / Skills 配置。MIT 开源，$0，无需注册。</p>
+      <p class="workbench-updated" data-en="Updated November 23, 2026 · Qingsong Cui (George O'Nair)">更新于 2026-11-23 · Qingsong Cui（George O'Nair）</p>
+    </header>
+    <div data-guide-section="zh" lang="zh-CN">
+<section id="who">
+  <h2>作者与仓库</h2>
+  <p>Senrelay 由独立开发者 <strong>Qingsong Cui（George O'Nair）</strong> 创建并维护。公开身份：<a href="https://github.com/qingsongcui" target="_blank" rel="noopener noreferrer">GitHub @qingsongcui</a> · <a href="https://x.com/George_ONair" target="_blank" rel="noopener noreferrer">X @George_ONair</a>。</p>
+  <p>源码仓库是 <a href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">qingsongcui/ContextCore</a>。技术标识仍使用 ContextCore（MCP 服务键 <code>contextcore</code>，回环地址 <code>http://127.0.0.1:8420/mcp/</code>）。公开品牌是 Senrelay · 续境。</p>
+  <p>与第三方网站 <code>context-core.dev</code>、PyPI 包 <code>contextcore</code> 以及汽车继电器硬件无关。不要运行 <code>pip install contextcore</code>。</p>
+</section>
+<section id="what">
+  <h2>产品做什么</h2>
+  <p>在 Claude Code、Codex、Cursor、Antigravity、OMP、OpenCode 六个核心宿主里输入 <code>/contextcore</code> 或「接力」，从短简介选场、分页读完原文并在新 Agent 上下文里压缩续做。工作台同时管理 MCP、Skills、模型供应商与配置快照。</p>
+  <p>当前公开版本是 <code>v1.0.0-beta.6</code>。安装步骤见 <a href="./guide.html">本地运行指南</a>。价格与许可见 <a href="./pricing.md">pricing.md</a>（$0 · MIT）。</p>
+</section>
+<section id="limits">
+  <h2>真实边界</h2>
+  <ul>
+    <li>只支持 macOS 14.0+、Apple Silicon（arm64）。不支持 Windows、Linux 或 Intel Mac。</li>
+    <li>服务只绑定本机回环 <code>127.0.0.1:8420</code>，没有多设备云同步或团队 SaaS。</li>
+    <li>公开 Beta 为 ad-hoc 签名，首次启动需要 <code>xattr -cr /Applications/Senrelay.app</code>。尚未提供 Apple Developer ID 公证。</li>
+    <li>9 个扩展宿主只做配置写入，不做会话采集或 <code>/contextcore</code> 接力。</li>
+  </ul>
+</section>
+<section id="faq">
+  <h2>常见问题</h2>
+  <div class="workbench-faq">
+    <details><summary>Senrelay 收费吗？</summary><p>不收费。当前公开版本按 MIT 许可证提供，$0，无需注册账号。</p></details>
+    <details><summary>作者是公司还是个人？</summary><p>个人维护。Qingsong Cui（George O'Nair）是署名作者，仓库在 GitHub 公开。</p></details>
+    <details><summary>Windows 能用吗？</summary><p>不能。只支持 macOS 14.0+ 的 Apple Silicon。Windows、Linux 和 Intel Mac 都不在范围内。</p></details>
+  </div>
+</section>
+    </div>
+    <div data-guide-section="en" lang="en">
+<section id="who">
+  <h2>Author and repository</h2>
+  <p>Senrelay is created and maintained by independent developer <strong>Qingsong Cui (George O'Nair)</strong>. Public identities: <a href="https://github.com/qingsongcui" target="_blank" rel="noopener noreferrer">GitHub @qingsongcui</a> · <a href="https://x.com/George_ONair" target="_blank" rel="noopener noreferrer">X @George_ONair</a>.</p>
+  <p>The source repository is <a href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">qingsongcui/ContextCore</a>. Technical identifiers remain ContextCore (MCP server key <code>contextcore</code> at <code>http://127.0.0.1:8420/mcp/</code>). The public brand is Senrelay.</p>
+  <p>It is unrelated to third-party <code>context-core.dev</code>, the PyPI package <code>contextcore</code>, or automotive relay hardware. Do not run <code>pip install contextcore</code>.</p>
+</section>
+<section id="what">
+  <h2>What the product does</h2>
+  <p>In the six core hosts — Claude Code, Codex, Cursor, Antigravity, OMP and OpenCode — type <code>/contextcore</code> or say “relay” to pick a recent session from a short brief, page through the transcript, and compact it in the receiving agent. The workbench also manages MCP, Skills, providers and configuration snapshots.</p>
+  <p>The current public release is <code>v1.0.0-beta.6</code>. See the <a href="./guide.html">local setup guide</a> and <a href="./pricing.md">pricing.md</a> ($0 · MIT).</p>
+</section>
+<section id="limits">
+  <h2>Real limits</h2>
+  <ul>
+    <li>macOS 14.0+ on Apple Silicon (arm64) only. Not Windows, Linux, or Intel Macs.</li>
+    <li>The service binds to loopback <code>127.0.0.1:8420</code> only. No multi-device cloud sync or hosted team SaaS.</li>
+    <li>Public Beta builds are ad-hoc signed. First launch needs <code>xattr -cr /Applications/Senrelay.app</code>. Apple Developer ID notarization is not available yet.</li>
+    <li>Nine extended hosts get configuration writes only — not session capture or <code>/contextcore</code> relay.</li>
+  </ul>
+</section>
+<section id="faq">
+  <h2>Frequently asked questions</h2>
+  <div class="workbench-faq">
+    <details><summary>Does Senrelay cost money?</summary><p>No. The current public release is $0 under the MIT License, with no account signup.</p></details>
+    <details><summary>Is this a company or a person?</summary><p>A person. Qingsong Cui (George O'Nair) is the named maintainer. The repository is public on GitHub.</p></details>
+    <details><summary>Does it run on Windows?</summary><p>No. It requires macOS 14.0+ on Apple Silicon. Windows, Linux and Intel Macs are out of scope.</p></details>
+  </div>
+</section>
+    </div>
+  </main>
+  <footer class="footer wrap">
+    <a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-en="Senrelay home">
+      <img class="brand-symbol" src="./assets/senrelay-logo-display-v1.png" width="26" height="33" loading="lazy" alt="" aria-hidden="true">
+      Senrelay<span class="brand-cn" data-en="">· 续境</span>
+    </a>
+    <div>
+      <a href="./guide.html" data-en="Setup Guide">运行指南</a>
+      <a href="./privacy.html" data-en="Privacy">隐私</a>
+      <a href="./contact.html" data-en="Contact">联系</a>
+      <a href="./security.html" data-en="Security">安全</a>
+      <a href="https://github.com/qingsongcui/ContextCore">GitHub</a>
+    </div>
+  </footer>
+</body>
+</html>

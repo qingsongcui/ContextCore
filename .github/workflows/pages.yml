@@ -79,6 +79,19 @@ jobs:
           test -f dist/zh/ai-coding-usage-tracker.html
           test -f dist/ai-coding-usage-tracker.md
           test -f dist/zh/ai-coding-usage-tracker.md
+          test -f dist/about.html
+          test -f dist/zh/about.html
+          test -f dist/privacy.html
+          test -f dist/zh/privacy.html
+          test -f dist/contact.html
+          test -f dist/zh/contact.html
+          test -f dist/security.html
+          test -f dist/zh/security.html
+          test -f dist/about.md
+          test -f dist/privacy.md
+          test -f dist/contact.md
+          test -f dist/security.md
+          test -f dist/assets/events.js
           test -f dist/pricing.md
           test -f dist/index.md
           test -f dist/zh/index.md
@@ -148,7 +161,15 @@ jobs:
                 "https://senrelay.com/guide.md",
                 "https://senrelay.com/compare.md",
                 "https://senrelay.com/llms.txt",
-                "https://senrelay.com/llms-full.txt"
+                "https://senrelay.com/llms-full.txt",
+                "https://senrelay.com/about.html",
+                "https://senrelay.com/zh/about.html",
+                "https://senrelay.com/privacy.html",
+                "https://senrelay.com/zh/privacy.html",
+                "https://senrelay.com/contact.html",
+                "https://senrelay.com/zh/contact.html",
+                "https://senrelay.com/security.html",
+                "https://senrelay.com/zh/security.html"
               ]
             }' | curl -fsS -X POST "https://api.indexnow.org/indexnow" \
               -H "Content-Type: application/json; charset=utf-8" \

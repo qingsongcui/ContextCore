@@ -51,8 +51,9 @@ Styles are sourced under `assets/css/` and bundled by `scripts/css-bundle.mjs`; 
 - `compare.html` (`en/compare.html`): Honest 5-option comparison (`AGENTS.md`, Cloud/Docker Memory MCP, Senrelay ranked #3, Dotfiles, Single IDE) with interactive setup picker, `#option-1`..`#option-5` ItemList schema, and 6-item decision FAQ.
 - `llms.txt` & `llms-full.txt`: Pure-English summary header plus full-transcript relay specification, 6+9 host matrix, 5-way comparison table, and Chinese core summary (`续境` / `ContextCore`).
 - `zh/index.md`: Simplified Chinese homepage Markdown mirror generated from `zh/index.html`; linked from the Chinese homepage head, `llms.txt` and `llms-full.txt`.
+- `about.html` / `privacy.html` / `contact.html` / `security.html` (and `/zh/` editions): author, website analytics vs local-app data, GitHub contact routes, and private vulnerability reporting.
 
-There is no live demo workspace, fake confirmation button, or server-side tracking. The sphere and static workspace previews are explicitly illustrative, not live state.
+There is no live demo workspace or fake confirmation button. Preview builds inject no analytics. Production builds may load Microsoft Clarity when `CLARITY_ID` is set; `assets/events.js` records `download_click` and `install_guide_view` as Clarity custom events plus `dataLayer` pushes. The sphere and static workspace previews remain illustrative, not live state.
 
 ## Checks and browser verification
 

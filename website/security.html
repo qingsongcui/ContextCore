@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121412">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Senrelay 安全说明 — 漏洞私下报告</title>
+  <meta name="description" content="Senrelay 是单用户本机应用，服务只绑定 127.0.0.1。安全问题请用 GitHub 私下漏洞报告，不要公开利用细节。无漏洞赏金。">
+  <meta property="og:type" content="article">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:site_name" content="Senrelay · 续境">
+  <meta property="og:title" content="Senrelay 安全说明 — 漏洞私下报告">
+  <meta property="og:description" content="Senrelay 是单用户本机应用，服务只绑定 127.0.0.1。安全问题请用 GitHub 私下漏洞报告，不要公开利用细节。无漏洞赏金。">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Senrelay 安全说明 — 漏洞私下报告">
+  <meta name="twitter:description" content="单用户本机应用，回环绑定。安全问题走 GitHub 私下报告。无赏金，非安全认证。">
+  <!-- deployment-metadata -->
+  <link rel="icon" href="./favicon.ico" sizes="48x48">
+  <link rel="icon" href="./assets/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" sizes="180x180">
+  <link rel="stylesheet" href="./assets/site.css">
+  <link rel="stylesheet" href="./assets/workbench-guides.css">
+</head>
+<body>
+  <a class="skip" href="#main" data-en="Skip to main content">跳到主要内容</a>
+  <header class="site-header">
+    <div class="header wrap">
+      <a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-en="Senrelay home">
+        <img class="brand-symbol" src="./assets/senrelay-logo-display-v1.png" width="28" height="35" decoding="async" alt="" aria-hidden="true">
+        Senrelay<span class="brand-cn" data-en="">· 续境</span>
+      </a>
+      <nav aria-label="页面导航" data-aria-en="Page navigation">
+        <a href="./" data-en="Home">首页</a>
+        <a href="./about.html" data-en="About">关于</a>
+        <a href="./privacy.html" data-en="Privacy">隐私</a>
+        <a href="./contact.html" data-en="Contact">联系</a>
+      </nav>
+      <div class="header-tools"><div class="language-switch" role="group" aria-label="语言">
+        <a href="./security.html" data-lang="zh" aria-current="page" lang="zh-CN">中</a>
+        <a href="./en/security.html" data-lang="en" lang="en">EN</a>
+      </div></div>
+    </div>
+  </header>
+  <main id="main" class="wrap workbench-guide">
+    <header class="workbench-guide-header">
+      <h1 data-en="Security — Private Vulnerability Reporting">Senrelay 安全说明 — 漏洞私下报告</h1>
+      <p class="guide-lead" data-en="Senrelay is a single-user local app. The OS user is the trust boundary. Report vulnerabilities privately on GitHub. There is no bug bounty and this page is not a security certification.">Senrelay 是单用户本机应用，操作系统用户就是信任边界。安全问题请在 GitHub 私下报告。没有漏洞赏金；本页不是安全认证。</p>
+      <p class="workbench-updated" data-en="Updated November 23, 2026 · Qingsong Cui (George O'Nair)">更新于 2026-11-23 · Qingsong Cui（George O'Nair）</p>
+    </header>
+    <div data-guide-section="zh" lang="zh-CN">
+<section id="report">
+  <h2>如何报告</h2>
+  <ol>
+    <li>普通产品缺陷用 GitHub Issue 模板。不要在公开 Issue 里贴利用细节、凭据、私人对话或数据库导出。</li>
+    <li>疑似漏洞请走仓库已开启的 <a href="https://github.com/qingsongcui/ContextCore/security/advisories/new" target="_blank" rel="noopener noreferrer">GitHub Private Vulnerability Reporting</a>。若该入口暂时不可用，先向维护者发送不含利用细节的摘要。</li>
+    <li>请写明受影响版本、macOS 版本、界面（工作台 / CLI / MCP）、最小合成复现，以及预期与实际边界失败。</li>
+  </ol>
+  <p>完整条款见仓库 <a href="https://github.com/qingsongcui/ContextCore/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">SECURITY.md</a>。安装与本机边界见 <a href="./guide.html">运行指南</a>。</p>
+</section>
+<section id="boundary">
+  <h2>设计边界（摘要）</h2>
+  <ul>
+    <li>服务只绑定回环 <code>127.0.0.1</code>。不要把端口暴露到局域网、反向代理、隧道或公网。</li>
+    <li>浏览器变更需要会话 Cookie 与对应 CSRF 令牌；Agent 令牌不能代替浏览器管理接口。</li>
+    <li>这些控制针对网络相邻与跨站威胁；同一 OS 用户下的恶意进程不在隔离范围内。</li>
+    <li>当前公开支持版本：<code>v1.0.0-beta.6</code>。</li>
+  </ul>
+  <p>没有漏洞赏金计划。文档与单元测试不等于完整的安全认证或新装环境验证。</p>
+</section>
+<section id="faq">
+  <h2>常见问题</h2>
+  <div class="workbench-faq">
+    <details><summary>可以把 PoC 发到公开 Issue 吗？</summary><p>不可以。利用细节、凭据和私人数据只走私下报告。</p></details>
+    <details><summary>有赏金吗？</summary><p>没有。感谢负责任的披露，但目前没有付费赏金。</p></details>
+    <details><summary>这能证明安装是安全的吗？</summary><p>不能。本页描述设计意图与报告渠道，不是对新装机器的认证。</p></details>
+  </div>
+</section>
+    </div>
+    <div data-guide-section="en" lang="en">
+<section id="report">
+  <h2>How to report</h2>
+  <ol>
+    <li>Use the ordinary GitHub issue template for non-security bugs. Do not post exploit details, credentials, private chats or database exports in a public issue.</li>
+    <li>For a potential vulnerability, use <a href="https://github.com/qingsongcui/ContextCore/security/advisories/new" target="_blank" rel="noopener noreferrer">GitHub Private Vulnerability Reporting</a>, which is enabled on this repository. If that form is unreachable, contact the maintainer first with a non-sensitive summary.</li>
+    <li>Include the affected version, macOS version, interface (workbench, CLI or MCP), minimal synthetic reproduction, expected behavior and the observed boundary failure.</li>
+  </ol>
+  <p>The full policy is <a href="https://github.com/qingsongcui/ContextCore/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">SECURITY.md</a>. Install boundaries: <a href="./guide.html">setup guide</a>.</p>
+</section>
+<section id="boundary">
+  <h2>Design boundary (summary)</h2>
+  <ul>
+    <li>The service binds to loopback <code>127.0.0.1</code> only. Do not expose ports to LAN, reverse proxies, tunnels or the public internet.</li>
+    <li>Browser mutations require a session cookie and that session’s CSRF token. Agent tokens cannot replace browser admin CSRF.</li>
+    <li>These controls target network-adjacent and cross-site threats. They do not isolate malicious processes under the same OS user.</li>
+    <li>Currently supported public release: <code>v1.0.0-beta.6</code>.</li>
+  </ul>
+  <p>There is no bug bounty. Documentation and unit tests are not a security certification of a fresh install.</p>
+</section>
+<section id="faq">
+  <h2>Frequently asked questions</h2>
+  <div class="workbench-faq">
+    <details><summary>Can I post a PoC on a public issue?</summary><p>No. Exploit details, credentials and private data belong in a private report only.</p></details>
+    <details><summary>Is there a bounty?</summary><p>No. Responsible disclosure is welcome; there is no paid bounty today.</p></details>
+    <details><summary>Does this certify a safe install?</summary><p>No. This page describes intent and the reporting channel, not certification of a new machine.</p></details>
+  </div>
+</section>
+    </div>
+  </main>
+  <footer class="footer wrap">
+    <a class="brand" href="./" aria-label="Senrelay 续境首页" data-aria-en="Senrelay home">
+      <img class="brand-symbol" src="./assets/senrelay-logo-display-v1.png" width="26" height="33" loading="lazy" alt="" aria-hidden="true">
+      Senrelay<span class="brand-cn" data-en="">· 续境</span>
+    </a>
+    <div>
+      <a href="./about.html" data-en="About">关于</a>
+      <a href="./privacy.html" data-en="Privacy">隐私</a>
+      <a href="./contact.html" data-en="Contact">联系</a>
+      <a href="./guide.html" data-en="Setup Guide">运行指南</a>
+      <a href="https://github.com/qingsongcui/ContextCore">GitHub</a>
+    </div>
+  </footer>
+</body>
+</html>
