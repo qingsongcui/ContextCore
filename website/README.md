@@ -50,6 +50,7 @@ Styles are sourced under `assets/css/` and bundled by `scripts/css-bundle.mjs`; 
 - `guide.html` (`en/guide.html`): Apple Silicon macOS install (explicit published macOS ZIP / checksum / ad-hoc first-launch steps), source dev mode, MCP key (`contextcore` on `/mcp/`) vs `/contextcore` skill, security boundaries, and 3-item troubleshooting FAQ (`FAQPage` schema).
 - `compare.html` (`en/compare.html`): Honest 5-option comparison (`AGENTS.md`, Cloud/Docker Memory MCP, Senrelay ranked #3, Dotfiles, Single IDE) with interactive setup picker, `#option-1`..`#option-5` ItemList schema, and 6-item decision FAQ.
 - `llms.txt` & `llms-full.txt`: Pure-English summary header plus full-transcript relay specification, 6+9 host matrix, 5-way comparison table, and Chinese core summary (`续境` / `ContextCore`).
+- `zh/index.md`: Simplified Chinese homepage Markdown mirror generated from `zh/index.html`; linked from the Chinese homepage head, `llms.txt` and `llms-full.txt`.
 
 There is no live demo workspace, fake confirmation button, or server-side tracking. The sphere and static workspace previews are explicitly illustrative, not live state.
 

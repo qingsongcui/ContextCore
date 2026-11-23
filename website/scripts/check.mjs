@@ -27,6 +27,7 @@ const llms = await readFile(path.join(root, 'llms.txt'), 'utf8');
 const llmsFull = await readFile(path.join(root, 'llms-full.txt'), 'utf8');
 const pricingMd = await readFile(path.join(root, 'pricing.md'), 'utf8');
 const indexMd = await readFile(path.join(root, 'index.md'), 'utf8');
+const zhIndexMd = await readFile(path.join(root, 'zh/index.md'), 'utf8');
 const guideMd = await readFile(path.join(root, 'guide.md'), 'utf8');
 const compareMd = await readFile(path.join(root, 'compare.md'), 'utf8');
 const hostsMd = await readFile(path.join(root, 'hosts.md'), 'utf8');
@@ -403,6 +404,13 @@ assert.ok(!llmsFull.includes('💡') && !llmsFull.includes('📌'), 'no decorati
 assert.ok(!llmsFull.includes('6-point'), 'no stale 6-point handoff card reference in llms-full.txt');
 
 const production = enHtml.includes('content="index, follow"');
+assert.equal(zhIndexMd.split('\n')[0], '> 原文：' + (production ? 'https://senrelay.com/zh/' : './zh/'));
+assert.match(zhIndexMd, /^# .*[\u4e00-\u9fff]/m, 'Chinese heading in zh/index.md');
+if (production) {
+  assert.ok(html.includes('type="text/markdown" href="https://senrelay.com/zh/index.md" title="Markdown Mirror"'), 'Chinese homepage mirror linked from zh/index.html');
+}
+assert.match(llms, /zh\/index\.md/, 'llms.txt exposes the Chinese homepage mirror');
+assert.match(llmsFull, /zh\/index\.md/, 'llms-full.txt exposes the Chinese homepage mirror');
 for (const [name, doc] of [['guide', guide], ['compare', compare], ['hosts', hosts], ['relay-workflow', relay]]) {
   const mirror = await readFile(path.join(root, 'zh', name + '.md'), 'utf8');
   const zhOrigin = production ? 'https://senrelay.com/zh/' : './zh/';

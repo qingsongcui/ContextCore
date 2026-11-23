@@ -81,6 +81,7 @@ jobs:
           test -f dist/zh/ai-coding-usage-tracker.md
           test -f dist/pricing.md
           test -f dist/index.md
+          test -f dist/zh/index.md
           test -f dist/hosts.md
           test -f dist/relay-workflow.md
           test -f dist/guide.md

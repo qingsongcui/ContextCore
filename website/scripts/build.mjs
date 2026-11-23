@@ -1322,7 +1322,7 @@ ${brand.name} (${brand.chineseName}) runs natively on macOS 14.0+ (Sonoma or lat
 - [Claude Code and Codex Usage](${resourceHref('ai-coding-usage-tracker.html')}) · [English Markdown](${resourceHref('ai-coding-usage-tracker.md')}) · [中文指南](${resourceHref('zh/ai-coding-usage-tracker.html')}) · [中文 Markdown](${resourceHref('zh/ai-coding-usage-tracker.md')}). Observed token use, logical requests and retries, estimated API costs, and supported account quotas.
 - [English Setup & Workflow Guide](${guideEnRef}) ([Markdown Mirror](${guideMdHref})): ZIP download, first launch (\`xattr -cr\`), source build, and daily workflows.
 - [English 5-Way Comparison & Stack Picker](${compareEnRef}) ([Markdown Mirror](${compareMdHref})): Objective comparison of \`CLAUDE.md\`/\`AGENTS.md\`, Cloud Memory MCP, ${brand.name}, Dotfiles scripts, and single-IDE routers (with interactive picker & real downsides).
-- [Chinese Homepage (中文首页)](${homeZhRef}): 简体中文产品概览、能力矩阵与常见问题。
+- [Chinese Homepage (中文首页)](${homeZhRef}) ([Markdown Mirror](${zhHomeMdHref})): 简体中文产品概览、能力矩阵与常见问题。
 - [Chinese Host Config Reference (15 宿主配置路径指南)](${hostsZhRef}): 6 类核心接力宿主与 9 类扩展宿主的 MCP/Skills/规则文件路径与写前保护边界。
 - [Chinese Cross-Agent Relay Workflow (跨 Agent 接力流程)](${relayZhRef}): Claude Code 切 Codex/Cursor 的六步接力协议、短简介选号与双层记忆协同。
 - [Chinese Setup & Workflow Guide (中文运行指南)](${guideZhRef}): 本地安装、首次启动、源码运行与三大工作流指南。
