@@ -820,6 +820,7 @@ const zhHostsHref = site ? new URL('zh/hosts.html', site).href : './zh/hosts.htm
 const enRelayHref = site ? new URL('relay-workflow.html', site).href : './relay-workflow.html';
 const zhRelayHref = site ? new URL('zh/relay-workflow.html', site).href : './zh/relay-workflow.html';
 const homeMdHref = site ? new URL('index.md', site).href : './index.md';
+const zhHomeMdHref = site ? new URL('zh/index.md', site).href : './zh/index.md';
 const guideMdHref = site ? new URL('guide.md', site).href : './guide.md';
 const compareMdHref = site ? new URL('compare.md', site).href : './compare.md';
 const hostsMdHref = site ? new URL('hosts.md', site).href : './hosts.md';
@@ -866,12 +867,22 @@ zhHtml = zhHtml.replace(
     canonicalHref: zhHomeHref,
     zhHref: zhHomeHref,
     enHref: enHomeHref,
-    mdHref: homeMdHref,
+    mdHref: zhHomeMdHref,
     altOgLocale: 'en_US',
     imageAlt: `${brand.name} · ${brand.chineseName} — ${brand.tagline}`,
   }),
 );
 await writeFile(path.join(out, 'zh', 'index.html'), zhHtml);
+await writeFile(
+  path.join(out, 'zh', 'index.md'),
+  htmlMainToMarkdown({
+    docHtml: zhHtml,
+    title: decodeHtml(baseIndexHtml.match(/<title>(.*?)<\/title>/s)[1]),
+    canonicalHref: zhHomeHref,
+    lastmod: homeLastmod,
+    lang: 'zh',
+  }),
+);
 
 let enHtml = baseIndexHtml.replace('<html lang="zh-CN">', '<html lang="en" data-static-locale="en">');
 enHtml = replaceI18nHtmlBlocks(enHtml, htmlEn);
