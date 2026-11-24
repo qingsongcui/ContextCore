@@ -41,6 +41,7 @@ ChatGPT Image*.png
 # macOS application artifacts
 app/macos/build/
 app/macos/dist/
+app/macos/dist-*/
 
 # Signing and notarization material. Never add these for the ad-hoc Beta.
 *.p12
