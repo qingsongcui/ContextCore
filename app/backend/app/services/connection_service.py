@@ -1686,9 +1686,10 @@ def _sync_connection_impl(connection_id: str, force: bool, *, allow_execution: b
                 target_observed = True
             title = session.get("title") or f"{connection_id} Session"
             cwd = session.get("cwd")
-            tombstone_key = conversation_service.compute_source_identity_key(connection_id, source_path, title, external_id)
             with db() as conn:
-                if conn.execute("SELECT id FROM tombstones WHERE entity_type = 'conversation' AND dedupe_key = ?", (tombstone_key,)).fetchone():
+                if conversation_service.is_conversation_tombstoned(
+                    conn, connection_id, source_path, title, external_id
+                ):
                     continue
             project_id = project_service.reconstruct_or_resolve_project(
                 cwd,

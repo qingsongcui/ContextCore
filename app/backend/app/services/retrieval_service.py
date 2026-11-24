@@ -611,7 +611,7 @@ def bootstrap_must_not_execute(
 
 def assemble_context(query: str = "", project_id: str | None = None, budget_tokens: int | None = None,
                      context_epoch: str = "default", consumer_id: str | None = None,
-                     protected: list[dict] | None = None, limit: int = 15,
+                     protected: list[dict] | None = None, limit: int | None = None,
                      *, max_tokens: int | None = None, handoff_id: str | None = None,
                      language: str = "zh") -> dict:
     check_language(language)

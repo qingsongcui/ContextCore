@@ -16,7 +16,8 @@ class StrictRequest(BaseModel):
 class SearchRequest(StrictRequest):
     query: str = Field(default="", max_length=8000)
     project_id: str | None = None
-    limit: int = Field(default=15, ge=1, le=100)
+    # Omit to use the configured retrieval max_results; an explicit value caps this request.
+    limit: int | None = Field(default=None, ge=1, le=100)
     mode: Literal["lexical", "hybrid", "semantic"] = "lexical"
     language: Literal["en", "zh"] = "zh"
 
@@ -33,7 +34,8 @@ class AssembleRequest(StrictRequest):
     context_epoch: str = Field(default="default", min_length=1, max_length=200)
     consumer_id: str | None = Field(default=None, min_length=1, max_length=200)
     protected: list[ProtectedEntry] = Field(default_factory=list, max_length=100)
-    limit: int = Field(default=15, ge=1, le=100)
+    # Omit to use the configured retrieval max_results; an explicit value caps this request.
+    limit: int | None = Field(default=None, ge=1, le=100)
     language: Literal["en", "zh"] = "zh"
 
 

@@ -1499,7 +1499,14 @@ def restore_version(content_id: str, version: int, expected_version: int) -> dic
         can_key = governance_guardrails.canonical_memory_key(
             current.get("project_id"), cur_cat, restored_title, restored_content
         )
-        if _has_content_tombstone(conn, current.get("project_id"), cur_cat, restored_title, restored_content):
+        if _has_content_tombstone(
+            conn,
+            current.get("project_id"),
+            cur_cat,
+            restored_title,
+            restored_content,
+            include_cross_category=True,
+        ):
             raise HTTPException(status_code=410, detail="Restored content snapshot was previously deleted and tombstoned")
 
         cursor = conn.execute(

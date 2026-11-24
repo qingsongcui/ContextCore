@@ -820,7 +820,7 @@ def _record_worker_failure(queue_id, conv_id, owner, *, send_started, result_rec
 async def process_distillation_queue_item(queue_id: str) -> dict[str, Any] | None:
     from app import transport
     from app.services import processing_jobs as jobs
-    from app.services.conversation_service import compute_source_identity_key
+    from app.services.conversation_service import is_conversation_tombstoned
     import asyncio
 
     with db() as conn:
@@ -836,8 +836,9 @@ async def process_distillation_queue_item(queue_id: str) -> dict[str, Any] | Non
         conv = conn.execute("SELECT * FROM conversations WHERE id=?", (conv_id,)).fetchone()
         if not conv:
             return None
-        source_key = compute_source_identity_key(conv['agent'],conv['source_path'],conv['title'],conv['external_id'])
-        if conn.execute("SELECT id FROM tombstones WHERE entity_type='conversation' AND dedupe_key=?",(source_key,)).fetchone():
+        if is_conversation_tombstoned(
+            conn, conv['agent'], conv['source_path'], conv['title'], conv['external_id']
+        ):
             jobs.finish_job(conn,queue_id,'cancelled',error_code='source_tombstoned')
             return {"ok":False,"error":"Source tombstoned"}
         error, status = _distillation_access(conn,conv)
@@ -974,7 +975,7 @@ def submit_structured_distillation(
     actor: str = "host_agent",
     usage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    from app.services.conversation_service import compute_source_identity_key
+    from app.services.conversation_service import is_conversation_tombstoned
 
     for m in memories:
         title = m.get("title", "").strip() if isinstance(m, dict) else ""
@@ -1007,10 +1008,9 @@ def submit_structured_distillation(
                 detail="Conversation content changed during distillation; stale result discarded",
             )
 
-        source_key = compute_source_identity_key(
-            conv["agent"], conv["source_path"], conv["title"], conv["external_id"]
-        )
-        if conn.execute("SELECT id FROM tombstones WHERE entity_type = 'conversation' AND dedupe_key = ?", (source_key,)).fetchone():
+        if is_conversation_tombstoned(
+            conn, conv["agent"], conv["source_path"], conv["title"], conv["external_id"]
+        ):
             raise HTTPException(status_code=410, detail="Conversation source tombstoned; distillation rejected")
 
         conn_row = conn.execute("SELECT enabled, paused FROM connections WHERE id = ?", (conv["agent"],)).fetchone()

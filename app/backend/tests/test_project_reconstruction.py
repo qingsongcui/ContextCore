@@ -57,6 +57,19 @@ def test_merge_cannot_reintroduce_content_deleted_in_target(projects):
     assert projects.get_project(source['id'])['status'] == 'active'
 
 
+def test_tilde_directory_is_expanded_and_resolves_from_real_home(projects, tmp_path, monkeypatch):
+    monkeypatch.setenv('HOME', str(tmp_path))
+    directory = tmp_path / 'tilde-workspace'
+    directory.mkdir()
+    project = projects.create_project(name='Tilde workspace', directories=['~/tilde-workspace'])
+
+    assert projects.get_project(project['id'])['directories'] == [str(directory)]
+    resolved, ambiguous = projects.resolve_project_by_path(str(directory / 'subfolder'))
+    assert resolved['id'] == project['id']
+    assert ambiguous is False
+    assert projects.reconstruct_or_resolve_project('~/tilde-workspace') == project['id']
+
+
 def test_symlink_directory_alias_matches_without_rewriting_binding(projects, tmp_path):
     directory = tmp_path / 'actual-workspace'
     directory.mkdir()

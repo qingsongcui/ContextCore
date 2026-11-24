@@ -212,20 +212,17 @@ def _save_page(
 
 
 def _compute_access(conn: sqlite3.Connection, conversation: dict[str, Any]) -> str | None:
-    from app.services.conversation_service import compute_source_identity_key
+    from app.services.conversation_service import is_conversation_tombstoned
 
     agent = str(conversation.get("agent") or "").strip().lower()
     if agent:
-        source_key = compute_source_identity_key(
+        if is_conversation_tombstoned(
+            conn,
             agent,
             conversation.get("source_path"),
             str(conversation.get("title") or ""),
             conversation.get("external_id"),
-        )
-        if conn.execute(
-            "SELECT 1 FROM tombstones WHERE entity_type='conversation' AND dedupe_key=?",
-            (source_key,),
-        ).fetchone():
+        ):
             return "Conversation source was deleted"
         source = conn.execute(
             "SELECT enabled, paused FROM connections WHERE id=?", (agent,)

@@ -341,17 +341,10 @@ def receive_hook_event_endpoint(
 
         if is_empty_lifecycle:
             with db() as conn:
-                existing_row = None
-                if ext_id:
-                    existing_row = conn.execute(
-                        "SELECT id FROM conversations WHERE agent = ? AND external_id = ?",
-                        (connection_id, ext_id),
-                    ).fetchone()
-                if not existing_row and source_p:
-                    existing_row = conn.execute(
-                        "SELECT id FROM conversations WHERE agent = ? AND source_path = ?",
-                        (connection_id, source_p),
-                    ).fetchone()
+                existing_row = conversation_service.find_hook_conversation(
+                    conn, connection_id, source_p, (record.get("title") or "").strip(), ext_id,
+                    title_is_generic=not (record.get("title") or "").strip(),
+                )
             if not existing_row:
                 continue
 
@@ -377,17 +370,9 @@ def receive_hook_event_endpoint(
 
         title = incoming_title
         with db() as conn:
-            existing_conv = None
-            if ext_id:
-                existing_conv = conn.execute(
-                    "SELECT id, title FROM conversations WHERE agent = ? AND external_id = ?",
-                    (connection_id, ext_id),
-                ).fetchone()
-            if not existing_conv and source_p:
-                existing_conv = conn.execute(
-                    "SELECT id, title FROM conversations WHERE agent = ? AND source_path = ?",
-                    (connection_id, source_p),
-                ).fetchone()
+            existing_conv = conversation_service.find_hook_conversation(
+                conn, connection_id, source_p, incoming_title, ext_id, title_is_generic=is_generic,
+            )
 
         if existing_conv and is_generic and existing_conv["title"]:
             title = existing_conv["title"]
@@ -395,14 +380,11 @@ def receive_hook_event_endpoint(
             title = f"{connection_id} Event"
 
         # Stable source tombstone check
-        tombstone_key = conversation_service.compute_source_identity_key(connection_id, source_p, title, ext_id)
         with db() as conn:
-            tb = conn.execute(
-                "SELECT id FROM tombstones WHERE entity_type = 'conversation' AND dedupe_key = ?",
-                (tombstone_key,),
-            ).fetchone()
-        if tb:
-            continue
+            if conversation_service.is_conversation_tombstoned(
+                conn, connection_id, source_p, title, ext_id
+            ):
+                continue
 
         # Reconstruct or resolve project (pass metadata name ONLY when explicitly provided)
         proj_meta = {"name": record.get("project_name")} if record.get("project_name") else None

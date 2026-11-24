@@ -109,6 +109,27 @@ def test_deleting_many_versions_streams_bodies_and_removes_identity_ledger(store
         assert conn.execute("SELECT COUNT(*) FROM tombstones WHERE entity_type='content'").fetchone()[0] == 26
 
 
+def test_cross_category_version_restore_cannot_revive_deleted_body(store):
+    source, _ = store
+    survivor = content.create_content(
+        title='Rule X', content='Use the approved constraint body here verbatim.',
+        category='decision', project_id=source['id'],
+    )
+    survivor = content.update_content(
+        survivor['id'], content='A later unique decision body', expected_version=1,
+    )
+    victim = content.create_content(
+        title='Rule X', content='Use the approved constraint body here verbatim.',
+        category='background', project_id=source['id'],
+    )
+    content.delete_content(victim['id'], expected_version=1)
+
+    with pytest.raises(HTTPException) as error:
+        content.restore_version(survivor['id'], version=1, expected_version=2)
+    assert error.value.status_code == 410
+    assert content.get_content(survivor['id'])['content'] == 'A later unique decision body'
+
+
 def test_deleted_memory_cannot_resurrect_via_import_version_or_relation(store):
     from app.services import importer_service, retrieval_service
     source, _ = store

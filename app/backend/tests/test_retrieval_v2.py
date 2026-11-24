@@ -253,6 +253,24 @@ def test_router_contract_and_settings_validation(store):
     assert client.get(f"/api/retrieval/evidence/{found['evidence_id']}?limit=2").json()["next_offset"] == 2
 
 
+def test_router_omitted_limit_uses_configured_max_results(store):
+    from app.routers.retrieval import router
+    app = FastAPI()
+    app.include_router(router)
+    client = TestClient(app)
+    for index in range(6):
+        memory(title=f"Limit probe {index}", body=f"limit probe token {index}")
+
+    retrieval.update_settings({"max_results": 3})
+    defaulted = client.post("/api/retrieval/search", json={"query": "limit probe"}).json()["items"]
+    assert len(defaulted) == 3
+
+    explicit = client.post(
+        "/api/retrieval/search", json={"query": "limit probe", "limit": 5}
+    ).json()["items"]
+    assert len(explicit) == 5
+
+
 def test_schema_extension_does_not_commit_callers_transaction(store):
     with db() as conn:
         conn.execute("BEGIN IMMEDIATE")

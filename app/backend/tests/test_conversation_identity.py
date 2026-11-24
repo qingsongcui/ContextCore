@@ -126,6 +126,80 @@ def test_conversation_project_validation_raises_404(tmp_path, monkeypatch):
     assert "Target project 'proj_nonexistent' not found" in exc.value.detail
 
 
+def test_shared_db_path_only_delete_blocks_exact_session_only(tmp_path, monkeypatch):
+    import pytest
+    from fastapi import HTTPException
+
+    monkeypatch.setenv('CONTEXTCORE_DB', str(tmp_path / 'shared_path_only.sqlite'))
+    create_schema()
+    source = str(tmp_path / 'state.vscdb')
+
+    legacy = conversation_service.upsert_conversation(
+        agent='cursor', source_path=source, title='Legacy shared session',
+        messages=[{'role': 'user', 'content': 'Original deleted body'}],
+    )
+    conversation_service.delete_conversation(legacy['id'])
+
+    # The exact path-only session stays deleted.
+    with pytest.raises(HTTPException) as exc:
+        conversation_service.upsert_conversation(
+            agent='cursor', source_path=source, title='Legacy shared session',
+            messages=[{'role': 'user', 'content': 'Original deleted body'}],
+        )
+    assert exc.value.status_code == 410
+
+    # Another legacy session in the same shared database is not blocked.
+    fresh = conversation_service.upsert_conversation(
+        agent='cursor', source_path=source, title='Another shared session',
+        messages=[{'role': 'user', 'content': 'A different body'}],
+    )
+    assert fresh['id'] != legacy['id']
+
+
+def test_shared_db_path_only_live_sessions_do_not_overwrite(tmp_path, monkeypatch):
+    monkeypatch.setenv('CONTEXTCORE_DB', str(tmp_path / 'shared_live.sqlite'))
+    create_schema()
+    source = str(tmp_path / 'state.vscdb')
+
+    first = conversation_service.upsert_conversation(
+        agent='cursor', source_path=source, title='Session A',
+        messages=[{'role': 'user', 'content': 'body A'}],
+    )
+    second = conversation_service.upsert_conversation(
+        agent='cursor', source_path=source, title='Session B',
+        messages=[{'role': 'user', 'content': 'body B'}],
+    )
+    assert first['id'] != second['id']
+    assert conversation_service.get_conversation(first['id'])['messages'][0]['content'] == 'body A'
+    assert conversation_service.get_conversation(second['id'])['messages'][0]['content'] == 'body B'
+
+    again = conversation_service.upsert_conversation(
+        agent='cursor', source_path=source, title='Session A',
+        messages=[{'role': 'user', 'content': 'body A revised'}],
+    )
+    assert again['id'] == first['id']
+    assert conversation_service.get_conversation(second['id'])['messages'][0]['content'] == 'body B'
+    assert len(conversation_service.list_conversations(agent='cursor')) == 2
+
+
+def test_non_shared_path_still_updates_the_same_conversation(tmp_path, monkeypatch):
+    monkeypatch.setenv('CONTEXTCORE_DB', str(tmp_path / 'file_path.sqlite'))
+    create_schema()
+    source = str(tmp_path / 'session.jsonl')
+
+    first = conversation_service.upsert_conversation(
+        agent='codex', source_path=source, title='One title',
+        messages=[{'role': 'user', 'content': 'first body'}],
+    )
+    second = conversation_service.upsert_conversation(
+        agent='codex', source_path=source, title='Renamed title',
+        messages=[{'role': 'user', 'content': 'second body'}],
+    )
+    assert second['id'] == first['id']
+    assert second['title'] == 'Renamed title'
+    assert len(conversation_service.list_conversations(agent='codex')) == 1
+
+
 def test_conversation_like_escaping_special_chars(tmp_path, monkeypatch):
     monkeypatch.setenv('CONTEXTCORE_DB', str(tmp_path / 'like_escape.sqlite'))
     create_schema()

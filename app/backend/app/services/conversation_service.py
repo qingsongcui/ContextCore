@@ -78,19 +78,116 @@ def compute_source_identity_key(agent: str, source_path: str | None, title: str,
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def compute_shared_path_session_key(agent: str, source_path: str | None, title: str) -> str:
+    """Identify one legacy session inside a shared database by path and title.
+
+    A bare shared-database path is shared by every sibling session, so using it as a
+    deletion identity would either block all siblings or be deleted by the next import.
+    """
+    identity = f"{source_path.strip()}\x1f{title.strip()}"
+    raw = f"conversation:{agent}:{identity}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def conversation_identity_keys(agent: str, source_path: str | None, title: str, external_id: str | None = None) -> list[str]:
     """Return identity keys for conversation deduplication and tombstones.
-    For shared databases (e.g. Cursor state.vscdb, OpenCode db), only the exact session
-    identifier (external_id) is used. Bare source_path must NEVER be used as an alias for
-    shared databases, as tombstoning it would block sibling and future sessions.
+    For shared databases (e.g. Cursor state.vscdb, OpenCode db), a session with an
+    external_id is identified only by that id. A legacy path-only session is identified
+    by path + title. Bare source_path must NEVER be used for shared databases, as
+    tombstoning it would block sibling and future sessions.
     """
+    if source_path and is_shared_database_path(source_path):
+        if external_id:
+            return [compute_source_identity_key(agent, source_path, title, external_id)]
+        return [compute_shared_path_session_key(agent, source_path, title)]
+
     primary = compute_source_identity_key(agent, source_path, title, external_id)
     keys = [primary]
-    if external_id and source_path and not is_shared_database_path(source_path):
+    if external_id and source_path:
         alternate = compute_source_identity_key(agent, source_path, title, None)
         if alternate not in keys:
             keys.append(alternate)
     return keys
+
+
+def is_conversation_tombstoned(
+    conn, agent: str, source_path: str | None, title: str, external_id: str | None = None
+) -> bool:
+    keys = conversation_identity_keys(agent, source_path, title, external_id)
+    placeholders = ",".join("?" for _ in keys)
+    return conn.execute(
+        f"SELECT 1 FROM tombstones WHERE entity_type = 'conversation' AND dedupe_key IN ({placeholders}) LIMIT 1",
+        tuple(keys),
+    ).fetchone() is not None
+
+
+def find_import_conversation(conn, agent: str, source_path: str | None, title: str, external_id: str | None = None):
+    """Find the row an import should update.
+
+    A normal transcript file is one conversation. A shared database holds many
+    sessions, so a path-only import must also match the title; matching the path
+    alone would replace a different live session.
+    """
+    if external_id:
+        row = conn.execute(
+            "SELECT * FROM conversations WHERE agent = ? AND external_id = ?",
+            (agent, external_id),
+        ).fetchone()
+        if row:
+            return row
+    if not source_path:
+        return None
+    if external_id:
+        if is_shared_database_path(source_path):
+            return None
+        return conn.execute(
+            """
+            SELECT * FROM conversations
+            WHERE agent = ? AND source_path = ? AND (external_id IS NULL OR external_id = '')
+            """,
+            (agent, source_path),
+        ).fetchone()
+    if is_shared_database_path(source_path):
+        clean_title = (title or "").strip()
+        if not clean_title:
+            return None
+        return conn.execute(
+            """
+            SELECT * FROM conversations
+            WHERE agent = ? AND source_path = ? AND title = ?
+              AND (external_id IS NULL OR external_id = '')
+            """,
+            (agent, source_path, clean_title),
+        ).fetchone()
+    return conn.execute(
+        "SELECT * FROM conversations WHERE agent = ? AND source_path = ?",
+        (agent, source_path),
+    ).fetchone()
+
+
+def find_hook_conversation(
+    conn, agent: str, source_path: str | None, title: str, external_id: str | None = None, *, title_is_generic: bool = False,
+):
+    """Resolve a hook to one session without guessing among shared-database siblings.
+
+    A generic hook title may still attach to the only path-only session in a
+    shared database. Two or more such sessions stay untouched.
+    """
+    row = find_import_conversation(conn, agent, source_path, title, external_id)
+    if row is not None or external_id or not source_path or not title_is_generic:
+        return row
+    if not is_shared_database_path(source_path):
+        return row
+    rows = conn.execute(
+        """
+        SELECT * FROM conversations
+        WHERE agent = ? AND source_path = ? AND (external_id IS NULL OR external_id = '')
+        """,
+        (agent, source_path),
+    ).fetchall()
+    if len(rows) == 1:
+        return rows[0]
+    return None
 
 
 def compute_conversation_hash(agent: str, source_path: str | None, title: str, external_id: str | None = None) -> str:
@@ -803,39 +900,21 @@ def upsert_conversation(
                 raise HTTPException(status_code=404, detail=f"Target project '{project_id}' not found")
 
         if is_shared_database_path(source_path):
-            shared_key = compute_source_identity_key(agent, source_path, "", None)
+            # Legacy releases wrote an overbroad bare-path tombstone. New deletions use
+            # a per-session key (path + title), so only the old bare key is cleaned here.
+            legacy_shared_key = compute_source_identity_key(agent, source_path, "", None)
             conn.execute(
                 "DELETE FROM tombstones WHERE entity_type = 'conversation' AND dedupe_key = ?",
-                (shared_key,),
+                (legacy_shared_key,),
             )
 
-        keys = conversation_identity_keys(agent, source_path, clean_title, external_id)
-        tombstone = conn.execute(
-            f"SELECT id FROM tombstones WHERE entity_type = 'conversation' AND dedupe_key IN ({','.join('?' for _ in keys)})",
-            tuple(keys),
-        ).fetchone()
-        if tombstone:
+        if is_conversation_tombstoned(conn, agent, source_path, clean_title, external_id):
             raise HTTPException(
                 status_code=410,
                 detail="Conversation was previously deleted and tombstoned.",
             )
 
-        existing = None
-        if external_id:
-            existing = conn.execute(
-                "SELECT * FROM conversations WHERE agent = ? AND external_id = ?",
-                (agent, external_id),
-            ).fetchone()
-        if not existing and source_path and external_id and not is_shared_database_path(source_path):
-            existing = conn.execute(
-                "SELECT * FROM conversations WHERE agent = ? AND source_path = ? AND (external_id IS NULL OR external_id = '')",
-                (agent, source_path),
-            ).fetchone()
-        if not existing and source_path and not external_id:
-            existing = conn.execute(
-                "SELECT * FROM conversations WHERE agent = ? AND source_path = ?",
-                (agent, source_path),
-            ).fetchone()
+        existing = find_import_conversation(conn, agent, source_path, clean_title, external_id)
 
         if existing:
             target_id = existing["id"]

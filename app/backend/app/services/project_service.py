@@ -286,6 +286,11 @@ def get_project(project_id: str) -> dict[str, Any]:
         return p
 
 
+def _normalize_project_directory(path: str) -> str:
+    """Expand ~ before making the stored path absolute; keep symlink aliases intact."""
+    return os.path.abspath(os.path.expanduser(path.strip()))
+
+
 def _insert_project_conn(
     conn,
     *,
@@ -311,7 +316,7 @@ def _insert_project_conn(
     )
     if directories:
         for d in directories:
-            norm_d = os.path.abspath(d.strip())
+            norm_d = _normalize_project_directory(d)
             conn.execute(
                 "INSERT OR IGNORE INTO project_directories (id, project_id, path, created_at) VALUES (?, ?, ?, ?)",
                 (new_id("pdir"), pid, norm_d, now),
@@ -389,7 +394,7 @@ def update_project(
         if directories is not None:
             conn.execute("DELETE FROM project_directories WHERE project_id = ?", (project_id,))
             for d in directories:
-                norm_d = os.path.abspath(d.strip())
+                norm_d = _normalize_project_directory(d)
                 conn.execute(
                     "INSERT OR IGNORE INTO project_directories (id, project_id, path, created_at) VALUES (?, ?, ?, ?)",
                     (new_id("pdir"), project_id, norm_d, now),
@@ -652,7 +657,7 @@ def split_project(
 
 def canonical_project_path(path: str) -> str:
     """Compare filesystem identity without rewriting stored paths or symlinks."""
-    return os.path.realpath(os.path.abspath(path.strip()))
+    return os.path.realpath(os.path.abspath(os.path.expanduser(path.strip())))
 
 
 def repository_identity(path: str) -> dict[str, str] | None:
@@ -1039,7 +1044,7 @@ def reconstruct_or_resolve_project(
         return None
 
     if cwd and str(cwd).strip():
-        norm_cwd = os.path.abspath(str(cwd).strip())
+        norm_cwd = _normalize_project_directory(str(cwd))
         if is_broad_or_ephemeral_project_path(norm_cwd):
             return None
         repo = repository_identity(norm_cwd)
