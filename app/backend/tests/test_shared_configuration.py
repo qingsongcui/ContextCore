@@ -104,7 +104,7 @@ def test_matrix_and_archive_include_only_scoped_readback(manager, monkeypatch):
     assert client.post('/api/manage/configuration-backup/restore', json={'data': backup}).status_code == 422
 
 
-@pytest.mark.parametrize('manual_before,surface', [(True, 'codex'), (False, 'codex'), (False, 'codex-desktop')])
+@pytest.mark.parametrize('manual_before,surface', [(True, 'codex'), (False, 'codex'), (False, 'codex')])
 def test_profile_switch_preserves_independently_managed_resources(manager, manual_before, surface):
     first, second = mcp(manager, 'Shared tool'), mcp(manager, 'Other tool')
     old = manager.save('bundle', {'name': 'First', 'host_ids': ['codex'], 'asset_ids': [first['id']]})
@@ -204,9 +204,8 @@ def test_global_matrix_shows_all_surfaces_and_shared_updates(manager, monkeypatc
     assert response.status_code == 200, response.text
     item, = response.json()['items']
     assert set(item['cells']) == set(HOSTS)
-    assert item['cells']['codex']['status'] == item['cells']['codex-desktop']['status'] == 'update_available'
-    assert item['cells']['codex']['applied_version'] == item['cells']['codex-desktop']['applied_version'] == 1
-    assert item['cells']['claude-desktop']['status'] == 'unsupported'
+    assert item['cells']['codex']['status'] == item['cells']['codex']['status'] == 'update_available'
+    assert item['cells']['codex']['applied_version'] == item['cells']['codex']['applied_version'] == 1
     assert item['cells']['cursor']['status'] == 'not_managed'
     assert 'files' not in item
 
@@ -246,15 +245,22 @@ def test_mixed_global_matrix_filters_and_paginates_before_host_reads(manager, mo
         return state(host_id)
     monkeypatch.setattr(manager,'host_state',read)
     path = '/api/manage/shared-resource-matrix'
-    query = {'host_ids':'codex,claude-desktop', 'scope':'global', 'kind':'all'}
+    query = {'host_ids':'codex,opencode', 'scope':'global', 'kind':'all'}
     first = client.get(path, params=query).json()
     assert first['total'] == 17 and len(first['items']) == 15 and first['has_more']
-    assert calls == ['codex','claude-desktop']
+    assert calls == ['codex','opencode']
     calls.clear()
     second = client.get(path, params={**query,'offset':15}).json()
     assert [row['id'] for row in second['items']] == [skill['id'],prompt['id']]
-    assert all(row['cells']['claude-desktop']['status'] == 'unsupported' for row in second['items'])
+    by_id = {row['id']: row for row in second['items']}
+    assert by_id[skill['id']]['cells']['opencode']['status'] == 'not_managed'
+    assert by_id[prompt['id']]['cells']['opencode']['status'] == 'unsupported'
     assert all(row['cells']['codex']['status'] == 'not_managed' for row in second['items'])
+    assert calls == ['codex','opencode']
+    calls.clear()
+    # A host with no configured root for the requested kind is skipped without a host read.
+    blocked = client.get(path, params={'host_ids':'codex,opencode', 'scope':'global', 'kind':'prompt'}).json()
+    assert blocked['items'][0]['cells']['opencode']['status'] == 'unsupported'
     assert calls == ['codex']
     focused = client.get(path,params={**query,'asset_id':prompt['id']}).json()
     assert focused['total'] == 1 and focused['items'][0]['kind'] == 'prompt'

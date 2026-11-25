@@ -75,14 +75,14 @@ export function productHosts(hosts = []) {
 export function isProductHostValue(hosts, value) {
   if (!value) return false;
   if (isPrimaryAgent(agentGroup(value))) return true;
-  return productHosts(hosts).some(host => host.id === value || host.registry_host_id === value);
+  return productHosts(hosts).some(host => host.id === value);
 }
 
 export function hostOptions(hosts, observed) {
   const eligible = productHosts(hosts);
   const labels = new Map();
   for (const row of eligible) {
-    const value = row.registry_host_id || row.id;
+    const value = row.id;
     if (!value) continue;
     const group = labels.get(value) || [];
     group.push(row.label || row.name || value);

@@ -26,11 +26,8 @@ export function hostNotice(hostId, kind, fallback) {
     case 'antigravity:provider':
       return t('请在 Antigravity 对话的模型菜单选择模型。它没有公开的自定义 API 配置接口，这里不会改写或借用账号缓存。');
     case 'codex:configuration':
-      return t('这些配置文件与 Codex Desktop 共用。桌面版下次读取配置时也会受到影响，运行中会话是否采用仍需核对。');
-    case 'codex-desktop:configuration':
-      return t('这些配置文件与 Codex CLI 共用，会影响后续配置读取；写入不能证明桌面会话已经采用。');
+      return t('这些配置文件由 Codex 桌面版和 CLI 共用。下一次读取配置时会受到影响，运行中会话是否采用仍需核对。');
     case 'codex:prompt':
-    case 'codex-desktop:prompt':
       return t('使用规则写入 Codex 用户级 AGENTS.md；自定义目录或覆盖规则可能优先，桌面读取效果尚未验证。');
     default:
       return fallback;

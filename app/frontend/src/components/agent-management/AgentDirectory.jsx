@@ -19,7 +19,7 @@ export function AgentDirectory({ hosts, connections, nameOf, favorites, recent, 
   const [filter, setFilter] = useState('all');
   const order = [...new Set([...favorites, ...recent])];
   const rank = id => order.includes(id) ? order.indexOf(id) : order.length;
-  const statusFor = host => list(connections.data).find(item => item.id === (host.registry_host_id || host.id));
+  const statusFor = host => list(connections.data).find(item => item.id === (host.id));
   const matchesFilter = host => filter === 'all' || (filter === 'favorites' ? favorites.includes(host.id) : statusFor(host)?.enabled);
   const entries = hosts.filter(host => matchesFilter(host) && (nameOf(host) + ' ' + host.id).toLowerCase().includes(query.toLowerCase().trim()))
     .sort((a, b) => rank(a.id) - rank(b.id));

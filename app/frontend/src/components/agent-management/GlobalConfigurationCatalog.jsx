@@ -13,11 +13,7 @@ const catalogs = [
 
 function hostChoices(hosts, collection) {
   if (collection === 'bundles') return hosts.map(host => ({ ids: [host.id], name: nativeTargetName(host) }));
-  const combined = hosts.filter(host => ['codex', 'codex-desktop'].includes(host.id) && host.shared_configuration);
-  const choices = hosts.filter(host => combined.length !== 2 || !combined.includes(host))
-    .map(host => ({ ids: [host.id], name: nativeTargetName(host) }));
-  if (combined.length === 2) choices.unshift({ ids: combined.map(host => host.id), name: combined.map(nativeTargetName).join(' / ') });
-  return choices;
+  return hosts.map(host => ({ ids: [host.id], name: nativeTargetName(host) }));
 }
 
 function HostPicker({label, groups, values, onChange}) {

@@ -31,15 +31,10 @@ NATIVE_HOSTS = {
                "prompt_notice": "Prompts are explicit-invocation instruction Skills (/asset-...). They do not replace global User Rules, which Cursor stores outside the documented filesystem interface. Project .mdc rules require a project scope.",
                "provider_unsupported_reason": "Cursor documents API-key setup in Cursor Settings > Models and model choice in its own picker, not a supported provider/default-model configuration file API. Save/export definitions here; add, update, switch or remove keys/models in Cursor Settings > Models. Private storage databases are not rewritten.",
                "sources": ["https://cursor.com/docs/skills", "https://cursor.com/help/customization/skills", "https://cursor.com/docs/rules", "https://cursor.com/help/models-and-usage/api-keys"]},
-    "antigravity": {"name": "Antigravity Desktop", "mcp_path": ".gemini/config/mcp_config.json", "format": "json", "container": "mcpServers",
+    "antigravity": {"name": "Antigravity", "mcp_path": ".gemini/config/mcp_config.json", "format": "json", "container": "mcpServers",
                     "skill_dir": ".gemini/config/skills", "prompt_dir": ".gemini/config/rules", "prompt_mode": "global_rule",
                     "provider_unsupported_reason": "Antigravity Desktop documents plan-dependent models selected in the conversation model menu, not a custom API-provider/key or default-model configuration file API. Select models in Antigravity; its private account/profile caches are not rewritten or reused as provider credentials.",
                     "sources": ["https://antigravity.google/docs/skills", "https://antigravity.google/docs/rules", "https://antigravity.google/docs/models", "https://antigravity.google/docs/customization-discovery"]},
-    "codex-desktop": {"name": "Codex Desktop", "mcp_path": ".codex/config.toml", "provider_path": ".codex/config.toml", "format": "toml",
-                      "skill_dir": ".codex/skills", "prompt_path": ".codex/AGENTS.md",
-                      "configuration_notice": "Writes shared Codex native files also used by Codex CLI. Desktop consumption, reload and model availability have not been verified. Review the shared-file impact; writing defaults is not switching a running Desktop conversation.",
-                      "prompt_notice": "Writes user AGENTS.md for subsequent instruction discovery. AGENTS.override.md and non-default CODEX_HOME can supersede this file; Desktop consumption remains unverified.",
-                      "sources": ["https://developers.openai.com/codex/config-basic/", "https://developers.openai.com/codex/config-reference/", "https://learn.chatgpt.com/docs/build-skills", "https://learn.chatgpt.com/docs/agent-configuration/agents-md"]},
 }
 
 
@@ -149,7 +144,7 @@ def native_skill(asset: dict, host_id: str) -> tuple[str, dict]:
     Existing frontmatter is never silently repaired or discarded.
     """
     files = dict(asset["files"])
-    codex = host_id in ("codex", "codex-desktop")
+    codex = host_id == "codex"
     name = asset["id"].replace("_", "-")
     text = files["SKILL.md"]
     if not codex and host_id not in ("omp", "cursor", "antigravity"):

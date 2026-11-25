@@ -2,6 +2,8 @@ import { locale, t } from "../lib/i18n.jsx";
 import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState, useLayoutEffect } from 'react';
 import { AlertCircle, ArrowRight, LoaderCircle, X } from 'lucide-react';
 import { safeEvidence } from '../lib/management.js';
+import { AGENTS } from '../lib/agentGroups.js';
+export { AGENTS };
 export function Button({
   children,
   icon: Icon,
@@ -212,14 +214,7 @@ export const CATEGORIES = {
   lesson: '踩坑经验',
   knowledge: '参考资料'
 };
-export const AGENTS = {
-  codex: 'Codex',
-  omp: 'Oh My Pi (OMP)',
-  cursor: 'Cursor',
-  antigravity: 'Antigravity',
-  'claude-code': 'Claude Code',
-  opencode: 'OpenCode'
-};
+
 
 // Measure the active segment after layout, including language/font and viewport changes.
 export function SegmentedTabs({ label, children }) {

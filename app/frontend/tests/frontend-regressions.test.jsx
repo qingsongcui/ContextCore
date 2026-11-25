@@ -666,13 +666,12 @@ it('keeps Shell aria-current aligned, deduplicates UsagePage host options, and l
 
   // 2. UsagePage deduplicates host filter options sharing the same registry_host_id
   h.data['/api/manage/hosts'] = [
-    { id: 'codex', name: 'Codex CLI', registry_host_id: 'codex' },
-    { id: 'codex-desktop', name: 'Codex Desktop', registry_host_id: 'codex' },
-    { id: 'antigravity', name: 'Antigravity', registry_host_id: 'antigravity' },
-    { id: 'antigravity-cli', name: 'Antigravity CLI', registry_host_id: 'antigravity' },
-    { id: 'claude-code', name: 'Claude Code', registry_host_id: 'claude_code' },
-    { id: 'claude-desktop', name: 'Claude Desktop' },
-    { id: 'hermes', name: 'Hermes Agent' },
+    { id: 'codex', name: 'Codex' },
+    { id: 'omp', name: 'Oh My Pi' },
+    { id: 'cursor', name: 'Cursor' },
+    { id: 'antigravity', name: 'Antigravity' },
+    { id: 'claude-code', name: 'Claude Code' },
+    { id: 'opencode', name: 'OpenCode' },
   ];
   h.data['/api/usage/summary?tz=UTC'] = { logical_requests: 0, known_tokens: 0, unknown_usage_count: 0, unknown_cost_count: 0, attempts: 0 };
   await render(<UsagePage projects={[]} />);
@@ -682,14 +681,15 @@ it('keeps Shell aria-current aligned, deduplicates UsagePage host options, and l
   const hostSelect = field('助手');
   const optionValues = Array.from(hostSelect.querySelectorAll('option')).map(opt => opt.value);
   expect(new Set(optionValues).size).toBe(optionValues.length);
-  expect(optionValues).toEqual(['', 'codex', 'antigravity', 'claude_code']);
-  expect(hostSelect.textContent).toContain('Codex CLI / Codex Desktop');
+  expect(optionValues).toEqual(['', 'codex', 'omp', 'cursor', 'antigravity', 'claude-code', 'opencode']);
+  expect(hostSelect.textContent).toContain('Codex');
+  expect(hostSelect.textContent).toContain('Oh My Pi');
   expect(hostSelect.textContent).not.toContain('Claude Desktop');
   expect(hostSelect.textContent).not.toContain('Hermes Agent');
   expect(hostSelect.textContent).not.toContain('Kimi Code CLI');
   await click(button('账号额度'));
   const quotaOptions = Array.from(field('助手').querySelectorAll('option')).map(opt => opt.textContent);
-  expect(quotaOptions).toEqual(['全部助手', 'Codex CLI', 'Codex Desktop', 'Antigravity', 'Antigravity CLI', 'Claude Code']);
+  expect(quotaOptions).toEqual(['全部助手', 'Codex', 'Oh My Pi', 'Cursor', 'Antigravity', 'Claude Code', 'OpenCode']);
   await render(<UsagePage projects={[]} agentId="hermes" />);
   expect(field('助手').value).toBe('');
   const overviewPath = [...h.resources].reverse().find(item => String(item.path || '').includes('/api/usage/overview'))?.path;

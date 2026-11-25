@@ -22,11 +22,6 @@ from app.services.provider_endpoints import require_endpoint
 HOST_ENDPOINTS = {
     'codex': ('responses',), 'claude-code': ('messages',),
     'opencode': ('chat/completions', 'responses', 'messages'),
-    'pi': ('chat/completions', 'messages'),
-    'kimi-code': ('chat/completions', 'responses', 'messages'),
-    'hermes': ('chat/completions', 'responses', 'messages'),
-    'minimax-code': ('chat/completions', 'responses', 'messages'),
-    'openclaw': ('chat/completions', 'responses', 'messages'),
 }
 DEFAULT_ALIAS = 'senrelay-default'
 NUMERIC = {'request_timeout_seconds': (120, 1, 600), 'circuit_threshold': (3, 1, 100), 'circuit_cooldown_seconds': (60, 1, 3600)}

@@ -207,8 +207,6 @@ def test_preview_withholds_secret_repeated_in_native_name_or_endpoint(manager):
 
 @pytest.mark.parametrize(('host', 'relative', 'document', 'selection_path', 'selection'), [
     ('omp', '.omp/agent/models.yml', 'providers:\n  provider_local:\n    baseUrl: https://api.example.org/v1\n    api: openai-responses\n    models:\n      - id: one\n        contextWindow: 8192\n      - id: two\n', '.omp/agent/config.yml', 'modelRoles:\n  default: provider_local/two\n'),
-    ('pi', '.pi/agent/models.json', json.dumps({'providers':{'provider_local':{'baseUrl':'https://api.example.org/v1','api':'openai-completions','models':[{'id':'one'},{'id':'two'}]}}}), '.pi/agent/settings.json', '{"defaultModel":"two", "defaultProvider":"provider_local"}'),
-    ('kimi-code', '.kimi-code/config.toml', 'default_model="local"\n[providers.provider_local]\ntype="openai_responses"\nbase_url="https://api.example.org/v1"\n[models.local]\nmodel="two"\nprovider="provider_local"\nmax_context_size=8192\n', None, None),
     ('opencode', '.config/opencode/opencode.json', json.dumps({'model':'provider_local/two','provider':{'provider_local':{'npm':'@ai-sdk/openai','options':{'baseURL':'https://api.example.org/v1'},'models':{'one':{},'two':{}}}}}), None, None),
 ])
 def test_native_selector_and_capacity_match_existing_host_formats(manager, host, relative, document, selection_path, selection):
@@ -223,7 +221,7 @@ def test_native_selector_and_capacity_match_existing_host_formats(manager, host,
     receipt = native_catalog.import_selection(manager,host,{'kind':'providers','selected_ids':[candidate['id']],'fingerprint':preview['fingerprint'],'confirmed':True})
     definition = manager.get('provider',receipt['entities'][0]['id'])
     assert definition['default_model'] == 'two'
-    if host in ('omp','kimi-code'):
+    if host == 'omp':
         assert 8192 in definition['model_context_windows'].values()
         assert any(model.get('context_window') == 8192 for model in manager.list('model'))
     assert path.read_text() == document
@@ -300,11 +298,11 @@ def test_native_rule_preserves_one_copy_and_conflicts_on_external_edit(manager):
     path.parent.mkdir()
     path.write_text('# original rule\n')
     entry = take_native(manager,'codex','rules')
-    assert manager.host_state('codex-desktop')['resources'][entry]['status'] == 'native_available'
+    assert manager.host_state('codex')['resources'][entry]['status'] == 'native_available'
     other = manager.save('asset', {'kind':'prompt', 'name':'other', 'content':'separate'})
     with pytest.raises(ConfigurationError, match='overlaps'):
         manager.plan({'host_id':'codex', 'asset_ids':[entry, other['id']]})
-    plan = manager.plan({'host_id':'codex-desktop','asset_ids':[entry]})
+    plan = manager.plan({'host_id':'codex','asset_ids':[entry]})
     path.write_text('# edited externally\n')
     with pytest.raises(ConfigurationError):
         manager.apply(plan['id'],1,True)
@@ -325,7 +323,7 @@ def test_native_skills_are_not_duplicated_in_same_or_shared_path(manager):
     path.parent.mkdir(parents=True)
     path.write_text('# test')
     entry = take_native(manager,'codex','skills')
-    for host in ('codex','codex-desktop'):
+    for host in ('codex','codex'):
         assert manager.host_state(host)['resources'][entry]['status'] == 'native_read_only'
         with pytest.raises(ConfigurationError):
             manager.quick_toggle_asset(host,entry,True,auto_apply=True)
@@ -365,8 +363,8 @@ def test_codex_toml_takes_over_shared_native_mcp_table_without_touching_neighbou
     before = '# my options\nmodel="custom"\n[mcp_servers."my.local"]\ncommand="tool"\nargs=["--ready"]\n# keep this comment\n[features]\nfast=true\n'
     path.write_text(before)
     key = take_native(manager,'codex','mcp')
-    assert manager.host_state('codex-desktop')['resources'][key]['status'] == 'native_available'
-    plan = manager.quick_toggle_asset('codex-desktop', key, True, auto_apply=True)
+    assert manager.host_state('codex')['resources'][key]['status'] == 'native_available'
+    plan = manager.quick_toggle_asset('codex', key, True, auto_apply=True)
     assert plan['status'] == 'review_required'
     manager.apply(plan['plan_id'],1,True)
     assert path.read_text() == before
@@ -386,7 +384,7 @@ def test_codex_toml_takes_over_shared_native_mcp_table_without_touching_neighbou
     assert tomllib.loads(path.read_text()) == after
 
 
-@pytest.mark.parametrize('first,second', [('codex', 'codex-desktop'), ('codex-desktop', 'codex')])
+@pytest.mark.parametrize('first,second', [('codex', 'codex'), ('codex', 'codex')])
 def test_shared_source_import_reuses_one_definition_and_preserves_edits(manager, first, second):
     skill = manager.home / '.codex/skills/local-notes'
     skill.mkdir(parents=True)

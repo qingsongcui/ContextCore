@@ -60,7 +60,7 @@ def _catalog(conn):
                 (not provider["credential_source"] and not provider["credential_ref"])):
             account_providers.setdefault(provider["account_id"], []).append(provider)
     items = [
-        _source("native-codex", "Codex", "codex", ["codex", "codex-desktop"]),
+        _source("native-codex", "Codex", "codex", ["codex"]),
         _source("native-claude", "Claude Code", "claude", ["claude-code"], status="native_only"),
     ]
 

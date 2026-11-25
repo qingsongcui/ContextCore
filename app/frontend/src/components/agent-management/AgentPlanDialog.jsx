@@ -24,7 +24,7 @@ export function AgentPlanDialog({ plan, definition, result, hostReadback, agent,
   const selection = plan.payload?.metadata?.model_selection;
   const sharedConfiguration = plan.payload?.metadata?.shared_configuration === true;
   const hostId = plan.payload?.metadata?.host_id;
-  const canShowNotice = !['codex', 'codex-desktop'].includes(hostId) || plan.payload?.metadata?.shared_configuration !== false;
+  const canShowNotice = hostId !== 'codex' || plan.payload?.metadata?.shared_configuration !== false;
   const kindLabel = kind => ({ provider: t('模型与账号'), mcp: t('工具'), skill: t('技能'), prompt: t('使用规则') })[kind] || kind;
   return <Modal wide title={`${agent} · ${category} · ${applied ? t('配置应用结果') : t('检查本次更改')}`} busy={busy} onClose={onClose}>
     <section className="agent-change-summary"><h3>{sharedConfiguration ? t('共享配置文件更改') : t('只更改 {agent}', { agent })}</h3><p>{operation === 'undo' ? t('将文件恢复到这次更改之前的版本。若其他程序修改了文件，撤销会停止。') : operation === 'uninstall' ? t('只移除由续境管理且未被外部修改的条目；不会删除不属于续境的文件。') : operation === 'restore' ? t('恢复此前保留的配置和模型选择，同时移除之后应用的组合条目；外部更改会阻止应用。') : sharedConfiguration ? t('将所选定义写入所列的共享配置文件；共用这些文件的入口也会受到影响。') : t('将所选定义写入这个助手的配置。其他助手保持不变。')}</p><p>{t('配置写入不代表助手已加载，也不会授权读取聊天、后台算力或执行工具。')}</p><StatusBadge value={result?.status || plan.status} />

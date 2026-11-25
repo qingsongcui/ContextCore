@@ -50,7 +50,7 @@ function DailyUsage({ projects, agentId, projectId, section, requestId, navigate
   // Native logs may only identify a shared registry host (for example, Codex CLI/Desktop).
   // Select a distinct surface when the period contains observations attributed to it.
   const exactHostObserved = list(observed.host_id).some(item => item.value === requestedHost);
-  const reportHost = exactHostObserved ? requestedHost : selectedHost?.registry_host_id || requestedHost;
+  const reportHost = exactHostObserved ? requestedHost : selectedHost?.id || requestedHost;
   const params = usageParams({ ...filters, host_id: reportHost });
   const summary = useResource(['overview', 'sources'].includes(tab) ? usagePath('overview', params) : null, revision);
   useEffect(() => {

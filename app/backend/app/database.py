@@ -823,6 +823,12 @@ def create_schema(db_path: Path | None = None) -> None:
         from app.services.memory_rules import migrate_beta4_rules
         migrate_beta4_rules(conn)
 
+        # Canonicalize legacy assistant ids after all service tables exist and
+        # before the server starts serving API requests.
+        from app.services.six_agent_migration import migrate_six_agent_variant_ids, prune_removed_host_ids
+        migrate_six_agent_variant_ids(conn)
+        prune_removed_host_ids(conn)
+
         # 6. Seal schema version
         set_app_setting("schema_version", settings.schema_version, conn=conn)
 

@@ -145,11 +145,10 @@ describe('native management failure feedback', () => {
   });
 });
 
-it('names the other Codex surface in shared configuration notices', async () => {
+it('explains that Codex desktop and CLI share configuration notices', async () => {
   const { hostNotice } = await import('../src/lib/management.js');
-  const cli = hostNotice('codex', 'configuration');
-  const desktop = hostNotice('codex-desktop', 'configuration');
-  expect(cli).toContain('Codex Desktop');
-  expect(cli).not.toContain('Codex CLI');
-  expect(desktop).toContain('Codex CLI');
+  const notice = hostNotice('codex', 'configuration');
+  expect(notice).toContain('Codex');
+  expect(notice).toContain('桌面版');
+  expect(notice).toContain('CLI');
 });

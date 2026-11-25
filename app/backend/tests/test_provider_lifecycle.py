@@ -38,7 +38,7 @@ def apply(manager, plan):
     return manager.apply(plan['id'], plan['version'], True)
 
 
-@pytest.mark.parametrize('host', ['codex', 'claude-code', 'opencode', 'pi', 'kimi-code', 'hermes', 'minimax-code', 'openclaw'])
+@pytest.mark.parametrize('host', ['codex', 'claude-code', 'opencode'])
 def test_bound_api_account_reaches_native_configuration_only_after_confirmation(manager, host):
     provider, model, account = account_provider(manager, host)
     plan = activate(manager, provider, model, host)
@@ -88,7 +88,7 @@ def test_account_rotation_marks_each_using_native_provider_as_update_available(m
     assert state['credentials_read'] is False
 
 
-@pytest.mark.parametrize('host', ['codex', 'claude-code', 'opencode', 'pi', 'kimi-code', 'hermes', 'minimax-code', 'openclaw'])
+@pytest.mark.parametrize('host', ['codex', 'claude-code', 'opencode'])
 def test_owned_uninstall_survives_removed_key_and_changed_protocol_without_vault_reads(manager, host, monkeypatch):
     provider, model = create(manager, host, own_key=True)
     plan = manager.plan({'host_id': host, 'provider_id': provider['id']})
@@ -113,36 +113,11 @@ def test_current_provider_must_switch_or_restore_before_uninstall(manager):
     assert (manager.home / '.codex/config.toml').read_bytes() == original
 
 
-def test_kimi_saved_model_capacity_is_written_and_changes_invalidate_old_preview(manager):
-    provider = manager.save('provider', {'name': 'Kimi fixture', 'protocol': 'openai', 'base_url': 'https://fixture.example/v1'})
-    provider = manager.credential('provider', provider['id'], 'synthetic-kimi-value')
-    model = manager.save('model', {'name': 'Saved capacity', 'provider_id': provider['id'], 'model_id': 'native-fixture', 'context_window': 32768})
-    stale = activate(manager, provider, model, 'kimi-code')
-    model = manager.save('model', {'context_window': 65536}, model['id'], model['version'])
-    with pytest.raises(ConfigurationError, match='changed since preview'):
-        apply(manager, stale)
-    apply(manager, activate(manager, provider, model, 'kimi-code'))
-    native = tomllib.loads((manager.home / '.kimi-code/config.toml').read_text())
-    assert list(native['models'].values())[0]['max_context_size'] == 65536
-
-
 @pytest.mark.parametrize('value', [True, 0, -1, '32768', 1.5, 2**63])
 def test_invalid_saved_capacity_rejected_before_creating_definition(manager, value):
     provider, _ = create(manager)
     with pytest.raises(ConfigurationError):
         manager.save('model', {'name': 'Bad capacity', 'provider_id': provider['id'], 'model_id': 'bad-capacity', 'context_window': value})
-
-
-def test_setup_saves_capacity_and_binds_it_into_native_kimi_format_idempotently(manager):
-    body = {'request_id': 'kimi-capacity-request-0001', 'host_id': 'kimi-code', 'provider': {'name': 'Kimi setup', 'base_url': 'https://fixture.example/v1', 'protocol': 'openai'}, 'model_id': 'setup-model', 'context_window': 32768, 'secret': 'synthetic-kimi-value'}
-    value = manager.setup_provider(body)
-    assert value == manager.setup_provider(body)
-    assert value['model']['context_window'] == 32768
-    apply(manager, activate(manager, value['provider'], value['model'], 'kimi-code'))
-    native = tomllib.loads((manager.home / '.kimi-code/config.toml').read_text())
-    assert list(native['models'].values())[0]['max_context_size'] == 32768
-    with pytest.raises(ConfigurationError, match='request changed'):
-        manager.setup_provider({**body, 'context_window': 65536})
 
 
 def test_explicit_account_source_is_used_consistently_and_does_not_fall_back_to_own_key(manager, monkeypatch):
@@ -268,14 +243,6 @@ def test_saving_a_provider_key_does_not_override_an_account_previously_in_use(ma
     manager.credential('provider', provider['id'], 'new-unused-provider-value')
     monkeypatch.setattr(management_service, 'service', lambda: manager)
     assert management_service.resolve_provider(provider['id'])['api_key'] == 'synthetic-account-value'
-
-
-def test_known_saved_model_capacity_fills_an_unknown_legacy_provider_capacity_map(manager):
-    provider, model = create(manager, own_key=True)
-    provider = manager.save('provider', {'model_context_windows': None}, provider['id'], provider['version'])
-    apply(manager, activate(manager, provider, model, 'kimi-code'))
-    native = tomllib.loads((manager.home / '.kimi-code/config.toml').read_text())
-    assert list(native['models'].values())[0]['max_context_size'] == 32768
 
 
 def test_invalid_share_kind_type_cannot_interrupt_after_partially_creating_objects(manager):

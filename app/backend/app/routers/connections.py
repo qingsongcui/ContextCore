@@ -272,7 +272,7 @@ def receive_hook_event_endpoint(
                 claude_roots.append(str(expanded_root / "projects"))
             claude_roots.append(str(expanded_root))
 
-        other_hosts = ("cursor", "codex", "omp", "opencode", "antigravity", "grok-build", "grok")
+        other_hosts = ("cursor", "codex", "omp", "opencode", "antigravity")
         for record in normalized_records:
             source_p = str(record.get("source_path") or "").strip()
             if source_p:

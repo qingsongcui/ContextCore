@@ -12,7 +12,7 @@ def _owned_scope(manager, host_id, alias):
     from app.integrations.host_management_native import configuration_paths
     host = manager.host_config(host_id, display=True)
     paths = configuration_paths(host, manager.home)
-    if host_id in ('codex', 'codex-desktop'):
+    if host_id in ('codex',):
         paths.append(str(manager.home / host['mcp_path']))
     prefix = str(manager.home / host['skill_dir']) + '/' if host.get('skill_dir') else '\x00'
     prompt_prefix = str(manager.home / host['prompt_dir']) + '/' if host.get('prompt_dir') else '\x00'

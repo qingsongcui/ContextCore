@@ -22,10 +22,10 @@ SUPPORTED_HOSTS: tuple[HostId, ...] = (
 
 # Single source for user-facing host labels. Discovery, database seeding and tests read this.
 HOST_LABELS: dict[HostId, str] = {
-    "codex": "Codex Desktop",
+    "codex": "Codex",
     "omp": "Oh My Pi",
     "cursor": "Cursor",
-    "antigravity": "Google Antigravity",
+    "antigravity": "Antigravity",
     "claude-code": "Claude Code",
     "opencode": "OpenCode",
 }

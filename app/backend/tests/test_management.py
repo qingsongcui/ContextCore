@@ -289,10 +289,10 @@ def test_management_router_contract(manager, monkeypatch):
     assert client.post(f"/api/manage/plans/{plan['id']}/apply", json={"confirmed": False, "expected_version": 1}).status_code == 422
     applied = client.post(f"/api/manage/plans/{plan['id']}/apply", json={"confirmed": True, "expected_version": 1})
     assert applied.status_code == 200 and applied.json()["status"] == "applied"
-    desktop = next(host for host in client.get("/api/manage/hosts").json() if host["id"] == "codex-desktop")
+    desktop = next(host for host in client.get("/api/manage/hosts").json() if host["id"] == "codex")
     assert desktop["configuration_status"] == "supported_format"
     assert desktop["verification_status"] == "not_verified"
-    assert "Desktop consumption" in desktop["configuration_notice"]
+    assert "Codex" in desktop["configuration_notice"]
 
 
 def test_opaque_native_credentials_never_enter_plan_database_diff_or_exports(manager):
@@ -569,23 +569,6 @@ def test_bundle_restore_removes_its_new_assets_and_preserves_foreign_content(man
     assert set(data["mcp"]) == {"foreign"}
     assert not data["provider"]
     assert not target.exists()
-
-
-def test_hermes_provider_identity_survives_other_owned_list_entry_deletion(manager):
-    from app.integrations.structured_config import parse_document
-    providers = []
-    for number in (1, 2):
-        provider = manager.save("provider", {"name": f"P{number}", "protocol": "openai", "base_url": f"https://p{number}.example.test/v1", "model_map": {"m": f"native-{number}"}})
-        provider = manager.credential("provider", provider["id"], f"private-{number}")
-        plan = manager.plan({"host_id": "hermes", "provider_id": provider["id"]})
-        manager.apply(plan["id"], 1, True)
-        providers.append(provider)
-    path = manager.home / ".hermes/config.yaml"
-    assert len(parse_document("yaml", path.read_text())["custom_providers"]) == 2
-    for provider in providers:
-        removal = manager.plan({"host_id": "hermes", "provider_id": provider["id"], "operation": "uninstall"})
-        manager.apply(removal["id"], 1, True)
-    assert parse_document("yaml", path.read_text())["custom_providers"] == []
 
 
 def test_toml_model_activation_preserves_real_inline_comment_and_hash_in_string(manager):

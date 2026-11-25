@@ -2,7 +2,7 @@ import { t } from '../../lib/i18n.jsx';
 import { Field } from '../ui.jsx';
 
 export function apiDefaults(protocol, agentId) {
-  const wire_api = protocol === 'openai' ? ['codex', 'codex-desktop', 'grok-build'].includes(agentId) ? 'responses' : 'chat' : null;
+  const wire_api = protocol === 'openai' ? agentId === 'codex' ? 'responses' : 'chat' : null;
   return { protocol, wire_api, supported_endpoints: protocol === 'openai' ? [wire_api === 'responses' ? 'responses' : 'chat/completions'] : protocol === 'anthropic' ? ['messages'] : ['generateContent'] };
 }
 
@@ -38,7 +38,7 @@ export function ProviderApiFields({ value, onChange }) {
 }
 
 export function directApiMismatch(agentId, provider) {
-  const required = ['codex', 'codex-desktop'].includes(agentId) ? 'responses' : agentId === 'claude-code' ? 'messages' : null;
+  const required = agentId === 'codex' ? 'responses' : agentId === 'claude-code' ? 'messages' : null;
   if (!required) return false;
   if ((required === 'responses' && provider.protocol !== 'openai') || (required === 'messages' && provider.protocol !== 'anthropic')) return true;
   const declared = provider.supported_endpoints || (provider.wire_api ? [provider.wire_api === 'responses' ? 'responses' : 'chat/completions'] : null);

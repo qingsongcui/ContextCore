@@ -138,16 +138,13 @@ it('keeps overview filters intact on return from a drill and isolates assistants
   expect(JSON.parse(sessionStorage.getItem('senrelay.usage.filters')).model).toBe('previous-global-model');
 });
 
-it('uses shared native log identity for a desktop menu link and keeps the desktop scope for quotas', async () => {
-  h.rows.hosts = [
-    { id:'codex', registry_host_id:'codex', label:'Codex CLI' },
-    { id:'codex-desktop', registry_host_id:'codex', label:'Codex Desktop' },
-  ];
-  await act(async () => root.render(<UsagePage agentId="codex-desktop" />));
+it('keeps the canonical Codex scope for usage and quotas', async () => {
+  h.rows.hosts = [{ id:'codex', label:'Codex' }];
+  await act(async () => root.render(<UsagePage agentId="codex" />));
   expect(endpoint('overview').searchParams.get('host_id')).toBe('codex');
-  expect(field('Assistant').selectedOptions[0].textContent).toBe('Codex CLI / Codex Desktop');
+  expect(field('Assistant').selectedOptions[0].textContent).toBe('Codex');
   await click(button('Account quotas'));
-  expect(endpoint('account-quotas').searchParams.get('host_id')).toBe('codex-desktop');
+  expect(endpoint('account-quotas').searchParams.get('host_id')).toBe('codex');
 });
 
 it('offers source coverage for an empty reporting scope and preserves snapshot-only reports', async () => {

@@ -63,7 +63,7 @@ export function ConsolePage({
   const rootFor = item => embedded ? installerRoot : (Array.isArray(hosts.data) ? hosts.data : hosts.data?.items)?.find(host => host.id === item.id)?.config_root;
   const setupSurface = item => {
     if (item.id !== 'codex') return null;
-    if (embedded) return returnAgent === 'codex-desktop' ? 'desktop' : 'cli';
+    if (embedded) return 'cli';
     return rootFor(item) ? 'desktop' : null;
   };
   const setupBlocked = item => Boolean(rootFor(item)) && (embedded || item.id !== 'codex');

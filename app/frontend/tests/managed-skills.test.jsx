@@ -13,8 +13,9 @@ import { AssetTools } from '../src/components/AssetTools.jsx';
 import { AgentPlanDialog } from '../src/components/agent-management/AgentPlanDialog.jsx';
 import { setLang } from '../src/lib/i18n.jsx';
 
+const AGENT_NAME = { omp: 'Oh My Pi', cursor: 'Cursor', antigravity: 'Antigravity', codex: 'Codex' };
 const linked = { agent_ids: ['codex'], id: 'asset_0123456789abcdef', name: 'Linked Skill', kind: 'skill', install_mode: 'symlink', version: 4, files: { 'SKILL.md': '# Four', 'scripts/do.sh': 'echo not-executed' }, source: { type: 'local', path: '/synthetic/source' }, external_metadata: { keep: true } };
-const codex = { id: 'codex', name: 'Codex CLI', configuration_status: 'supported_format', verification_status: 'not_verified', capabilities: { skills: true, mcp: true, providers: true, prompts: true, native_activation: true } };
+const codex = { id: 'codex', name: 'Codex', configuration_status: 'supported_format', verification_status: 'not_verified', capabilities: { skills: true, mcp: true, providers: true, prompts: true, native_activation: true } };
 const omp = { ...codex, id: 'omp', name: 'omp', capabilities: { ...codex.capabilities, native_activation: false } };
 const plan = (id = 'plan_synthetic', agent = 'codex') => ({ id, version: 1, status: 'planned', payload: { metadata: { host_id: agent, operation: 'install' }, files: [{ path: `/synthetic/${agent}/SKILL.md`, install_mode: 'symlink', stage: 'pending', source_version: 4 }], readback: 'not_run', host_reload: 'not_run', real_request: 'not_run' } });
 let root, container;
@@ -28,7 +29,7 @@ function field(label, parent = document) { const node = [...parent.querySelector
 async function click(text, parent) { await act(async () => { button(text, parent).click(); }); }
 async function change(element, value) { await act(async () => { const setter = Object.getOwnPropertyDescriptor(element.tagName === 'SELECT' ? HTMLSelectElement.prototype : element.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set; setter.call(element, value); element.dispatchEvent(new Event(element.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); }); }
 function dialog() { return document.querySelector('dialog[open]'); }
-async function confirmApply() { const checkbox = dialog().querySelector('input[type=checkbox]'); await act(async () => { checkbox.click(); }); await click('确认应用到 Codex CLI', dialog()); }
+async function confirmApply() { const checkbox = dialog().querySelector('input[type=checkbox]'); await act(async () => { checkbox.click(); }); await click('确认应用到 Codex', dialog()); }
 function expand(text, parent = document) { const summary = [...parent.querySelectorAll('summary')].find(item => item.textContent === text); if (!summary) throw new Error(`Missing details: ${text}`); summary.parentElement.open = true; }
 
 beforeEach(() => {
@@ -96,9 +97,9 @@ describe('consumer Skill copy, link and application controls', () => {
 
   it('requires explicit single-Agent confirmation and reads back independently from apply transport', async () => {
     await mount(); const planned = plan(); h.mutate.mockResolvedValueOnce(planned);
-    await click('预览应用到 Codex CLI');
+    await click('预览应用到 Codex');
     expect(h.mutate).toHaveBeenCalledExactlyOnceWith('/api/manage/plans', 'POST', { host_id: 'codex', operation: 'install', asset_ids: [linked.id] });
-    expect(button('确认应用到 Codex CLI', dialog()).disabled).toBe(true);
+    expect(button('确认应用到 Codex', dialog()).disabled).toBe(true);
     const receipt = { ...planned, status: 'applied', payload: { ...planned.payload, metadata: { ...planned.payload.metadata, entity_versions: { [linked.id]: linked.version } }, readback: 'verified' } };
     h.mutate.mockResolvedValueOnce({ status: 'applied' });
     h.request.mockResolvedValueOnce(receipt);
@@ -117,12 +118,12 @@ describe('consumer Skill copy, link and application controls', () => {
 
   it('keeps a partial receipt and error visible without offering another unsafe apply', async () => {
     await mount(); const planned = plan('plan_partial'); h.mutate.mockResolvedValueOnce(planned);
-    await click('预览应用到 Codex CLI');
+    await click('预览应用到 Codex');
     h.mutate.mockRejectedValueOnce(new Error('synthetic partial failure'));
     h.request.mockResolvedValueOnce({ ...planned, status: 'recovery_required' });
     await confirmApply();
     expect(dialog().textContent).toContain('需要恢复'); expect(dialog().textContent).toContain('synthetic partial failure');
-    expect([...dialog().querySelectorAll('button')].some(item => item.textContent === '确认应用到 Codex CLI')).toBe(false);
+    expect([...dialog().querySelectorAll('button')].some(item => item.textContent === '确认应用到 Codex')).toBe(false);
     expect(h.mutate.mock.calls.filter(([path]) => path.endsWith('/apply'))).toHaveLength(1);
   });
 
@@ -155,24 +156,24 @@ describe('Agent-scoped uncertainty and failed drafts', () => {
     await mount(<ControlledPage initialAgent="" initialSection="" />);
     expect(document.querySelector('h1').textContent).toBe('Agent 管理'); expect(h.mutate).not.toHaveBeenCalled();
     await act(async () => { [...document.querySelectorAll('.agent-choice')].find(node => node.textContent.includes('Oh My Pi')).click(); });
-    expect(document.querySelector('h1').textContent).toBe('Oh My Pi (OMP)');
+    expect(document.querySelector('h1').textContent).toBe('Oh My Pi');
     expect(h.mutate).toHaveBeenCalledExactlyOnceWith('/api/manage/agent-preferences', 'POST', { host_id: 'omp', action: 'visit' });
   });
 
   it('discards late previews after changing Agent and never carries a prior confirmation', async () => {
     let resolve;
     h.mutate.mockReturnValueOnce(new Promise(done => { resolve = done; }));
-    await mount(<AgentManagementPage agentId="codex" section="skill" onAgentChange={() => {}} revision={0} onChanged={() => {}} projects={[]} />); await click('预览应用到 Codex CLI');
+    await mount(<AgentManagementPage agentId="codex" section="skill" onAgentChange={() => {}} revision={0} onChanged={() => {}} projects={[]} />); await click('预览应用到 Codex');
     await mount(<AgentManagementPage agentId="omp" section="skill" onAgentChange={() => {}} revision={1} onChanged={() => {}} projects={[]} />);
     await act(async () => { resolve(plan()); await Promise.resolve(); });
-    expect(document.querySelector('h1').textContent).toBe('Oh My Pi (OMP)');
+    expect(document.querySelector('h1').textContent).toBe('Oh My Pi');
     expect(document.querySelector('dialog')).toBeNull();
     expect(h.mutate.mock.calls.filter(([path]) => path.endsWith('/apply'))).toHaveLength(0);
   });
 
   it('rejects a returned preview for another Agent even when transport succeeds', async () => {
     await mount(); h.mutate.mockResolvedValueOnce(plan('wrong', 'omp'));
-    await click('预览应用到 Codex CLI');
+    await click('预览应用到 Codex');
     expect(document.querySelector('[role=alert]').textContent).toContain('不属于当前助手');
     expect(document.querySelector('dialog')).toBeNull();
     expect(h.mutate.mock.calls.filter(([path]) => path.endsWith('/apply'))).toHaveLength(0);
@@ -181,9 +182,9 @@ describe('Agent-scoped uncertainty and failed drafts', () => {
   it('invalidates an already confirmed preview when the URL category changes', async () => {
     await mount(<AgentManagementPage agentId="codex" section="skill" onAgentChange={() => {}} revision={0} onChanged={() => {}} projects={[]} />);
     h.mutate.mockResolvedValueOnce(plan());
-    await click('预览应用到 Codex CLI');
+    await click('预览应用到 Codex');
     await act(async () => { dialog().querySelector('input[type=checkbox]').click(); });
-    expect(button('确认应用到 Codex CLI', dialog()).disabled).toBe(false);
+    expect(button('确认应用到 Codex', dialog()).disabled).toBe(false);
     await mount(<AgentManagementPage agentId="codex" section="mcp" onAgentChange={() => {}} revision={1} onChanged={() => {}} projects={[]} />);
     expect(document.querySelector('dialog')).toBeNull();
     expect(h.mutate.mock.calls.filter(([path]) => path.endsWith('/apply'))).toHaveLength(0);
@@ -236,13 +237,13 @@ describe('Agent-scoped uncertainty and failed drafts', () => {
 });
 
 describe('new native management consumers', () => {
-  it.each(['omp', 'cursor', 'antigravity', 'codex-desktop'].flatMap(id => ['skill', 'prompt'].map(kind => [id, kind])))('reaches %s %s through a scoped preview without applying implicitly', async (id, kind) => {
-    const native = { ...codex, id, name: id, selection_config_only: id === 'omp' || id === 'codex-desktop' };
+  it.each(['omp', 'cursor', 'antigravity', 'codex'].flatMap(id => ['skill', 'prompt'].map(kind => [id, kind])))('reaches %s %s through a scoped preview without applying implicitly', async (id, kind) => {
+    const native = { ...codex, id, name: id, selection_config_only: id === 'omp' };
     const asset = { ...linked, kind, agent_ids: [id], ...(kind === 'prompt' ? { content: 'Wait for confirmation' } : {}) };
     h.data['/api/manage/hosts'] = [native];
     h.data['/api/manage/assets'] = [asset];
     await mount(<ControlledPage initialAgent={id} initialSection={kind} />);
-    const name = id === 'omp' ? 'Oh My Pi (OMP)' : id;
+    const name = AGENT_NAME[id];
     const planned = plan(`plan_${id}_${kind}`, id);
     h.mutate.mockResolvedValueOnce(planned);
     await click(`预览应用到 ${name}`);
@@ -260,20 +261,20 @@ describe('new native management consumers', () => {
     h.data['/api/manage/providers'] = [{ id: 'provider_native', name: 'Saved definition', protocol: 'openai', enabled: true, agent_ids: [id], version: 1, base_url: 'https://synthetic.invalid/v1' }];
     await mount(<ControlledPage initialAgent={id} initialSection="providers" />);
     expect(document.querySelector('.agent-unsupported').textContent).toContain(reason);
-    expect(button(`预览应用到 ${id}`).disabled).toBe(true);
+    expect(button(`预览应用到 ${AGENT_NAME[id]}`).disabled).toBe(true);
     expect(button('一键切换').disabled).toBe(true);
-    await act(async () => { button(`预览应用到 ${id}`).click(); });
+    await act(async () => { button(`预览应用到 ${AGENT_NAME[id]}`).click(); });
     expect(h.mutate).not.toHaveBeenCalled();
   });
 
-  it.each(['omp', 'codex-desktop'])('allows %s default configuration selection but never claims a running model switch', async id => {
+  it.each(['omp', 'codex'])('allows %s default configuration selection but never claims a running model switch', async id => {
     const native = { ...codex, id, name: id, selection_config_only: true, configuration_notice: 'File selection is not running-session adoption.' };
     const value = { id: 'provider_native', name: 'Native service', protocol: 'openai', enabled: true, agent_ids: [id], model_map: { friendly: 'native-model' }, version: 1, base_url: 'https://synthetic.invalid/v1' };
     h.data['/api/manage/hosts'] = [native];
     h.data['/api/manage/providers'] = [value];
     await mount(<ControlledPage initialAgent={id} initialSection="providers" />);
     expect(button('预览默认模型配置').disabled).toBe(false);
-    expect(container.textContent).toContain(id === 'omp' ? '这里只修改 OMP 默认配置' : '这些配置文件与 Codex CLI 共用');
+    expect(container.textContent).toContain(id === 'omp' ? '这里只修改 OMP 默认配置' : '这些配置文件由 Codex 桌面版和 CLI 共用');
     await click('预览默认模型配置');
     expect(dialog().textContent).toContain('不会切换正在运行的对话');
     expect(h.mutate).not.toHaveBeenCalled();
@@ -281,7 +282,7 @@ describe('new native management consumers', () => {
     planned.payload.metadata.selection_config_only = true;
     planned.payload.metadata.model_selection = { provider_name: value.name, native_model: 'native-model' };
     h.mutate.mockResolvedValueOnce(planned);
-    const name = id === 'omp' ? 'Oh My Pi (OMP)' : id;
+    const name = AGENT_NAME[id];
     expect(button(`预览应用到 ${name}`, dialog()).disabled).toBe(true);
     await change(field('请求模型', dialog()), 'friendly');
     await click(`预览应用到 ${name}`, dialog());
@@ -292,16 +293,16 @@ describe('new native management consumers', () => {
 
   it('requires consent to shared Codex files instead of falsely promising all other clients stay unchanged', async () => {
     const onApply = vi.fn();
-    const planned = plan('shared', 'codex-desktop');
+    const planned = plan('shared', 'codex');
     Object.assign(planned.payload.metadata, { shared_configuration: true, configuration_notice: 'CLI and Desktop share these files; Desktop consumption is unverified.' });
-    await mount(<AgentPlanDialog plan={planned} agent="Codex Desktop" category="模型与账号" valid onClose={() => {}} onApply={onApply} />);
+    await mount(<AgentPlanDialog plan={planned} agent="Codex" category="模型与账号" valid onClose={() => {}} onApply={onApply} />);
     expect(dialog().textContent).toContain('共享配置文件更改');
     expect(dialog().textContent).toContain('共用这些文件的入口也会受到影响');
-    expect(dialog().textContent).toContain('这些配置文件与 Codex CLI 共用');
+    expect(dialog().textContent).toContain('这些配置文件由 Codex 桌面版和 CLI 共用');
     expect(dialog().textContent).not.toContain('其他助手保持不变');
-    expect(button('确认应用到 Codex Desktop', dialog()).disabled).toBe(true);
+    expect(button('确认应用到 Codex', dialog()).disabled).toBe(true);
     await act(async () => { dialog().querySelector('input[type=checkbox]').click(); });
-    await click('确认应用到 Codex Desktop', dialog());
+    await click('确认应用到 Codex', dialog());
     expect(onApply).toHaveBeenCalledTimes(1);
   });
 });

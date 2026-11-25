@@ -26,9 +26,8 @@ def _document(manager, relative, format):
 
 
 def _guard_references(manager, host_id, host, provider_id, replacing_selected):
-    from app.integrations.host_formats_v2 import ACTIVATION_FORMATS
     selected = False
-    if host_id in ('codex', 'codex-desktop'):
+    if host_id in ('codex',):
         document = _document(manager, host['mcp_path'], 'toml')
         selected = document.get('model_provider') == 'senrelay_' + provider_id.replace('provider_', '')
     elif host_id == 'opencode':
@@ -50,35 +49,6 @@ def _guard_references(manager, host_id, host, provider_id, replacing_selected):
         for key in ('modelRoles', 'retry', 'task', 'modelPresets', 'enabledModels', 'cycleOrder'):
             if references(document.get(key)):
                 raise ConfigurationError('Change or restore OMP model roles, fallbacks and task/preset selectors before uninstalling their provider', 409)
-    elif host_id in ACTIVATION_FORMATS:
-        definition = ACTIVATION_FORMATS[host_id]
-        document = _document(manager, definition['path'], definition['format'])
-        if host_id == 'pi':
-            selected = document.get('defaultProvider') == provider_id
-        elif host_id == 'kimi-code':
-            selected = str(document.get('default_model', '')).startswith(provider_id + ':')
-        elif host_id == 'hermes':
-            model = document.get('model')
-            selected = isinstance(model, dict) and model.get('provider') == provider_id
-        elif host_id == 'minimax-code':
-            prefix = f'custom_provider:{provider_id}/'
-            if str(document.get('defaultLightModel', '')).startswith(prefix):
-                raise ConfigurationError('Select another native light model before removing its provider', 409)
-            selected = str(document.get('defaultModel', '')).startswith(prefix)
-        elif host_id == 'openclaw':
-            agents = document.get('agents', {})
-            defaults = agents.get('defaults', {}) if isinstance(agents, dict) else {}
-            model = defaults.get('model', {}) if isinstance(defaults, dict) else {}
-            prefix = provider_id + '/'
-            if isinstance(model, dict):
-                fallbacks = model.get('fallbacks', [])
-                if not isinstance(fallbacks, list):
-                    raise ConfigurationError('Native fallback selection has an unsupported shape', 422)
-                if any(isinstance(value, str) and value.startswith(prefix) for value in fallbacks):
-                    raise ConfigurationError('Select another native fallback before removing its provider', 409)
-                selected = str(model.get('primary', '')).startswith(prefix)
-            elif isinstance(model, str):
-                selected = model.startswith(prefix)
     if selected and not replacing_selected:
         raise ConfigurationError('Switch or restore the current model selection before uninstalling its provider', 409)
 
@@ -86,7 +56,7 @@ def _guard_references(manager, host_id, host, provider_id, replacing_selected):
 def owned_specs(manager, host_id, host, provider_id, *, replacing_selected=False):
     from app.services.management_experience import _spec
     paths = [str(manager.home / host['provider_path'])] if host.get('provider_path') else []
-    if host_id in ('codex', 'codex-desktop'):
+    if host_id in ('codex',):
         paths.append(str(manager.home / host['mcp_path']))
     if not paths:
         raise ConfigurationError(host.get('provider_unsupported_reason', 'Provider configuration format is unsupported for this host'), 422)

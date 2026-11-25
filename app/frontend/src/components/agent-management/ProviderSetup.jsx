@@ -3,7 +3,7 @@ import { t } from '../../lib/i18n.jsx';
 import { Button, ErrorNotice, Field, Modal } from '../ui.jsx';
 import { apiDefaults, presetApi, customApi, ProviderApiFields } from './ProviderApiFields.jsx';
 import { CatalogChoice } from './CatalogControls.jsx';
-import { capacityIsValid, ModelCapacityField } from './ModelCapacityField.jsx';
+import { capacityIsValid } from './ModelCapacityField.jsx';
 
 /** Secrets live only in this form; never in the cross-page draft store. */
 function initialDraft(existing, protocols, agentId) {
@@ -55,12 +55,11 @@ export function ProviderSetup({ agent, agentId, presets = [], protocols = ['open
           if (model) update({ model_entity_id: model.id, expected_model_version: model.version, model_id: model.model_id || '', context_window: model.context_window ?? '' });
         }}>{existing.models.map(model => <option key={model.id} value={model.id}>{model.name || model.model_id}</option>)}</select></Field> : <p>{t('要一起保存的模型')}{`: ${existing.models[0].name || existing.models[0].model_id}`}</p> : null}
         <Field label={t('默认请求模型')} hint={t('填写服务商提供的模型名称；保存时不会发起模型调用。')}><input required maxLength={200} value={draft.model_id} onChange={event => update({ model_id: event.target.value })} placeholder={preset?.default_model || t('服务商文档中的模型名称')} /></Field>
-        {agentId === 'kimi-code' ? <ModelCapacityField required value={draft.context_window} onChange={context_window => update({ context_window })} /> : null}
         <details className="agent-advanced" open={existing ? undefined : true}><summary>{t('高级：API 协议')}</summary><Field label={t('协议')}><select value={draft.protocol} onChange={event => update(apiDefaults(event.target.value, agentId))}>{protocols.map(protocol => <option key={protocol} value={protocol}>{({ openai: 'OpenAI', anthropic: 'Anthropic', gemini: 'Gemini' })[protocol]}</option>)}</select></Field><ProviderApiFields value={draft} onChange={update} /><p>{t('这里只列出可直接使用的协议；跨协议转发请到本地路由设置。')}</p></details>
       </fieldset>
       {uncertain ? <><p role="status">{existing ? t('保存结果尚未确认。重试会核对同一笔修改，不会另建服务商。') : t('保存结果尚未确认。重试会核对同一笔保存，不会重复新建服务商。')}</p><p>{existing ? t('取消只关闭窗口。如果修改其实已经完成，列表会显示新内容；取消不会撤回这次修改。') : t('取消只关闭窗口。如果保存其实已经完成，服务商会留在列表里；取消不会删除它。')}</p></> : null}
       <ErrorNotice error={error} />
-      <footer className="modal-actions"><Button disabled={busy} onClick={onClose}>{t('取消')}</Button><Button type="submit" variant="primary" busy={busy} disabled={!draft.name.trim() || !draft.base_url.trim() || !draft.model_id.trim() || !capacityIsValid(draft.context_window, agentId === 'kimi-code')}>{uncertain ? t('核对并重试保存') : existing ? t('保存连接与模型的修改') : t('保存连接与模型')}</Button></footer>
+      <footer className="modal-actions"><Button disabled={busy} onClick={onClose}>{t('取消')}</Button><Button type="submit" variant="primary" busy={busy} disabled={!draft.name.trim() || !draft.base_url.trim() || !draft.model_id.trim() || !capacityIsValid(draft.context_window, false)}>{uncertain ? t('核对并重试保存') : existing ? t('保存连接与模型的修改') : t('保存连接与模型')}</Button></footer>
     </form>
   </Modal>;
 }

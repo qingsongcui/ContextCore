@@ -33,8 +33,8 @@ def test_codex_custom_root_native_switch_lookup_and_restore(tmp_path, monkeypatc
     registered = {host['id']:host for host in manager.hosts()}
     assert registered['codex']['config_root']['path'] == str(root)
     assert registered['codex']['shared_configuration'] is False
-    assert registered['codex-desktop']['shared_configuration'] is False
-    assert registered['codex-desktop']['paths']['mcp_path'] == str(manager.home/'.codex/config.toml')
+    assert registered['codex']['shared_configuration'] is False
+    assert registered['codex']['paths']['mcp_path'] == str(config)
     assert native_catalog.preview(manager, 'codex', 'providers')['source_path'] == str(config)
     provider = manager.save('provider', {'name':'Example', 'protocol':'openai','base_url':'https://fixture.example/v1'})
     model = manager.save('model', {'provider_id':provider['id'], 'name':'local', 'model_id':'model-a'})
@@ -44,7 +44,6 @@ def test_codex_custom_root_native_switch_lookup_and_restore(tmp_path, monkeypatc
     apply(manager, initial)
     assert tomllib.loads(config.read_text())['model'] == 'model-a'
     assert manager.host_state('codex')['selection']['status'] == 'verified'
-    assert manager.host_state('codex-desktop')['selection']['status'] == 'not_managed'
     monkeypatch.delenv('CODEX_HOME')
     host = next(h for h in manager.hosts() if h['id']=='codex')
     assert host['config_root']['reason'] == 'previous_root'
@@ -119,13 +118,13 @@ def test_shared_matrix_keeps_unaffected_hosts_available(tmp_path, monkeypatch):
     assert row['cells']['cursor']['status'] == 'not_managed'
 
 
-def test_desktop_plan_rechecks_sharing_before_write(tmp_path, monkeypatch):
+def test_codex_custom_root_plan_rechecks_scope_before_write(tmp_path, monkeypatch):
     manager = create(tmp_path, monkeypatch)
     monkeypatch.setenv('CODEX_HOME', str(manager.home/'separate-cli'))
     asset = mcp(manager)
-    plan = manager.plan({'host_id':'codex-desktop','asset_ids':[asset['id']]})
+    plan = manager.plan({'host_id':'codex','asset_ids':[asset['id']]})
     assert plan['payload']['metadata']['shared_configuration'] is False
     monkeypatch.delenv('CODEX_HOME')
-    with pytest.raises(ConfigurationError, match='sharing changed'):
+    with pytest.raises(ConfigurationError, match='configuration root changed'):
         apply(manager, plan)
     assert not (manager.home/'.codex/config.toml').exists()

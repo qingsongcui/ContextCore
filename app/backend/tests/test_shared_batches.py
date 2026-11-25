@@ -81,14 +81,14 @@ def test_stale_assets_preview_and_shared_paths(manager):
     old = target('opencode', asset)
     current = manager.save('asset', {'name':'Updated definition'}, asset['id'], asset['version'])
     batch = shared_batches.create(manager, {'operation':'install','targets':[
-        target('codex', current), target('codex-desktop', current), old]})
+        target('codex', current), target('claude-code', current), old]})
     assert [(r['status'],r['error_code']) for r in batch['targets']] == [
-        ('planned',None),('failed','shared_target'),('failed','stale_asset')]
+        ('planned',None),('planned',None),('failed','stale_asset')]
     updated = retry(manager, batch, 'opencode')
     assert updated['targets'][2]['asset_versions'] == {asset['id']: current['version']}
     result = apply(manager, updated)
-    assert result['counts']['applied'] == 2 and result['counts']['failed'] == 1
-    assert result['targets'][1]['plan_id'] is None
+    assert result['counts']['applied'] == 3 and result['counts']['failed'] == 0
+    assert result['targets'][1]['plan_id'] is not None
     assert 'specs' not in json.dumps(result) and 'before_hash' not in json.dumps(result)
 
 
@@ -123,9 +123,9 @@ def test_concurrent_confirmations_and_interrupted_configuration(manager, monkeyp
 def test_same_skill_in_one_shared_directory_cannot_be_written_as_two_folders(manager):
     skill = manager.save('asset', {'name':'Research', 'kind':'skill', 'files':{'SKILL.md':'# Research'}})
     batch = shared_batches.create(manager, {'operation':'install','targets':[
-        target('codex', skill), target('codex-desktop', skill), target('claude-code', skill)]})
-    assert [row['error_code'] for row in batch['targets']] == [None,'shared_target',None]
-    assert apply(manager, batch)['counts']['applied'] == 2
+        target('codex', skill), target('omp', skill), target('claude-code', skill)]})
+    assert [row['error_code'] for row in batch['targets']] == [None,None,None]
+    assert apply(manager, batch)['counts']['applied'] == 3
     assert len(list((manager.home / '.codex/skills').glob('*/SKILL.md'))) == 1
 
 

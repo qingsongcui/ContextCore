@@ -662,7 +662,7 @@ def test_all_six_host_skills_meet_frontmatter_size_and_closed_loop_invariants():
         assert not re.search(r"[\u3400-\u9fff]", prose), f"{filename} hard-codes Chinese outside relay aliases"
 
         # Validate against native_skill validators for Cursor, Antigravity, OMP, Codex
-        for native_host in ("cursor", "antigravity", "omp", "codex-desktop"):
+        for native_host in ("cursor", "antigravity", "omp", "codex"):
             folder_name, files = native_skill(
                 {"id": "contextcore", "name": "ContextCore", "files": {"SKILL.md": text}},
                 native_host,

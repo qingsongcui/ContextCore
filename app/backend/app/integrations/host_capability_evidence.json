@@ -84,7 +84,7 @@
       "uninstall_restore": {"grade": "synthetic_tested", "verified": false, "host_version": null, "evidence": "test_installer_safety.py isolated HOME."}
     },
     "antigravity": {
-      "model_switch": {"grade": "code_present", "verified": false, "host_version": "Antigravity Desktop", "evidence": "agy provider via settings.json is unsupported in host_formats_v2."},
+      "model_switch": {"grade": "code_present", "verified": false, "host_version": "Antigravity Desktop", "evidence": "agy provider activation via settings.json is not supported; credentials belong to process env/private profile."},
       "third_party_mcp": {"grade": "live_host", "verified": true, "host_version": "Antigravity Desktop", "evidence": "Live Antigravity Desktop session loaded contextcore alongside pre-existing configured MCP servers."},
       "skills_prompts": {"grade": "live_host", "verified": true, "host_version": "Antigravity Desktop", "evidence": "contextcore-handoff skill and contextcore MCP schemas loaded in live Antigravity Desktop session."},
       "uninstall_restore": {"grade": "synthetic_tested", "verified": false, "host_version": "Antigravity Desktop", "evidence": "Isolated HOME."}

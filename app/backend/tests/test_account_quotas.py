@@ -43,7 +43,7 @@ def test_clean_home_cache_only_and_scoped_readback(manager, monkeypatch):
     client = TestClient(app)
     items = client.get("/api/account-quotas").json()["items"]
     assert [i["id"] for i in items] == ["native-codex", "native-claude"]
-    assert [i["id"] for i in client.get("/api/account-quotas?host_id=codex-desktop").json()["items"]] == ["native-codex"]
+    assert [i["id"] for i in client.get("/api/account-quotas?host_id=codex").json()["items"]] == ["native-codex"]
     assert client.get("/api/account-quotas?host_id=opencode").json()["items"] == []
     assert {i["status"] for i in items} == {"native_only", "not_checked"}
     assert client.post("/api/account-quotas/native-codex/refresh",

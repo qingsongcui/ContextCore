@@ -13,12 +13,12 @@ import { GlobalLibrary } from '../src/components/agent-management/GlobalLibrary.
 import { setLang } from '../src/lib/i18n.jsx';
 
 const hosts = [
-  {id:'codex',name:'Codex CLI',shared_configuration:true}, {id:'codex-desktop',name:'Codex Desktop'},
-  {id:'gemini-cli',name:'Gemini CLI'}, {id:'claude-code',name:'Claude Code'},
+  {id:'codex',name:'Codex',shared_configuration:true}, {id:'omp',name:'Oh My Pi'},
+  {id:'claude-code',name:'Claude Code'},
 ].map(host => ({...host,capabilities:{mcp:true,skills:true}}));
 const item = (id, version, kind='mcp') => ({id,version,kind,name:id, cells:{
-  codex:{status:'verified',applied_version:version}, 'codex-desktop':{status:'verified',applied_version:version},
-  'gemini-cli':{status:'externally_changed'}, 'claude-code':{status:'not_managed'},
+  codex:{status:'verified',applied_version:version}, omp:{status:'not_managed'},
+  'claude-code':{status:'verified',applied_version:version},
 }});
 let root;
 const button = text => [...document.querySelectorAll('button')].find(el => el.textContent === text);
@@ -41,14 +41,15 @@ it('previews one versioned batch from multi-select, normalizes shared targets an
   expect(url.searchParams.get('host_ids').split(',')).toEqual(hosts.map(host => host.id));
   await click(button('全选本页资源'));await click(button('全选可用助手'));
   expect([...document.querySelectorAll('.global-host-choice')].map(el => el.textContent)).toEqual([
-    'Codex CLI / Codex Desktop2/2 项可应用','Gemini CLI0/2 项可应用','Claude Code2/2 项可应用',
+    'Codex2/2 项可应用','Oh My Pi2/2 项可应用','Claude Code2/2 项可应用',
   ]);
-  expect(document.querySelectorAll('.global-host-choice input:checked')).toHaveLength(2);
+  expect(document.querySelectorAll('.global-host-choice input:checked')).toHaveLength(3);
   await click(button('预览批量更改'));
   expect(h.mutate).toHaveBeenCalledTimes(1);
   expect(h.mutate).toHaveBeenCalledWith('/api/manage/shared-batches','POST',{
     operation:'install', targets:[
       {host_id:'codex',asset_versions:{First:2,Second:4}},
+      {host_id:'omp',asset_versions:{First:2,Second:4}},
       {host_id:'claude-code',asset_versions:{First:2,Second:4}},
     ],
   });
@@ -81,10 +82,9 @@ it('never selects a missing deep-linked definition from an unrelated row',async 
 it('mixes resources from different pages and deduplicates physical host targets separately for each kind', async () => {
   const surfaces = [
     {id:'antigravity',name:'Antigravity'},
-    {id:'antigravity-cli',name:'Antigravity CLI'},
-    {id:'gemini-cli',name:'Gemini CLI'},
-  ].map(host => ({...host, capabilities:{mcp:true,skills:host.id !== 'gemini-cli',prompts:host.id !== 'gemini-cli'},
-    paths:{mcp_path:'/same/tools.json', skill_dir:'/same/skills'}}));
+    {id:'opencode',name:'OpenCode'},
+  ].map(host => ({...host, capabilities:{mcp:true,skills:host.id === 'antigravity',prompts:host.id === 'antigravity'},
+    paths:{mcp_path:`/${host.id}/tools.json`, skill_dir:`/${host.id}/skills`}}));
   function mixedItem(id,kind) {
     return {id,kind,name:id,version:2,cells:Object.fromEntries(surfaces.map(host => [host.id,{status:'not_managed'}]))};
   }
@@ -98,13 +98,12 @@ it('mixes resources from different pages and deduplicates physical host targets 
   await render({hosts:surfaces});
   await click(button('全选本页资源')); await click(button('全选可用助手'));
   expect(document.querySelector('.global-selection').textContent).toContain('已选 3 项资源');
-  expect([...document.querySelectorAll('.global-host-choice')].find(label => label.textContent.includes('Gemini CLI')).textContent).toContain('1/3');
+  expect([...document.querySelectorAll('.global-host-choice')].find(label => label.textContent.includes('OpenCode')).textContent).toContain('1/3');
   await click(button('预览批量更改'));
   expect(h.mutate).toHaveBeenCalledWith('/api/manage/shared-batches','POST',{
     operation:'install',targets:[
       {host_id:'antigravity',asset_versions:{Tools:2,Method:2,Instruction:2}},
-      {host_id:'antigravity-cli',asset_versions:{Instruction:2}},
-      {host_id:'gemini-cli',asset_versions:{Tools:2}},
+      {host_id:'opencode',asset_versions:{Tools:2}},
     ],
   });
 });

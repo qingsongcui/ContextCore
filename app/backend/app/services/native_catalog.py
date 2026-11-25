@@ -119,33 +119,18 @@ def _mapping(value):
 
 
 def _native_selection(host, doc, preferences):
-    if host == 'pi':
-        return preferences.get('defaultProvider'), preferences.get('defaultModel')
-    if host == 'hermes' and isinstance(doc.get('model'), dict):
-        return doc['model'].get('provider'), doc['model'].get('default')
-    if host == 'kimi-code':
-        selected = _mapping(doc.get('models', {})).get(doc.get('default_model'))
-        if isinstance(selected, dict):
-            return selected.get('provider'), selected.get('model')
     composite = None
     if host == 'omp':
         composite = _mapping(preferences.get('modelRoles', {})).get('default')
     elif host == 'opencode':
         composite = doc.get('model')
-    elif host == 'minimax-code':
-        raw = doc.get('defaultModel')
-        if isinstance(raw, str) and raw.startswith('custom_provider:'):
-            composite = raw.removeprefix('custom_provider:')
-    elif host == 'openclaw':
-        choice = _mapping(_mapping(doc.get('agents', {})).get('defaults', {})).get('model')
-        composite = choice.get('primary') if isinstance(choice, dict) else choice
     if isinstance(composite, str) and '/' in composite:
         return composite.split('/', 1)
     return None, None
 
 
 def _providers(host, doc, preferences):
-    if host in ('codex', 'codex-desktop'):
+    if host in ('codex',):
         for key, data in _mapping(doc.get('model_providers', {})).items():
             data = _mapping(data)
             wire = {'responses': 'openai-responses', 'chat': 'openai-completions'}.get(data.get('wire_api', 'responses'))
@@ -159,16 +144,9 @@ def _providers(host, doc, preferences):
             if isinstance(base, str):
                 base = base.rstrip('/').removesuffix('/v1') + '/v1'
             yield 'Claude Code', env, base, 'anthropic', models, env.get('ANTHROPIC_MODEL') or doc.get('model')
-    elif host in ('hermes', 'opencode', 'minimax-code', 'openclaw', 'omp', 'pi', 'kimi-code'):
-        if host == 'hermes':
-            rows = doc.get('custom_providers', [])
-            if not isinstance(rows, list):
-                raise ConfigurationError('Unexpected native provider list', 422)
-            entries = [(_mapping(entry).get('name'), entry) for entry in rows]
-        else:
-            container = {'opencode': 'provider', 'minimax-code': 'custom_provider'}.get(host, 'providers')
-            root = _mapping(doc.get('models', {})) if host == 'openclaw' else doc
-            entries = _mapping(root.get(container, {})).items()
+    elif host in ('opencode', 'omp'):
+        container = 'provider' if host == 'opencode' else 'providers'
+        entries = _mapping(doc.get(container, {})).items()
         selected_provider, selected_model = _native_selection(host, doc, preferences)
         for key, data in entries:
             data = _mapping(data)
@@ -177,12 +155,7 @@ def _providers(host, doc, preferences):
             api = data.get('api') or data.get('api_mode') or data.get('npm') or data.get('type')
             models = data.get('models') or []
             windows = {}
-            if host == 'kimi-code':
-                entries = [item for item in _mapping(doc.get('models', {})).values() if isinstance(item, dict) and item.get('provider') == key]
-                models = [item.get('model') for item in entries]
-                windows = {item['model']: item['max_context_size'] for item in entries if isinstance(item.get('model'), str)
-                           and type(item.get('max_context_size')) is int and 0 < item['max_context_size'] <= 9223372036854775807}
-            elif isinstance(models, dict):
+            if isinstance(models, dict):
                 models = list(models)
             elif isinstance(models, list):
                 windows = {m['id']: m['contextWindow'] for m in models if isinstance(m, dict) and isinstance(m.get('id'), str)
@@ -372,12 +345,12 @@ def _collect(manager, host_id, kind):
             doc = _document(raw, host.get('provider_format', host.get('format')) if kind == 'providers' else host.get('format'))
             if kind == 'providers':
                 preferences = {}
-                companion = host.get('selection_path') if host_id == 'omp' else '.pi/agent/settings.json' if host_id == 'pi' else None
+                companion = host.get('selection_path') if host_id == 'omp' else None
                 if companion:
                     extra = _read(manager.home / companion, 4 * 1024 * 1024)
                     evidence.append((_digest(companion) if extra is None else hashlib.sha256(extra).hexdigest(), 0))
                     if extra is not None:
-                        preferences = _document(extra, 'yaml' if host_id == 'omp' else 'json5')
+                        preferences = _document(extra, 'yaml')
                 for values in _providers(host_id, doc, preferences):
                     if isinstance(values[0], str) and re.fullmatch(r'(?:provider|senrelay)_[0-9a-f]{16}', values[0]):
                         continue

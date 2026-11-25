@@ -13,7 +13,7 @@ import { ProviderChecks } from '../src/components/ProviderChecks.jsx';
 import { AssetTools } from '../src/components/AssetTools.jsx';
 import { BundleAssetSelection, CatalogChoice, SharedLibrary, catalogPath } from '../src/components/agent-management/CatalogControls.jsx';
 import { setLang } from '../src/lib/i18n.jsx';
-const host = { id: 'codex', name: 'Codex CLI', configuration_status: 'supported_format', verification_status: 'not_verified', capabilities: { mcp: true, prompts: true, skills: true, providers: true, native_activation: true } };
+const host = { id: 'codex', name: 'Codex', configuration_status: 'supported_format', verification_status: 'not_verified', capabilities: { mcp: true, prompts: true, skills: true, providers: true, native_activation: true } };
 const provider = { agent_ids: ['codex'], id: 'provider_fixture', name: 'Local synthetic provider', protocol: 'openai', base_url: 'http://127.0.0.1:18999/v1', version: 2, enabled: true, model_map: {} };
 let root, container;
 async function mount(section = 'providers', draftStore) { await act(async () => { root.render(<AgentManagementPage agentId="codex" section={section} draftStore={draftStore} onAgentChange={() => {}} projects={[]} revision={0} onChanged={() => {}} />); }); }
@@ -44,18 +44,17 @@ describe('ordinary assistant configuration forms', () => {
     expect(button('一键接入续境').disabled).toBe(true);
     await mount('bundles');
     expect(container.textContent).toContain('方案按助手应用到各自的用户级配置文件。');
-    expect(container.textContent).not.toContain('Codex CLI 和桌面版共用原生配置。');
+    expect(container.textContent).not.toContain('Codex 和桌面版共用原生配置。');
   });
-  it.each([['codex', 'cli'], ['codex-desktop', 'desktop']])('uses the selected %s surface for installation and removal', async (agentId, surface) => {
-    const cli = agentId === 'codex' ? host : { ...host, config_root: { variable: 'CODEX_HOME', path: '/home/test/custom', status: 'custom' } };
-    h.data['/api/manage/hosts'] = [cli, { ...host, id: 'codex-desktop', name: 'Codex Desktop', registry_host_id: 'codex', shared_configuration: false }];
+  it('uses the canonical Codex surface for installation and removal', async () => {
+    h.data['/api/manage/hosts'] = [host];
     h.data['/api/connections'] = [{ id: 'codex', enabled: true }];
     h.mutate.mockResolvedValue({ ok: true });
-    await act(async () => { root.render(<AgentManagementPage agentId={agentId} section="providers" onAgentChange={() => {}} projects={[]} revision={0} onChanged={() => {}} />); });
+    await act(async () => { root.render(<AgentManagementPage agentId="codex" section="providers" onAgentChange={() => {}} projects={[]} revision={0} onChanged={() => {}} />); });
     await click('一键接入续境');
-    expect(h.mutate).toHaveBeenCalledWith('/api/connections/codex/one-click-connect', 'POST', { surface });
+    expect(h.mutate).toHaveBeenCalledWith('/api/connections/codex/one-click-connect', 'POST', { surface: 'cli' });
     await click('断开接入');
-    expect(h.mutate).toHaveBeenCalledWith('/api/connections/codex/one-click-disconnect', 'POST', { surface });
+    expect(h.mutate).toHaveBeenCalledWith('/api/connections/codex/one-click-disconnect', 'POST', { surface: 'cli' });
   });
   it('preserves definition editing and blocks native operations while the root needs recovery', async () => {
     h.data['/api/manage/hosts'] = [{ ...host, config_root: { variable: 'CODEX_HOME',
@@ -80,7 +79,7 @@ describe('ordinary assistant configuration forms', () => {
 
   it('reviews human resource names and the selected model while keeping native paths in collapsed advanced details', async () => {
     const plan = { status: 'planned', payload: { metadata: { host_id: 'codex', operation: 'install', configuration_changes: [{ name: 'My research tool', kind: 'mcp', operation: 'install' }, { name: 'My writing skill', kind: 'skill', operation: 'install' }], model_selection: { provider_name: 'My service', native_model: 'everyday-model' } }, files: [{ path: '/synthetic/.codex/config.toml', diff: { entries: [] } }] } };
-    await act(async () => root.render(<AgentPlanDialog plan={plan} agent="Codex CLI" category="项目配置组合" valid onClose={() => {}} onApply={() => {}} />));
+    await act(async () => root.render(<AgentPlanDialog plan={plan} agent="Codex" category="项目配置组合" valid onClose={() => {}} onApply={() => {}} />));
     expect(document.querySelector('.agent-resource-changes').textContent).toContain('My research tool');
     expect(document.querySelector('.agent-resource-changes').textContent).toContain('My writing skill');
     expect(document.querySelector('.agent-change-summary').textContent).toContain('My service');
@@ -95,17 +94,17 @@ describe('ordinary assistant configuration forms', () => {
   it('reads the current selection back in the result and keeps an unread host state unlabeled', async () => {
     const plan = { status: 'applied', payload: { metadata: { host_id: 'codex', operation: 'uninstall', provider_id: 'provider_fixture', entity_versions: { provider_fixture: 2 } }, readback: 'verified', host_reload: 'not_run', real_request: 'not_run', files: [] } };
     const hostReadback = { state: { host_id: 'codex', selection: { provider_name: 'Local synthetic provider', model_id: 'current-native', status: 'verified' }, effects: { selection: 'recorded', configuration: 'verified', host_loaded: 'not_verified', reachability: 'not_checked', authentication: 'not_checked', invocation: 'not_checked' }, coverage: 'complete_owned_entries' }, resources: [{ id: 'provider_fixture', name: 'Local synthetic provider', status: 'removed' }] };
-    await act(async () => root.render(<AgentPlanDialog plan={plan} result={plan} hostReadback={hostReadback} agent="Codex CLI" category="模型与账号" valid onClose={() => {}} onApply={() => {}} />));
+    await act(async () => root.render(<AgentPlanDialog plan={plan} result={plan} hostReadback={hostReadback} agent="Codex" category="模型与账号" valid onClose={() => {}} onApply={() => {}} />));
     const readback = document.querySelector('.agent-host-readback');
     expect(readback.textContent).toContain('Local synthetic provider');
     expect(readback.textContent).toContain('current-native');
     expect(readback.textContent).toContain('已从助手移除');
     expect(readback.textContent).toContain('尚未检查。写入配置不能说明网络可达。');
-    await act(async () => root.render(<AgentPlanDialog plan={plan} result={plan} agent="Codex CLI" category="模型与账号" valid onClose={() => {}} onApply={() => {}} />));
+    await act(async () => root.render(<AgentPlanDialog plan={plan} result={plan} agent="Codex" category="模型与账号" valid onClose={() => {}} onApply={() => {}} />));
     expect(dialog().textContent).toContain('应用后的本机配置还没有读回');
     expect(dialog().textContent).not.toContain('已从助手移除');
     setLang('en');
-    await act(async () => root.render(<AgentPlanDialog plan={plan} result={plan} hostReadback={hostReadback} agent="Codex CLI" category="模型与账号" valid onClose={() => {}} onApply={() => {}} />));
+    await act(async () => root.render(<AgentPlanDialog plan={plan} result={plan} hostReadback={hostReadback} agent="Codex" category="模型与账号" valid onClose={() => {}} onApply={() => {}} />));
     expect(document.querySelector('.agent-host-readback').textContent).toContain('Configuration read back after applying');
     expect(document.querySelector('.agent-host-readback').textContent).toContain('Removed from this assistant');
   });
@@ -116,7 +115,7 @@ describe('ordinary assistant configuration forms', () => {
       const deadline = Date.now() / 1000 + 3;
       h.mutate.mockResolvedValue({ account_id: 'pending_account', status: 'authorizing', expires_at: deadline, authorization_url: 'https://official.example/authorize' });
       h.request.mockResolvedValue({ id: 'pending_account', kind: 'oauth', status: 'authorizing', authorization_expires_at: deadline });
-      await act(async () => root.render(<AccountOperation action="authorize" agent="Codex CLI" item={{ id: 'pending_account', kind: 'oauth' }} onChanged={() => {}} onClose={() => {}} />));
+      await act(async () => root.render(<AccountOperation action="authorize" agent="Codex" item={{ id: 'pending_account', kind: 'oauth' }} onChanged={() => {}} onClose={() => {}} />));
       await click('确认操作', dialog());
       expect(dialog().textContent).toContain('等待官方授权');
       await act(async () => { await vi.advanceTimersByTimeAsync(2500); });
@@ -156,22 +155,6 @@ describe('ordinary assistant configuration forms', () => {
     await click('保存共享定义', dialog());
     expect(h.mutate).toHaveBeenCalledExactlyOnceWith('/api/manage/providers/provider_fixture', 'PATCH', expect.objectContaining({ account_id: 'account_fixture', credential_source: 'account', expected_version: 2 }));
     expect(h.mutate.mock.calls.some(([path]) => path.endsWith('/credential') || path.includes('/plans'))).toBe(false);
-  });
-
-  it('requires an explicit model capacity in the ordinary Kimi setup form', async () => {
-    const kimi = { ...host, id: 'kimi-code', name: 'Kimi Code CLI', provider_protocols: ['openai', 'anthropic'] };
-    h.data['/api/manage/hosts'] = [kimi]; h.data['/api/manage/providers'] = [];
-    await act(async () => root.render(<AgentManagementPage agentId="kimi-code" section="providers" projects={[]} revision={0} onChanged={() => {}} />));
-    await click('添加服务商'); await change(field('名称'), 'Kimi native service'); await change(field('服务地址'), 'https://fixture.example/v1'); await change(field('默认请求模型'), 'kimi-fixture');
-    expect(field('上下文窗口').required).toBe(true);
-    expect(button('保存连接与模型', dialog()).disabled).toBe(true);
-    await change(field('上下文窗口'), '0'); expect(button('保存连接与模型', dialog()).disabled).toBe(true);
-    await change(field('上下文窗口'), '32768');
-    h.mutate
-      .mockResolvedValueOnce({ provider: { ...provider, id: 'kimi_provider' }, model: { id: 'kimi_model' } })
-      .mockResolvedValueOnce({ id: 'plan_kimi', version: 1, status: 'planned', payload: { metadata: { host_id: 'kimi-code' }, files: [] } });
-    await click('保存连接与模型', dialog());
-    expect(h.mutate.mock.calls[0]).toEqual(['/api/manage/providers/setup', 'POST', expect.objectContaining({ host_id: 'kimi-code', context_window: 32768, model_id: 'kimi-fixture' })]);
   });
 
   it('preserves the actually applied selection when its dependent account needs an update', async () => {
@@ -228,7 +211,7 @@ describe('ordinary assistant configuration forms', () => {
     h.data['/api/manage/providers'] = [{ ...provider, wire_api: 'chat', supported_endpoints: ['chat/completions'] }];
     await mount();
     expect(button('选择并启用模型').disabled).toBe(true);
-    expect(document.body.textContent).toContain('接口与 Codex CLI 的直连要求不同');
+    expect(document.body.textContent).toContain('接口与 Codex 的直连要求不同');
     expect(h.mutate).not.toHaveBeenCalled();
   });
 
@@ -326,7 +309,7 @@ describe('ordinary assistant configuration forms', () => {
   });
 
   it('does not revive unsupported catalog or inference actions through advanced provider checks', async () => {
-    await act(async () => { root.render(<ProviderChecks provider={{ ...provider, protocol: 'gemini' }} contextTitle="Codex CLI" />); });
+    await act(async () => { root.render(<ProviderChecks provider={{ ...provider, protocol: 'gemini' }} contextTitle="Codex" />); });
     await click('目录与独立检查');
     expect(button('明确刷新远程目录', dialog()).disabled).toBe(true);
     expect(button('确认执行此检查', dialog()).disabled).toBe(true);
@@ -389,7 +372,7 @@ describe('per-assistant connection modes', () => {
   async function modes(drafts) {
     h.data['/api/manage/hosts/codex/mode'] ||= state;
     h.data['/api/manage/models'] = [model];
-    await act(async () => { root.render(<AssistantConnectionModes agentId="codex" agent="Codex CLI" revision="fixture" drafts={drafts} />); });
+    await act(async () => { root.render(<AssistantConnectionModes agentId="codex" agent="Codex" revision="fixture" drafts={drafts} />); });
   }
   it('views modes without applying them and keeps the independent connection draft across navigation', async () => {
     const drafts = { current: new Map() };
@@ -411,11 +394,11 @@ describe('per-assistant connection modes', () => {
     h.mutate.mockResolvedValueOnce({ id: 'mode_plan', version: 1, status: 'planned', payload: { metadata: { host_id: 'codex', connection_change: { before: 'direct', after: 'routing' } }, files: [] } });
     await click('预览连接更改');
     expect(h.mutate).toHaveBeenCalledExactlyOnceWith('/api/manage/hosts/codex/mode/preview', 'POST', expect.objectContaining({ expected_version: 4, mode: 'routing', endpoint: 'responses', target: { provider_id: provider.id, model_id: model.id }, fallbacks: [] }));
-    expect(button('确认应用到 Codex CLI', dialog()).disabled).toBe(true);
+    expect(button('确认应用到 Codex', dialog()).disabled).toBe(true);
     expect(h.mutate.mock.calls.some(([path]) => path.endsWith('/apply'))).toBe(false);
     await act(async () => dialog().querySelector('input[type=checkbox]').click());
     h.mutate.mockResolvedValueOnce({ status: 'applied', payload: { files: [], readback: 'verified', host_reload: 'not_run', real_request: 'not_run' } });
-    await click('确认应用到 Codex CLI', dialog());
+    await click('确认应用到 Codex', dialog());
     expect(h.mutate).toHaveBeenLastCalledWith('/api/manage/plans/mode_plan/apply', 'POST', { expected_version: 1, confirmed: true });
     expect(dialog().textContent).toContain('尚未验证');
   });
@@ -573,7 +556,7 @@ describe('assistant resource organization', () => {
     expect(button('预览原位接管', card('available')).disabled).toBe(false);
     for (const name of ['read_only', 'source_changed']) {
       expect(button('由宿主管理', card(name)).disabled).toBe(true);
-      expect(button('预览应用到 Codex CLI', card(name)).disabled).toBe(true);
+      expect(button('预览应用到 Codex', card(name)).disabled).toBe(true);
     }
     expect(h.mutate).not.toHaveBeenCalled();
   });
@@ -648,7 +631,7 @@ describe('complete provider and installed resource journeys', () => {
     })]);
     expect(h.mutate.mock.calls[1]).toEqual(['/api/manage/plans', 'POST', expect.objectContaining({ host_id: 'codex', provider_id: 'provider_new', activate_provider: true, model_id: 'model_new' })]);
     expect(document.querySelector('.agent-next-step')).toBeNull();
-    expect(button('确认应用到 Codex CLI', dialog()).disabled).toBe(true);
+    expect(button('确认应用到 Codex', dialog()).disabled).toBe(true);
     expect(h.mutate.mock.calls.some(([path]) => path.endsWith('/apply'))).toBe(false);
   });
 
@@ -682,7 +665,7 @@ describe('complete provider and installed resource journeys', () => {
     expect(body.provider).not.toHaveProperty('credential_ref');
     expect(JSON.stringify(body)).not.toContain('credential_ref');
     expect(h.mutate.mock.calls[1][0]).toBe('/api/manage/plans');
-    expect(button('确认应用到 Codex CLI', dialog()).disabled).toBe(true);
+    expect(button('确认应用到 Codex', dialog()).disabled).toBe(true);
     expect(document.body.textContent).toContain('确认更改后才会写入');
   });
 
@@ -787,7 +770,7 @@ describe('complete provider and installed resource journeys', () => {
     await mount();
     const card = document.querySelector('.management-card');
     expect(card.textContent).not.toContain('不能在仍被选中时直接卸下');
-    expect(button('预览从 Codex CLI 移除', card).disabled).toBe(false);
+    expect(button('预览从 Codex 移除', card).disabled).toBe(false);
     expect(h.mutate).not.toHaveBeenCalled();
   });
 
@@ -796,13 +779,13 @@ describe('complete provider and installed resource journeys', () => {
     h.data['/api/manage/hosts/codex/state'] = { host_id: 'codex', selection: { provider_id: 'provider_other', status: 'verified' }, resources: { [provider.id]: { status: 'verified', paths: 1 } }, coverage: 'complete_owned_entries' };
     await mount();
     h.mutate.mockResolvedValueOnce(removal);
-    await click('预览从 Codex CLI 移除');
+    await click('预览从 Codex 移除');
     expect(dialog().textContent).not.toContain('已从助手移除');
     await act(async () => dialog().querySelector('input[type=checkbox]').click());
     h.mutate.mockResolvedValueOnce({ status: 'applied' });
     h.request.mockResolvedValueOnce({ ...removal, status: 'applied', payload: { ...removal.payload, readback: 'verified', host_reload: 'not_run', real_request: 'not_run' } });
     h.request.mockResolvedValueOnce({ host_id: 'codex', selection: { provider_id: null, status: 'not_managed' }, effects: { selection: 'not_selected_by_senrelay', configuration: 'not_managed', host_loaded: 'not_verified', reachability: 'not_checked', authentication: 'not_checked', invocation: 'not_checked' }, resources: { [provider.id]: { status: 'removed' } }, coverage: 'complete_owned_entries' });
-    await click('确认应用到 Codex CLI', dialog());
+    await click('确认应用到 Codex', dialog());
     const readback = dialog().querySelector('.agent-host-readback');
     expect(readback.textContent).toContain(provider.name);
     expect(readback.textContent).toContain('已从助手移除');
@@ -815,12 +798,12 @@ describe('complete provider and installed resource journeys', () => {
     h.data['/api/manage/hosts/codex/state'] = { host_id: 'codex', selection: { provider_id: 'provider_other', status: 'verified' }, resources: { [provider.id]: { status: 'verified', paths: 1 } }, coverage: 'complete_owned_entries' };
     await mount();
     h.mutate.mockResolvedValueOnce(removal);
-    await click('预览从 Codex CLI 移除');
+    await click('预览从 Codex 移除');
     await act(async () => dialog().querySelector('input[type=checkbox]').click());
     h.mutate.mockRejectedValueOnce(new Error('apply failed'));
     h.request.mockResolvedValueOnce({ ...removal, status: 'failed', payload: { ...removal.payload, readback: 'not_run', host_reload: 'not_run', real_request: 'not_run' } });
     h.request.mockRejectedValueOnce(new Error('state unavailable'));
-    await click('确认应用到 Codex CLI', dialog());
+    await click('确认应用到 Codex', dialog());
     expect(dialog().textContent).toContain('应用后的本机配置还没有读回');
     expect(dialog().textContent).not.toContain('已从助手移除');
   });
@@ -932,7 +915,7 @@ describe('bounded assistant libraries and lazy details', () => {
 
   it('requires full matching probe details and pins the reviewed version without connecting on open', async () => {
     const summary = { id: 'asset_probe', kind: 'mcp', name: 'Review before connecting', version: 3, _summary: true };
-    const render = () => root.render(<AssetTools item={summary} selectedAgent="Codex CLI" onChanged={() => {}} />);
+    const render = () => root.render(<AssetTools item={summary} selectedAgent="Codex" onChanged={() => {}} />);
     await act(async () => { render(); });expect(h.paths).not.toContain('/api/manage/assets/asset_probe');
     await click('验证工具发现');expect(button('确认连接并发现工具').disabled).toBe(true);expect(h.mutate).not.toHaveBeenCalled();
     h.data['/api/manage/assets/asset_probe'] = { ...summary, id: 'wrong', _summary: undefined, config: { command: 'wrong-command' } };
@@ -945,7 +928,7 @@ describe('bounded assistant libraries and lazy details', () => {
 
   it('pages version metadata and loads only the selected old body before allowing a restore', async () => {
     const current = { id: 'asset_history', kind: 'skill', name: 'Versioned fixture', version: 25, files: { 'SKILL.md': '# Current' } };
-    const render = () => root.render(<AssetTools item={current} selectedAgent="Codex CLI" onChanged={() => {}} />);
+    const render = () => root.render(<AssetTools item={current} selectedAgent="Codex" onChanged={() => {}} />);
     h.data['/api/manage/assets/asset_history/versions?summary=true&limit=20&offset=0'] = pageOf(Array.from({ length: 20 }, (_, i) => ({ version: 25 - i, created_at: '2026-10-26' })), 25, 0, 20);
     await act(async () => { render(); });await click('版本与恢复');await click('6', dialog());
     expect(button('确认恢复此版本').disabled).toBe(true);
@@ -1164,21 +1147,21 @@ it('requires a separate consent click for each reopened configuration preview an
   const onApply = vi.fn();
   const onClose = vi.fn();
   const plan = { id: 'consent_preview', version: 1, status: 'planned', payload: { metadata: { host_id: 'codex' }, files: [] } };
-  const show = () => root.render(<AgentPlanDialog plan={plan} agent="Codex CLI" category="工具" valid onApply={onApply} onClose={onClose} />);
+  const show = () => root.render(<AgentPlanDialog plan={plan} agent="Codex" category="工具" valid onApply={onApply} onClose={onClose} />);
   await act(async () => show());
-  await click('确认应用到 Codex CLI', dialog());
+  await click('确认应用到 Codex', dialog());
   expect(onApply).not.toHaveBeenCalled();
   await act(async () => dialog().querySelector('input[type=checkbox]').click());
-  expect(button('确认应用到 Codex CLI', dialog()).disabled).toBe(false);
+  expect(button('确认应用到 Codex', dialog()).disabled).toBe(false);
   await click('取消', dialog());
   expect(onClose).toHaveBeenCalledOnce();
   expect(onApply).not.toHaveBeenCalled();
   await act(async () => root.render(null));
   await act(async () => show());
   expect(dialog().querySelector('input[type=checkbox]').checked).toBe(false);
-  expect(button('确认应用到 Codex CLI', dialog()).disabled).toBe(true);
+  expect(button('确认应用到 Codex', dialog()).disabled).toBe(true);
   await act(async () => dialog().querySelector('input[type=checkbox]').click());
-  await click('确认应用到 Codex CLI', dialog());
+  await click('确认应用到 Codex', dialog());
   expect(onApply).toHaveBeenCalledOnce();
 });
 
@@ -1205,7 +1188,7 @@ it('discards a late preview after changing category and does not revive it on re
   let resolve;
   h.mutate.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
   await mount('prompt');
-  await click('预览应用到 Codex CLI');
+  await click('预览应用到 Codex');
   expect(resolve).toBeTypeOf('function');
   await mount('providers');
   await act(async () => resolve({ id: 'old_preview', status: 'planned', version: 1, payload: { metadata: { host_id: 'codex' }, files: [] } }));
@@ -1232,9 +1215,9 @@ it.each(['wrong-plan', 'wrong-host', 'lost-response'])('multi-host apply treats 
     h.request.mockResolvedValueOnce({ ...plan, id: failure === 'wrong-plan' ? 'another_plan' : plan.id, status: 'applied', payload: { metadata: { host_id: failure === 'wrong-host' ? 'claude-code' : 'codex' } } });
   }
   h.request.mockResolvedValueOnce({ host_id: 'codex', resources: {} });
-  await click('确认应用到 Codex CLI', dialog());
+  await click('确认应用到 Codex', dialog());
   expect(dialog().textContent).toContain('未知');
-  expect([...dialog().querySelectorAll('button')].some(node => node.textContent === '确认应用到 Codex CLI')).toBe(false);
+  expect([...dialog().querySelectorAll('button')].some(node => node.textContent === '确认应用到 Codex')).toBe(false);
   await click('关闭', dialog());
   expect(button('查看差异并确认', dialog()).disabled).toBe(true);
   expect(h.mutate.mock.calls.filter(([path]) => path.endsWith('/apply'))).toHaveLength(1);
@@ -1248,7 +1231,7 @@ it('shows model choice separately from file resources after apply', async () => 
   } };
   const resources = readbackResources(plan, state, { provider_test: 'Synthetic', model_test: 'Chosen model' });
   expect(resources.map(item => item.id)).toEqual(['provider_test']);
-  await act(async () => root.render(<AgentPlanDialog plan={plan} result={{ status: 'applied', payload: { readback: 'verified' } }} hostReadback={{ state, resources }} agent="Codex CLI" category="模型与账号" valid onClose={() => {}} />));
+  await act(async () => root.render(<AgentPlanDialog plan={plan} result={{ status: 'applied', payload: { readback: 'verified' } }} hostReadback={{ state, resources }} agent="Codex" category="模型与账号" valid onClose={() => {}} />));
   const summary = document.querySelector('.agent-host-readback');
   expect(summary.textContent).toContain('chosen-native');
   expect(summary.querySelector('ul').textContent).not.toContain('尚未应用');
@@ -1343,7 +1326,7 @@ it('sanitizes compatibility wire keys in EvidenceDetails, maps connection badges
   expect(alertText).not.toContain('/Users/private');
 
   // 4. Paused StatusBadge renders localized "已暂停" and pause/resume sends confirmed: true
-  h.data['/api/connections'] = [{ id: 'codex', label: 'Codex CLI', enabled: true, paused: true }];
+  h.data['/api/connections'] = [{ id: 'codex', label: 'Codex', enabled: true, paused: true }];
   await mount();
   const pausedBar = container.querySelector('.cc-connection-status-bar');
   expect(pausedBar.textContent).toContain('已暂停');
@@ -1392,7 +1375,7 @@ it('surfaces partial failures and queues multiple conflict_preview plans in mult
   });
   await click('生成各宿主预览', dialog());
   const modalAlert = dialog().querySelector('.inline-error')?.textContent || '';
-  expect(modalAlert).toContain('Codex CLI');
+  expect(modalAlert).toContain('Codex');
   expect(modalAlert).toContain('Cursor');
 
   // Multiple conflict_preview plans queued sequentially
@@ -1415,7 +1398,7 @@ it('surfaces partial failures and queues multiple conflict_preview plans in mult
     },
   });
   await click('生成各宿主预览', dialog());
-  expect(dialog().textContent).toContain('Codex CLI');
+  expect(dialog().textContent).toContain('Codex');
   expect(dialog().textContent).toContain('剩余 1 个冲突宿主待确认');
   await act(async () => { dialog().querySelector('input[type=checkbox]').click(); });
   expect(dialog().querySelector('input[type=checkbox]').checked).toBe(true);
@@ -1431,18 +1414,16 @@ it('surfaces partial failures and queues multiple conflict_preview plans in mult
 
 it('lists the six Agent families, including entries with no detected installation', async () => {
   const families = ['claude-code', 'opencode', 'omp', 'cursor', 'antigravity'].map(id => ({ id }));
-  const desktop = { ...host, id: 'codex-desktop', name: 'Codex Desktop', shared_configuration: true };
-  const agy = { id: 'antigravity-cli', name: 'Antigravity CLI' };
-  h.data['/api/manage/hosts'] = [{ ...host, shared_configuration: true }, ...families, desktop, agy, { id: 'hermes', name: 'Hermes' }];
+  h.data['/api/manage/hosts'] = [{ ...host, shared_configuration: true }, ...families];
   const choose = vi.fn();
   await act(async () => root.render(<AgentManagementPage onAgentChange={choose} />));
   expect(container.querySelector('h1').textContent).toBe('Agent 管理');
   expect([...container.querySelectorAll('.agent-choice strong')].map(item => item.textContent))
-    .toEqual(['Claude Code', 'Codex', 'OpenCode', 'Oh My Pi (OMP)', 'Cursor', 'Antigravity']);
+    .toEqual(['Claude Code', 'Codex', 'OpenCode', 'Oh My Pi', 'Cursor', 'Antigravity']);
   await change(field('查找助手', container), 'Omp');
   await act(async () => container.querySelector('.agent-choice').click());
   expect(choose).toHaveBeenCalledWith('omp', 'providers');
-  await act(async () => root.render(<AgentManagementPage agentId="codex-desktop" onAgentChange={choose} />));
+  await act(async () => root.render(<AgentManagementPage agentId="codex" onAgentChange={choose} />));
   expect(container.querySelector('h1').textContent).toBe('Codex');
   expect(container.querySelector('.agent-surface select')).toBeNull();
   expect(container.querySelector('.agent-surface').textContent).toContain('共用配置');
@@ -1450,23 +1431,16 @@ it('lists the six Agent families, including entries with no detected installatio
   expect(choose).toHaveBeenCalledWith('', '');
 });
 
-it('uses one Antigravity tools view while keeping entry-specific rules selectable', async () => {
+it('uses one Antigravity workspace without a surface selector', async () => {
   const paths = { mcp_path: '/shared/mcp.json', skill_dir: '/shared/skills' };
   const common = { paths, capabilities: { mcp: true, prompts: true } };
-  h.data['/api/manage/hosts'] = [
-    { ...common, id: 'antigravity', name: 'Antigravity Desktop' },
-    { ...common, id: 'antigravity-cli', name: 'Antigravity CLI' },
-  ];
+  h.data['/api/manage/hosts'] = [{ ...common, id: 'antigravity', name: 'Antigravity' }];
   const choose = vi.fn();
-  await act(async () => root.render(<AgentManagementPage agentId="antigravity-cli" section="mcp" onAgentChange={choose} />));
+  await act(async () => root.render(<AgentManagementPage agentId="antigravity" section="mcp" onAgentChange={choose} />));
   expect(container.querySelector('h1').textContent).toBe('Antigravity');
   expect(container.querySelector('.agent-surface select')).toBeNull();
-  expect(container.querySelector('.agent-surface').textContent).toContain('共用此处的配置');
-  await act(async () => root.render(<AgentManagementPage agentId="antigravity-cli" section="prompt" onAgentChange={choose} />));
-  const select = field('配置入口', container);
-  expect(select.value).toBe('antigravity-cli');
-  await change(select, 'antigravity');
-  expect(choose).toHaveBeenCalledWith('antigravity', 'prompt');
+  await act(async () => root.render(<AgentManagementPage agentId="antigravity" section="prompt" onAgentChange={choose} />));
+  expect(container.querySelector('h1').textContent).toBe('Antigravity');
 });
 
 it('reads only the chosen native source, requires an explicit selection, and invalidates a changed source', async () => {

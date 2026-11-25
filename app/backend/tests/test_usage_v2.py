@@ -174,7 +174,7 @@ def test_native_parsers_are_pure_replay_safe_and_cache_aware(ledger):
     assert ledger.ingest(events)["duplicates"] == 1
     assert ledger.requests()["items"][0]["usage"]["cache_read_tokens"] == 20
     claude = [{"uuid": "id", "timestamp": "2026-10-24T00:00:00Z", "message": {"id": "resp", "usage": {"input_tokens": 20, "cache_read_input_tokens": 10, "output_tokens": 2}, "model": "claude"}}]
-    parsed = ledger.extract_usage_from_messages(claude, host_id="claude_code", source_id="s")
+    parsed = ledger.extract_usage_from_messages(claude, host_id="claude-code", source_id="s")
     ledger.ingest(parsed)
     assert ledger.requests()["items"][0]["usage"]["input_tokens"] in (30, 100)
 

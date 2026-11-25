@@ -58,10 +58,8 @@ def require_integration_root(host_id, surface, home, env):
 def resolve(manager, host_id, definition, env, *, display=False):
     result = effective_host(definition, manager.home)
     home = manager.home
-    cli_profile = override_root('codex', home, env) if host_id in ('codex', 'codex-desktop') else None
-    result["shared_configuration"] = host_id in ("codex", "codex-desktop") and cli_profile is None
-    if host_id == "codex-desktop" and cli_profile:
-        result["configuration_notice"] = None
+    cli_profile = override_root('codex', home, env) if host_id in ('codex',) else None
+    result["shared_configuration"] = host_id == "codex" and cli_profile is None
     if host_id not in ROOTS:
         return result
     variable, default = ROOTS[host_id]
@@ -98,14 +96,9 @@ def resolve(manager, host_id, definition, env, *, display=False):
 
 def shared_membership(manager, host_id, kind, resource_kind=None):
     """Definitions assigned through either entry belong to their shared configuration."""
-    if kind in ("provider", "account", "asset") and host_id in ("codex", "codex-desktop"):
+    if kind in ("provider", "account", "asset") and host_id in ("codex",):
         if manager.host_config(host_id, display=True)["shared_configuration"]:
-            return ("codex", "codex-desktop")
-    if kind == "asset" and host_id in ("antigravity", "antigravity-cli"):
-        field = {"mcp": "mcp_path", "skill": "skill_dir"}.get(resource_kind)
-        if field and (manager.host_config("antigravity").get(field)
-                      == manager.host_config("antigravity-cli").get(field)):
-            return ("antigravity", "antigravity-cli")
+            return ("codex",)
     return (host_id,)
 
 
@@ -114,12 +107,6 @@ def check_plan(manager, plan):
     if meta.get('namespace') == 'connections':
         raise ConfigurationError('Use the selected assistant connection plan to apply or recover this change.', 409)
     host_id = meta.get('host_id')
-    if host_id == 'codex-desktop':
-        # A plan prepared for an independent desktop profile can become shared
-        # when the CLI moves back to its default root.
-        if meta.get('shared_configuration', True) != manager.host_config(host_id)['shared_configuration']:
-            raise ConfigurationError('Codex configuration sharing changed since preview. Review the affected surfaces again.', 409)
-        return
     if host_id not in ROOTS:
         return
     from app.services.management_service import HOSTS

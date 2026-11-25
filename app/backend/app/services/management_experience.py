@@ -59,9 +59,6 @@ def setup_provider(manager, body: dict) -> dict:
                 "model": manager._public(manager.get("model", prior["model_id"])),
                 "host_configuration": "unchanged", "request_id": request_id}
 
-    if host_id == 'kimi-code' and capacity is None:
-        raise ConfigurationError('Kimi setup requires the model context_window before saving', 422)
-
     provider["default_model"] = native_model
     reference = manager._store_secret(secret) if secret is not None else None
     if reference:
@@ -188,8 +185,6 @@ def revise_provider_setup(manager, body: dict) -> dict:
         else:
             merged_model["context_window"] = capacity
     merged_model = manager._validate("model", merged_model, entity_id=model_entity_id)
-    if host_id == "kimi-code" and merged_model.get("context_window") is None:
-        raise ConfigurationError("Kimi setup requires the model context_window before saving", 422)
     uses_account = stored_provider.get("credential_source") == "account" or (
         not stored_provider.get("credential_source") and stored_provider.get("account_id") and not stored_provider.get("credential_ref"))
     if secret != "absent" and uses_account:
@@ -268,7 +263,7 @@ def host_state(manager, host_id: str) -> dict:
     from app.integrations.host_management_native import configuration_paths, shadowed_configuration_paths
     host = manager.host_config(host_id)
     paths = configuration_paths(host, manager.home)
-    if host_id in ("codex", "codex-desktop"):
+    if host_id in ("codex",):
         paths.append(str(manager.home / host["mcp_path"]))
     skill_prefix = str(manager.home / host["skill_dir"]) + "/" if host.get("skill_dir") else "\x00"
     prompt_prefix = str(manager.home / host["prompt_dir"]) + "/" if host.get("prompt_dir") else "\x00"
@@ -364,7 +359,7 @@ def host_state(manager, host_id: str) -> dict:
         activation_status = "missing"
     if active.get('selection_receipt_unknown'):
         activation_status = 'not_checked'
-    return {"host_id": host_id, "provider_mode": "single_selection" if host_id in ("codex", "codex-desktop", "claude-code") else host.get("provider_mode", "coexist_named_entries"),
+    return {"host_id": host_id, "provider_mode": "single_selection" if host_id in ("codex", "claude-code") else host.get("provider_mode", "coexist_named_entries"),
         "selection": {**{key: (active.get('model_selection') or {}).get(key) for key in ('protocol','credential_source','account_id','account_name')}, "provider_id": active.get("provider_id"), "provider_name": names.get(active.get("provider_id")), 'connection_mode': gateway['mode'] if gateway_selected else 'direct',
             "model_id": active.get("model_id"), "status": activation_status, 'receipt_unknown': bool(active.get('selection_receipt_unknown')), "updated_at": active_row["updated_at"] if active_row else None,
             "host_loaded": "not_verified", "activation_method": "restart_and_verify"},
@@ -389,10 +384,6 @@ _HOST_ENV_VARS: dict[str, tuple[str, ...]] = {
         "OPENAI_API_KEY",
         "OPENAI_BASE_URL",
         "OPENAI_ORG_ID",
-    ),
-    "gemini-cli": (
-        "GEMINI_API_KEY",
-        "GOOGLE_API_KEY",
     ),
     "opencode": (
         "OPENAI_API_KEY",

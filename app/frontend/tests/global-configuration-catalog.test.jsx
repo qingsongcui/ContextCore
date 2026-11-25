@@ -7,7 +7,7 @@ vi.mock('../src/lib/useResource.js',()=>({useResource(path){h.paths.push(path);c
 vi.mock('../src/lib/api.js',()=>({mutate:h.mutate}));
 import GlobalConfigurationCatalog from '../src/components/agent-management/GlobalConfigurationCatalog.jsx';
 import {setLang} from '../src/lib/i18n.jsx';
-const hosts=['codex','codex-desktop','claude-code'].map(id=>({id,name:id,shared_configuration:id.startsWith('codex')}));
+const hosts=['codex','claude-code'].map(id=>({id,name:id,shared_configuration:id==='codex'}));
 let root;
 const button=text=>[...document.querySelectorAll('button')].find(el=>el.textContent===text);
 const click=async el=>act(async()=>el.click());
@@ -39,13 +39,13 @@ it('follows a model to its provider instead of writing ineffective model host ov
 });
 it('updates bundle directory assignment without changing execution scope or activating profiles',async()=>{
   await click(button('项目配置包'));await click(button('编辑定义'));
-  await click(document.querySelectorAll('.global-host-picker')[0].querySelectorAll('input')[2]);await click(button('保存目录定义'));
+  await click(document.querySelectorAll('.global-host-picker')[0].querySelectorAll('input')[1]);await click(button('保存目录定义'));
   expect(h.mutate).toHaveBeenCalledWith('/api/manage/bundles/b','PATCH',{expected_version:5,agent_ids:['codex','claude-code']});
 });
 it('keeps an account conflict visible and lets the user reload without retrying a stale write',async()=>{
   h.mutate.mockRejectedValueOnce(Object.assign(new Error('Conflict'),{status:409}));
   await click(button('账号'));await click(button('编辑定义'));await click(button('全部选中'));await click(button('保存目录定义'));
-  expect(h.mutate).toHaveBeenCalledWith('/api/manage/accounts/a','PATCH',{expected_version:2,agent_ids:['codex','codex-desktop','claude-code']});
+  expect(h.mutate).toHaveBeenCalledWith('/api/manage/accounts/a','PATCH',{expected_version:2,agent_ids:['codex','claude-code']});
   expect(document.querySelector('dialog')).toBeTruthy();await click(button('放弃编辑并读取最新目录'));
   expect(h.mutate).toHaveBeenCalledTimes(1);expect(document.querySelector('dialog')).toBeNull();
 });

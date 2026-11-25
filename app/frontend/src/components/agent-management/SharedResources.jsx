@@ -14,8 +14,8 @@ import '../../styles/shared-resources.css';
 export { ConfigurationBackup } from './ConfigurationBackup.jsx';
 
 export function ProfileScope({ hosts = [] }) {
-  if (hosts.some(host => (host.id === 'codex' || host.id === 'codex-desktop') && (host.shared_configuration === false || host.config_root))) return <p className="muted">{t('方案按助手应用到各自的用户级配置文件。')}</p>;
-  return <p className="muted">{t('方案按助手应用到用户级配置文件。Codex CLI 和桌面版共用原生配置。')}</p>;
+  if (hosts.some(host => host.id === 'codex' && (host.shared_configuration === false || host.config_root))) return <p className="muted">{t('方案按助手应用到各自的用户级配置文件。')}</p>;
+  return <p className="muted">{t('方案按助手应用到用户级配置文件。Codex 桌面版和 CLI 共用原生配置。')}</p>;
 }
 
 const capability = { mcp: 'mcp', skill: 'skills', prompt: 'prompts' };

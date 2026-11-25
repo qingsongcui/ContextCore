@@ -29,8 +29,6 @@ def anyio_backend():
 
 def provider(manager, host='codex', token='setup-request-0001', protocol='openai'):
     body = setup(host, token)
-    if host == 'kimi-code':
-        body['context_window'] = 32768
     body['provider'].update(protocol=protocol, supported_endpoints=['messages'] if protocol == 'anthropic' else ['chat/completions', 'responses'])
     return manager.setup_provider(body)
 
@@ -255,11 +253,9 @@ def test_claude_native_key_header_and_interface_mismatch(manager, client, monkey
     assert direct["env"]["ANTHROPIC_BASE_URL"] + "/v1/messages" == value["provider"]["base_url"] + "/messages"
 
 
-@pytest.mark.parametrize('host,endpoint', [('opencode', 'responses'), ('pi', 'chat/completions'), ('kimi-code', 'responses'), ('hermes', 'responses'), ('minimax-code', 'responses'), ('openclaw', 'responses')])
+@pytest.mark.parametrize('host,endpoint', [('opencode', 'responses')])
 def test_each_supported_native_renderer_can_start_route_and_return_to_direct(manager, host, endpoint):
     value = provider(manager, host)
-    if host == 'kimi-code':
-        value['model'] = manager.save('model', {'context_window': 32768}, value['model']['id'], value['model']['version'])
     apply(manager, manager.plan({'host_id': host, **choice(value), 'activate_provider': True}))
     plan = preview(manager, value, host, endpoint=endpoint)
     apply(manager, plan)

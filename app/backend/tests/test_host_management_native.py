@@ -212,25 +212,25 @@ def test_codex_desktop_shared_native_files_not_live_desktop_acceptance(env):
     path = write(manager.home, ".codex/config.toml", '# keep comment\nmodel = "original-model"\nmodel_provider = "original-provider"\n[features]\nkeep = true\n')
     original = tomllib.loads(path.read_text())
     value = provider(client)
-    plan = preview(client, "codex-desktop", provider_id=value["id"], activate_provider=True, model_id="native-model")
+    plan = preview(client, "codex", provider_id=value["id"], activate_provider=True, model_id="native-model")
     assert plan["payload"]["metadata"]["shared_configuration"] is True
-    assert "Desktop consumption" in plan["payload"]["metadata"]["configuration_notice"]
+    assert "Codex" in plan["payload"]["metadata"]["configuration_notice"]
     assert tomllib.loads(path.read_text()) == original
     apply(client, plan)
     native = tomllib.loads(path.read_text())
     assert native["model"] == "native-model" and native["features"] == original["features"]
     assert native["model_providers"][native["model_provider"]]["http_headers"]["Authorization"] == 'Bearer synthetic-native-secret-"-literal'
-    state = client.get("/api/manage/hosts/codex-desktop/state").json()
+    state = client.get("/api/manage/hosts/codex/state").json()
     assert state["selection"]["provider_id"] == value["id"]
     assert state["effects"]["host_loaded"] == "not_verified"
-    # CLI and Desktop share the selected native field; an independent owner may
-    # not take it over and silently destroy the Desktop restoration baseline.
+    # The canonical Codex workspace owns the shared native selection; a repeat
+    # activation is reviewed against the same owner instead of a second surface.
     response = client.post("/api/manage/plans", json={"host_id": "codex", "provider_id": value["id"], "activate_provider": True, "model_id": "native-model"})
+    assert response.status_code == 200
+    response = client.post("/api/manage/plans", json={"host_id": "codex", "provider_id": value["id"], "operation": "uninstall"})
     assert response.status_code == 409
-    response = client.post("/api/manage/plans", json={"host_id": "codex-desktop", "provider_id": value["id"], "operation": "uninstall"})
-    assert response.status_code == 409
-    apply(client, preview(client, "codex-desktop", operation="restore"))
-    apply(client, preview(client, "codex-desktop", provider_id=value["id"], operation="uninstall"))
+    apply(client, preview(client, "codex", operation="restore"))
+    apply(client, preview(client, "codex", provider_id=value["id"], operation="uninstall"))
     assert tomllib.loads(path.read_text()) == original
     assert "# keep comment" in path.read_text()
 
@@ -248,7 +248,7 @@ def test_external_provider_operations_fail_precisely_without_writing(env, host, 
     assert not list(manager.home.iterdir())
 
 
-@pytest.mark.parametrize("host", ["omp", "cursor", "antigravity", "codex-desktop"])
+@pytest.mark.parametrize("host", ["omp", "cursor", "antigravity", "codex"])
 @pytest.mark.parametrize("mode", ["copy", "symlink"])
 def test_native_skills_full_lifecycle_preserves_foreign_files_and_never_executes(env, host, mode):
     manager, client = env
@@ -285,11 +285,11 @@ def test_native_skills_full_lifecycle_preserves_foreign_files_and_never_executes
     assert not marker.exists()
 
 
-@pytest.mark.parametrize("host", ["omp", "cursor", "antigravity", "codex-desktop"])
+@pytest.mark.parametrize("host", ["omp", "cursor", "antigravity", "codex"])
 def test_native_prompts_update_restore_conflict_and_uninstall(env, host):
     manager, client = env
     original_file = None
-    if host in ("omp", "codex-desktop"):
+    if host in ("omp", "codex"):
         original_file = write(manager.home, ".omp/agent/AGENTS.md" if host == "omp" else ".codex/AGENTS.md", "User-owned original instructions\n")
     else:
         foreign = write(manager.home, ".cursor/skills/foreign/SKILL.md" if host == "cursor" else ".gemini/config/rules/foreign.md", "Unrelated user rule\n")
@@ -348,7 +348,7 @@ def test_antigravity_rule_limit_refuses_truncation_without_touching_files(env):
     assert not (manager.home / ".gemini").exists()
 
 
-@pytest.mark.parametrize("host,relative", [("omp", ".omp"), ("cursor", ".cursor"), ("antigravity", ".gemini"), ("codex-desktop", ".codex")])
+@pytest.mark.parametrize("host,relative", [("omp", ".omp"), ("cursor", ".cursor"), ("antigravity", ".gemini"), ("codex", ".codex")])
 def test_new_native_categories_never_relax_directory_symlink_safety(env, tmp_path, host, relative):
     manager, client = env
     outside = tmp_path / "outside"
@@ -360,7 +360,7 @@ def test_new_native_categories_never_relax_directory_symlink_safety(env, tmp_pat
     assert not list(outside.iterdir())
 
 
-@pytest.mark.parametrize("host", ["omp", "cursor", "antigravity", "codex-desktop"])
+@pytest.mark.parametrize("host", ["omp", "cursor", "antigravity", "codex"])
 def test_native_managed_skill_external_replacement_is_visible_and_not_overwritten(env, host):
     manager, client = env
     asset = post(client, "assets", {"name": "Managed", "kind": "skill", "install_mode": "symlink", "files": {"SKILL.md": "Reviewed"}})
@@ -413,7 +413,7 @@ def test_omp_preserves_other_roles_and_refuses_uninstalling_their_provider(env):
     assert config.read_bytes() == original
 
 
-@pytest.mark.parametrize("host", ["omp", "cursor", "antigravity", "codex-desktop"])
+@pytest.mark.parametrize("host", ["omp", "cursor", "antigravity", "codex"])
 def test_installed_native_resources_stay_discoverable_in_scoped_catalog_without_membership(env, host):
     manager, client = env
     skill = post(client, "assets", {"name": "Unassigned skill", "kind": "skill", "agent_ids": [], "files": {"SKILL.md": "Reviewed skill"}})
@@ -444,7 +444,7 @@ def test_codex_desktop_mcp_install_update_remove_keeps_foreign_toml(env):
     path = write(manager.home, ".codex/config.toml", '# private original\nmodel = "keep"\n[mcp_servers.foreign]\ncommand = "foreign-server"\nenv = {FOREIGN_SECRET = "opaque-preserved"}\n')
     original = tomllib.loads(path.read_text())
     asset = post(client, "assets", {"name": "Desktop tool", "kind": "mcp", "config": {"transport": "http", "url": "https://tool.invalid/mcp", "headers": {"X-Trace": "reviewed"}}})
-    plan = preview(client, "codex-desktop", asset_ids=[asset["id"]])
+    plan = preview(client, "codex", asset_ids=[asset["id"]])
     assert "opaque-preserved" not in json.dumps(plan)
     apply(client, plan)
     key = "senrelay_" + asset["id"].replace("asset_", "")
@@ -453,9 +453,9 @@ def test_codex_desktop_mcp_install_update_remove_keeps_foreign_toml(env):
     assert document["mcp_servers"]["foreign"] == original["mcp_servers"]["foreign"]
     changed = client.patch(f"/api/manage/assets/{asset['id']}", json={"expected_version": asset["version"], "config": {"transport": "stdio", "command": "synthetic-never-executed", "args": ["--stdio"]}})
     assert changed.status_code == 200
-    apply(client, preview(client, "codex-desktop", asset_ids=[asset["id"]]))
+    apply(client, preview(client, "codex", asset_ids=[asset["id"]]))
     assert tomllib.loads(path.read_text())["mcp_servers"][key] == {"command": "synthetic-never-executed", "args": ["--stdio"]}
-    apply(client, preview(client, "codex-desktop", asset_ids=[asset["id"]], operation="uninstall"))
+    apply(client, preview(client, "codex", asset_ids=[asset["id"]], operation="uninstall"))
     assert tomllib.loads(path.read_text()) == original
 
 
@@ -512,7 +512,7 @@ def test_shadowed_omp_owned_files_remain_visible_as_conflicts_not_success(env, s
     assert (manager.home / ".omp/agent/config.yaml").read_bytes() == original_config
 
 
-@pytest.mark.parametrize("first, second", [("codex", "codex-desktop"), ("codex-desktop", "codex")])
+@pytest.mark.parametrize("first, second", [("codex", "codex")])
 @pytest.mark.parametrize("mode", ["copy", "symlink"])
 def test_codex_shared_skill_uses_identical_entry_from_either_surface(env, first, second, mode):
     manager, client = env
@@ -548,7 +548,7 @@ def test_codex_keeps_legacy_desktop_folder_when_applying_from_cli(env):
     assert legacy.read_text().startswith("---\n") and legacy.read_text().endswith("# New body")
 
 
-@pytest.mark.parametrize("host", ["codex", "codex-desktop"])
+@pytest.mark.parametrize("host", ["codex", "codex"])
 def test_codex_preserves_authored_skill_and_rejects_ambiguous_frontmatter(env, host):
     manager, client = env
     text = "---\nname: authored-method\ndescription: Explicit constraints.\ncustom: retained\n---\n# Steps"

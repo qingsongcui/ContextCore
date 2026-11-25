@@ -34,20 +34,10 @@ from app.integrations.secret_store import KeychainSecretStore, SecretStore, Secr
 # Only verified native formats are rendered. Discovery/registration is not proof
 # that a particular installed version loaded a configuration.
 HOSTS = {
-    "codex": {"name": "Codex CLI", "mcp_path": ".codex/config.toml", "format": "toml", "skill_dir": ".codex/skills", "prompt_path": ".codex/AGENTS.md"},
+    "codex": {"name": "Codex", "mcp_path": ".codex/config.toml", "provider_path": ".codex/config.toml", "format": "toml", "skill_dir": ".codex/skills", "prompt_path": ".codex/AGENTS.md"},
     "claude-code": {"name": "Claude Code", "mcp_path": ".claude.json", "format": "json", "container": "mcpServers", "provider_path": ".claude/settings.json", "skill_dir": ".claude/skills", "prompt_path": ".claude/CLAUDE.md"},
     "opencode": {"name": "OpenCode", "mcp_path": ".config/opencode/opencode.json", "format": "json", "container": "mcp", "provider_path": ".config/opencode/opencode.json", "skill_dir": ".config/opencode/skills"},
-    "claude-desktop": {"name": "Claude Desktop", "mcp_path": "Library/Application Support/Claude/claude_desktop_config.json", "format": "json", "container": "mcpServers"},
-    "gemini-cli": {"name": "Gemini CLI", "mcp_path": ".gemini/settings.json", "format": "json", "container": "mcpServers"},
-    "grok-build": {"name": "Grok Build", "unsupported_reason": "Native configuration format has not been verified"},
-    "openclaw": {"name": "OpenClaw", "unsupported_reason": "JSON5/plugin configuration requires a lossless native renderer"},
-    "hermes": {"name": "Hermes", "unsupported_reason": "YAML provider and tool format requires a lossless native renderer"},
-    "pi": {"name": "Pi", "unsupported_reason": "Pi and Oh My Pi are separate hosts; renderer not verified"},
-    "minimax-code": {"name": "MiniMax Code", "unsupported_reason": "Native configuration format has not been verified"},
-    "kimi-code": {"name": "Kimi Code", "unsupported_reason": "Native configuration format has not been verified"},
 }
-from app.integrations.host_formats_v2 import HOST_FORMATS, render_mcp_specs, render_provider_specs, render_activation_specs, validate_prompt
-HOSTS.update(HOST_FORMATS)
 from app.integrations.host_management_native import (
     NATIVE_HOSTS, effective_host, omp_provider_specs, omp_activation_specs,
     cursor_prompt_spec, antigravity_prompt_spec, native_skill,
@@ -260,27 +250,26 @@ class ManagementService:
         result = []
         for host_id, host in HOSTS.items():
             host = self.host_config(host_id, display=True)
-            result.append({"id": host_id, "name": host["name"], "surface": "cli" if host_id in ("codex", "claude-code", "opencode", "omp", "gemini-cli", "grok-build", "kimi-code", "minimax-code", "pi", "antigravity-cli") else "desktop_or_service",
+            result.append({"id": host_id, "name": host["name"], "surface": "cli" if host_id in ("codex", "claude-code", "opencode", "omp") else "desktop_or_service",
                            "shared_configuration": host['shared_configuration'],
                            **({"config_root": host["config_root"]} if "config_root" in host else {}),
                            "configuration_status": "supported_format" if any(host.get(key) for key in ("mcp_path", "provider_path", "skill_dir", "prompt_path")) else "unsupported",
                            "verification_status": "not_verified", "unsupported_reason": host.get("unsupported_reason"), "provider_unsupported_reason": host.get("provider_unsupported_reason"), "provider_mode": host.get("provider_mode", "coexist_named_entries"),
                            "configuration_notice": host.get("configuration_notice"), "prompt_notice": host.get("prompt_notice"), "format_sources": host.get("sources", []),
-                           "selection_config_only": host_id in ("omp", "codex-desktop"),
+                           "selection_config_only": host_id == "omp",
                            "operation_limits": {category: {"status": "external_host_ui_required", "operations": ["install", "update", "switch", "restore", "uninstall"], "reason": host["provider_unsupported_reason"], "sources": host.get("sources", [])} for category in ("providers",) if host.get("provider_unsupported_reason")},
                            "capabilities": {"mcp": bool(host.get("mcp_path")), "providers": bool(host.get("provider_path")) or host_id == "codex",
                                             "skills": bool(host.get("skill_dir")), "prompts": bool(host.get("prompt_path") or host.get("prompt_dir")), "oauth": False},
                            "paths": {key: str(self.home / value) for key, value in host.items() if key.endswith("_path") or key in ("skill_dir", "prompt_dir")}})
         for item in result:
-            item["capabilities"]["native_activation"] = item["id"] in ("codex", "codex-desktop", "omp", "claude-code", "opencode", "pi", "kimi-code", "hermes", "minimax-code", "openclaw")
-            item["provider_protocols"] = ["openai"] if item["id"] in ("codex", "codex-desktop") else ["openai", "anthropic", "gemini"] if item["id"] == "omp" else ["anthropic"] if item["id"] == "claude-code" else ["openai", "anthropic"] if item["capabilities"]["providers"] else []
+            item["capabilities"]["native_activation"] = item["id"] in ("codex", "omp", "claude-code", "opencode")
+            item["provider_protocols"] = ["openai"] if item["id"] in ("codex",) else ["openai", "anthropic", "gemini"] if item["id"] == "omp" else ["anthropic"] if item["id"] == "claude-code" else ["openai", "anthropic"] if item["capabilities"]["providers"] else []
             dependency = HOSTS[item["id"]].get("runtime_dependency")
             if dependency:
                 from app.integrations.structured_config import runtime_status
                 format_name = "yaml" if dependency == "ruamel.yaml" else "json5"
                 item["format_runtime"] = runtime_status(format_name)
-            identity = "antigravity" if item["id"] == "antigravity-cli" else "codex" if item["id"] == "codex-desktop" else item["id"]
-            item["registry_host_id"] = identity
+            identity = item["id"]
             item["configuration_surface"] = item["surface"]
             if identity in registry:
                 discovery = registry[identity]["discovery"]
@@ -308,16 +297,8 @@ class ManagementService:
                 item["context_status"] = "unsupported"
         codex = next(item for item in result if item["id"] == "codex")
         if codex["shared_configuration"]:
-            # Existing Desktop activations must keep their original owner and
-            # restore point when opened through the unified Codex workspace.
-            with self.connect() as conn:
-                active_owner = conn.execute(
-                    "SELECT owner FROM management_owned WHERE path=? AND item_key=?",
-                    (codex["paths"]["mcp_path"], self.transactions._item_key({"kind": "toml_selection", "pointer": ["model"]})),
-                ).fetchone()
-            codex["shared_provider_target"] = (
-                "codex-desktop" if active_owner and active_owner["owner"] == "activation:codex-desktop" else "codex"
-            )
+            # Legacy Desktop activations were migrated to the canonical codex owner.
+            codex["shared_provider_target"] = "codex"
         return result
 
     def _row(self, row) -> dict:
@@ -1480,7 +1461,7 @@ class ManagementService:
                 if model["model_id"] not in known_models:
                     provider["model_map"][model["id"]] = model["model_id"]
                     known_models.add(model["model_id"])
-                if host_id in ('kimi-code', 'omp') and model.get('context_window') is not None:
+                if host_id == 'omp' and model.get('context_window') is not None:
                     capacity = model['context_window']
                     if model['model_id'] in capacities and capacities[model['model_id']] != capacity:
                         raise ConfigurationError('Saved models declare conflicting context_window values for the same native model', 422)
@@ -1552,7 +1533,7 @@ class ManagementService:
                         if act_secret:
                             provider_specs.append({"path": token_path, "kind": "json", "pointer": ["env", "ANTHROPIC_AUTH_TOKEN"], "value": None, "owner": "activation:" + host_id, "operation": "uninstall", "activation_field": True})
                     provider_specs.append({"path": str(self.home / host["provider_path"]), "kind": "json", "pointer": ["env", "ANTHROPIC_MODEL"], "value": native_model, "owner": "activation:" + host_id, "operation": "install", "takeover_selected_field": True, "activation_field": True})
-                elif host_id in ("codex", "codex-desktop"):
+                elif host_id in ("codex",):
                     name = "senrelay_" + provider_id.replace("provider_", "")
                     for key, value in (("model_provider", name), ("model", native_model)):
                         provider_specs.append({"path": str(self.home / host["mcp_path"]), "kind": "toml_selection", "pointer": [key], "value": value, "owner": "activation:" + host_id, "operation": "install", "takeover_selected_field": True, "activation_field": True})
@@ -1561,7 +1542,7 @@ class ManagementService:
                 elif host_id == "omp":
                     provider_specs.extend(omp_activation_specs(host, provider, native_model, home=self.home))
                 else:
-                    provider_specs.extend(render_activation_specs(host_id, provider, native_model, owner="activation:" + host_id, home=self.home))
+                    raise ConfigurationError("Native provider activation has not been verified for this host surface", 422)
             if request.get("replace_provider_id"):
                 if host_id != "claude-code" or operation != "install" or request["replace_provider_id"] == provider_id:
                     raise ConfigurationError("Explicit replacement currently supports a different owned Claude Code provider only; other renderers append named providers", 422)
@@ -1589,7 +1570,7 @@ class ManagementService:
             'configuration_changes': configuration_changes, **({'model_selection': model_selection} if model_selection else {}),
             "configuration_notice": host.get("configuration_notice"),
             "shared_configuration": host['shared_configuration'], **({'root_scope': host['root_scope']} if 'root_scope' in host else {}),
-            "selection_config_only": host_id in ("omp", "codex-desktop"),
+            "selection_config_only": host_id == "omp",
             **({"native_paths": {key: host[key] for key in ("provider_path", "selection_path")}} if host_id == "omp" and provider_id else {}),
             "prompt_notice": host.get("prompt_notice") if any(change["kind"] == "prompt" for change in configuration_changes) else None,
             "bundle_id": request.get("bundle_id"), **profile_options, "scope": "selected_host_global", "activate_provider": request.get("activate_provider") is True, "provider_id": provider_id, "model_id": native_model if request.get("activate_provider") is True else None}
@@ -1868,7 +1849,6 @@ class ManagementService:
         owner = asset["id"]
         native = native_asset_origin.plan_target(self, host_id, asset, operation)
         if native and asset['kind'] == 'prompt':
-            validate_prompt(host_id, asset['content'])
             return [{**native, 'value': asset['content'], 'asset_kind': 'prompt'}]
         if asset["kind"] == "mcp":
             from app.services.mcp_bindings import requires_review, settings as mcp_settings
@@ -1882,20 +1862,13 @@ class ManagementService:
             self.transactions.safe_path(path)
             if native and native['kind'] == 'toml_table':
                 transport = config.pop('transport', 'stdio')
-                if host_id in ('codex', 'codex-desktop') and transport == 'sse':
+                if host_id in ('codex',) and transport == 'sse':
                     raise ConfigurationError('Codex SSE configuration is unsupported', 422)
-                if transport == 'http' and host_id in ('codex', 'codex-desktop') and 'headers' in config:
+                if transport == 'http' and host_id in ('codex',) and 'headers' in config:
                     config['http_headers'] = config.pop('headers')
                 return [{**native, 'value': config}]
-            if host_id in HOST_FORMATS:
-                specs = render_mcp_specs(host_id, host, config, name=name, owner=owner, operation=operation, home=self.home)
-                if native:
-                    if len(specs) != 1 or specs[0]['kind'] != 'json':
-                        raise ConfigurationError('Native named entry requires a lossless in-place renderer', 409)
-                    return [{**specs[0], **native}]
-                return specs
             transport = config.pop("transport", "stdio")
-            if host_id in ("codex", "codex-desktop"):
+            if host_id in ("codex",):
                 if transport == "sse":
                     raise ConfigurationError("Codex SSE configuration is not a verified supported format", 422)
                 if transport == "http":
@@ -1908,8 +1881,6 @@ class ManagementService:
                 else:
                     config = {"type": "remote", "url": config["url"], "headers": config.get("headers", {}), "enabled": True}
             elif transport != "stdio":
-                if host_id == "claude-desktop":
-                    raise ConfigurationError("Claude Desktop direct remote MCP format is not verified", 422)
                 config["type"] = transport
                 if host_id == "antigravity":
                     config["serverUrl"] = config.pop("url")
@@ -1923,7 +1894,6 @@ class ManagementService:
                 return [antigravity_prompt_spec(host, asset, home=self.home, operation=operation)]
             if not host.get("prompt_path"):
                 raise ConfigurationError(host.get("prompt_unsupported_reason", "Prompt file format/path is not verified for this host"), 422)
-            validate_prompt(host_id, asset["content"])
             return [{"path": str(self.home / host["prompt_path"]), "kind": "block", "marker": owner, "owner": owner, "operation": operation, "value": asset["content"]}]
         if not host.get("skill_dir"):
             raise ConfigurationError("Skill installation is unsupported for this host", 422)
@@ -1932,7 +1902,7 @@ class ManagementService:
         with self.connect() as conn:
             owned = conn.execute("SELECT path FROM management_owned WHERE owner=? AND item_key LIKE 'file:%'", (owner,)).fetchall()
         owned_paths = {item["path"] for item in owned if Path(item["path"]).is_relative_to(skill_root)}
-        if host_id in ("codex", "codex-desktop") and owned_paths:
+        if host_id in ("codex",) and owned_paths:
             # Older CLI and Desktop renderers chose different folder names for
             # the same physical library. Keep the installed location on upgrade.
             installed = sorted({path.parent.name for raw in owned_paths if (path := Path(raw)).name == "SKILL.md"
@@ -1990,7 +1960,7 @@ class ManagementService:
             if secret:
                 config["options"]["apiKey"] = secret
             return [{"path": str(self.home / host["provider_path"]), "kind": "json", "pointer": ["provider", owner], "value": config, "owner": owner, "operation": operation}]
-        if host_id in ("codex", "codex-desktop"):
+        if host_id in ("codex",):
             if provider["protocol"] != "openai":
                 raise ConfigurationError("Codex custom providers require the OpenAI protocol", 422)
             if operation == 'install':
@@ -2005,8 +1975,6 @@ class ManagementService:
                 fields["http_headers"] = {"Authorization": "Bearer " + secret}
             body = f"[model_providers.{name}]\n" + self._toml_fields(fields)
             return [{"path": str(self.home / host["mcp_path"]), "kind": "block", "marker": owner, "format": "toml", "value": body.rstrip(), "owner": owner, "operation": operation}]
-        if host_id in HOST_FORMATS:
-            return render_provider_specs(host_id, host, provider, operation, home=self.home, replacing_selected=replacing_selected)
         raise ConfigurationError("Provider configuration format is not verified for this host", 422)
 
     @staticmethod

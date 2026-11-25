@@ -2,11 +2,29 @@
 from __future__ import annotations
 
 import copy
+import json
 import re
 import tomllib
 
 from app.integrations.config_transactions import ConfigurationError
-from app.integrations.host_formats_v2 import _table
+
+
+def _toml(value: object) -> str:
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, list):
+        return "[" + ", ".join(_toml(v) for v in value) + "]"
+    if isinstance(value, dict) and all(isinstance(k, str) for k in value):
+        return "{ " + ", ".join(f"{_toml(k)} = {_toml(v)}" for k, v in value.items()) + " }"
+    raise ConfigurationError("Native TOML values must be bounded strings, integers, booleans, lists or maps", 422)
+
+
+def _table(parts: list[str], fields: dict) -> str:
+    return "[" + ".".join(_toml(p) for p in parts) + "]\n" + "\n".join(f"{_toml(key)} = {_toml(value)}" for key, value in fields.items())
 
 
 def document(text):

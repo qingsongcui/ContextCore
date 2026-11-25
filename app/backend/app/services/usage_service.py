@@ -840,7 +840,7 @@ def extract_usage_from_messages(messages, *, host_id, source_id, project_id=None
         info = row.get("info") if isinstance(row.get("info"), dict) else {}
         raw = message.get("usage") or payload.get("usage") or info.get("tokens") or row.get("tokens")
         cumulative = False
-        protocol = "anthropic" if host_id in {"claude_code", "claude-code"} else "openai"
+        protocol = "anthropic" if host_id in {"claude-code"} else "openai"
         if payload.get("type") == "token_count" or row.get("type") == "token_usage_record":
             token_info = payload.get("info") or payload
             raw = token_info.get("total_token_usage")
@@ -876,7 +876,7 @@ def extract_usage_from_messages(messages, *, host_id, source_id, project_id=None
             event_id = hashlib.sha256(json.dumps({"index": index, "timestamp": stamp, "usage": mapped}, sort_keys=True).encode()).hexdigest()
         upstream_id = row.get("requestId") or row.get("request_id") or payload.get("request_id")
         # Claude's message ID identifies one physical API response across logs.
-        if host_id in {"claude_code", "claude-code"}:
+        if host_id in {"claude-code"}:
             upstream_id = upstream_id or message.get("id")
         event = {"origin": "native_log", "observation_id": f"{source_id}:{event_id}", "host_id": host_id,
                  "project_id": project_id, "account_id": account_id, "provider_id": provider_id or message.get("provider") or info.get("providerID"),

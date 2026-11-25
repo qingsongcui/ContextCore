@@ -6,12 +6,10 @@ from app.services.host_registry import HOST_DEFINITIONS
 from app.services.selection_receipts import EVENT_FILTER, HEADER_SQL, selected_state
 
 DEFAULT_HOSTS = ["claude-code", "codex", "opencode"]
-GROUP_IDS = {"codex-desktop": "codex", "antigravity-cli": "antigravity"}
 
 
 def _agents(ids):
-    return list(dict.fromkeys(group for item in ids
-                              if (group := GROUP_IDS.get(item, item)) in HOST_DEFINITIONS))
+    return list(dict.fromkeys(item for item in ids if item in HOST_DEFINITIONS))
 
 
 def ensure_schema(conn):
@@ -32,7 +30,6 @@ def _write(conn, key, values):
 def _state(conn):
     from app.services.management_service import HOSTS
     names = {host: HOSTS[host]["name"] for host in HOST_DEFINITIONS}
-    names.update(codex="Codex", antigravity="Antigravity")
     return {"host_names": names,
             "favorite_hosts": _agents(_items(conn, "hosts", DEFAULT_HOSTS)),
             "recent_hosts": _agents(_items(conn, "recent-hosts"))}
@@ -55,7 +52,7 @@ def update(manager, host, action, provider=None, neighbor=None):
         elif action in ("pin", "unpin"):
             key = "hosts" if provider is None else "providers:" + host
             values = _items(conn, key, DEFAULT_HOSTS if provider is None else ())
-            target = GROUP_IDS.get(host, host) if provider is None else provider
+            target = host if provider is None else provider
             if provider is None:
                 values = _agents(values)
                 if target not in HOST_DEFINITIONS:
