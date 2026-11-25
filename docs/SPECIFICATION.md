@@ -38,7 +38,7 @@ Success is assessed in order: successful handoff, correct memory, time saved (D0
 
 ## 4. Hosts, compute and security
 
-The six context hosts are **Codex (Desktop and CLI), Oh My Pi (OMP), Cursor, Google Antigravity, Claude Code and OpenCode** (D059, expanding D025). OMP is not Pi or OpenCode. History formats, new capture, MCP loading, memory read/write, protocol readback / full-transcript relay (`read_conversation_messages`), and confirm-then-continue require separate per-host and per-surface evidence. Discovery, configuration present, protocol reachable and actual host consumption are different states (D026, D029, D053).
+Senrelay supports exactly six Agents: **Codex, Oh My Pi, Cursor, Antigravity, Claude Code and OpenCode** (D059, D065). Each product has one Agent id; its desktop app and CLI share that id and its native configuration. Oh My Pi is not Pi or OpenCode. History formats, new capture, MCP loading, memory read/write, protocol readback / full-transcript relay (`read_conversation_messages`), and confirm-then-continue require separate per-host and per-surface evidence. Discovery, configuration present, protocol reachable and actual host consumption are different states (D026, D029, D053).
 
 D037 prefers reusing the active connected Agent rather than requiring an independent model API: in normal use, the connected Agent captures memories in real time via companion MCP tools and Skills during conversation, while underlying backend distillation endpoints remain disabled by default and require separate explicit authorization. Do not infer model-call rights from a provider/model listing, and no silent external-provider fallback is permitted. D038 imposes no extra financial cap; show observable usage and mark missing usage/cost unknown, not zero. Context token budgets and queue limits are not financial caps. Separate permission boundaries are strictly maintained: reading past/new conversations, modifying host configuration files, and downloading optional semantic models/runtimes require distinct authorizations and are never bundled.
 
@@ -81,7 +81,7 @@ Configuration changes create automatic rollback snapshots before writing host fi
 
 The main Agent directory and shortcuts list six Agent families. CLI, desktop, and IDE entries appear under their Agent where a distinct configuration or connection operation needs a target. A shared native file is managed through one configuration view. For example, Codex shares its default configuration, and Antigravity shares the user MCP and Skills paths supported by the current adapters. Entry-specific models, rules, or custom roots remain explicit, and old native target links stay addressable.
 
-Maintain **two matrices**: six-host context support and broader configuration/tool management support. D060 also tracks wider multi-host configuration differences including Claude Desktop, Gemini CLI, Grok Build, OpenClaw, Hermes, Pi, MiniMax Code and Kimi Code, with Antigravity CLI (`agy`) distinct from desktop. Config-format support must not inherit context support, and only supporting the original six cannot establish full multi-host configuration parity. Platform/companion differences (Windows/Linux, tray, cloud sync, cloud backup) remain disclosed, not silently claimed equivalent.
+Maintain **two matrices** for the same six Agents: context support and configuration/tool management support. Config-format support must not inherit context support. D065 (2026-11-23) withdrew the earlier wider-host configuration targets (Claude Desktop, Gemini CLI, Grok Build, OpenClaw, Hermes, Pi, MiniMax Code, Kimi Code); they are not supported. Platform/companion differences (Windows/Linux, tray, cloud sync, cloud backup) remain disclosed, not silently claimed equivalent.
 ## 6. Unified context and optional first-release enhancements (D061, D062)
 
 Unify traceable lexical retrieval, evidence paging and version checks, relevance/context pack assembly, protected token zones, compression/checkpoints and recovery for content ContextCore controls. Unknown total host context usage must remain unknown. Active tasks, user authorization, pending actions, tool pairings and exact critical parameters must not be replaced by an unsafe summary. An insufficient protected budget must be explicit.
@@ -168,11 +168,12 @@ These concise paraphrases preserve identifiers without publishing private interv
 | D057 | Fluid interaction; motion acceptance still needs evidence. |
 | D058 | Frontend model exclusivity revoked 2026-10-25. |
 | D059 | Six context hosts, adding Claude Code and OpenCode. |
-| D060 | Full model/API/account/usage/routing/MCP/Skills/prompt management. |
+| D060 | Full model/API/account/usage/routing/MCP/Skills/prompt management (six Agents only since D065). |
 | D061 | Unified local multi-Agent management and low-friction context experience. |
 | D062 | Approved full implementation, first-release optional semantics/relations. |
 | D063 | Explicit opt-in context; silent lifecycle hooks, no forced injection. |
 | D064 | Dual-tier memory (durable long-term `contents` + short-term `working_tasks` with `discussion_only` fail-closed gate, honest `saved`/`provided`/`cited` receipts, and MCP `bootstrap_working_memory` without hook prompt injection). |
+| D065 | 2026-11-23: exactly six Agents, one id per product (no per-surface ids); wider configuration hosts removed. Supersedes D060's wider-host scope. |
 
 ## 9. Acceptance discipline
 

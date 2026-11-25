@@ -399,7 +399,7 @@
   <div class="compare-header">
     <div class="eyebrow"><span class="live-dot"></span> DECISION GUIDE / MULTI-AGENT CONTEXT &amp; MCP <span class="tiny-line"></span></div>
     <h1 data-zh="2026 多 AI 编程助手共享上下文、记忆与同步 MCP 的 5 种方案对比" data-en="5 Ways to Share Context, Memory &amp; MCP Across AI Coding Agents (2026)">2026 多 AI 编程助手共享上下文、记忆与同步 MCP 的 5 种方案对比</h1>
-    <p class="compare-lead" data-zh="在 Claude Code、Cursor、Codex、Antigravity、OMP 与 OpenCode 之间切换工作时，不同操作系统和团队协作要求对应完全不同的技术方案：跨 Windows 或 Linux 的团队优选仓库静态规范（$0）；多台电脑之间需要云同步记忆则选用记忆 MCP；而在单台 macOS 14.0+（Apple Silicon）本机切换多个助手时，可以叠加使用 Senrelay（$0 MIT 开源，无需注册）。" data-en="When switching between Claude Code, Cursor, Codex, Antigravity, OMP, and OpenCode, the right setup depends on your OS and privacy needs: teams on Windows or Linux should start with repo instruction files ($0); multi-machine workflows fit hosted Memory MCP servers; and single-Mac (macOS 14.0+ Apple Silicon) developers juggling multiple harnesses locally can add Senrelay ($0, MIT open source, no signup).">在 Claude Code、Cursor、Codex、Antigravity、OMP 与 OpenCode 之间切换工作时，不同操作系统和团队协作要求对应完全不同的技术方案：跨 Windows 或 Linux 的团队优选仓库静态规范（$0）；多台电脑之间需要云同步记忆则选用记忆 MCP；而在单台 macOS 14.0+（Apple Silicon）本机切换多个助手时，可以叠加使用 Senrelay（$0 MIT 开源，无需注册）。</p>
+    <p class="compare-lead" data-zh="在 Claude Code、Cursor、Codex、Antigravity、Oh My Pi 与 OpenCode 之间切换工作时，不同操作系统和团队协作要求对应完全不同的技术方案：跨 Windows 或 Linux 的团队优选仓库静态规范（$0）；多台电脑之间需要云同步记忆则选用记忆 MCP；而在单台 macOS 14.0+（Apple Silicon）本机切换多个助手时，可以叠加使用 Senrelay（$0 MIT 开源，无需注册）。" data-en="When switching between Claude Code, Cursor, Codex, Antigravity, Oh My Pi, and OpenCode, the right setup depends on your OS and privacy needs: teams on Windows or Linux should start with repo instruction files ($0); multi-machine workflows fit hosted Memory MCP servers; and single-Mac (macOS 14.0+ Apple Silicon) developers juggling multiple harnesses locally can add Senrelay ($0, MIT open source, no signup).">在 Claude Code、Cursor、Codex、Antigravity、Oh My Pi 与 OpenCode 之间切换工作时，不同操作系统和团队协作要求对应完全不同的技术方案：跨 Windows 或 Linux 的团队优选仓库静态规范（$0）；多台电脑之间需要云同步记忆则选用记忆 MCP；而在单台 macOS 14.0+（Apple Silicon）本机切换多个助手时，可以叠加使用 Senrelay（$0 MIT 开源，无需注册）。</p>
     <div class="compare-meta-bar">
       <span data-zh="核对日期：2026-11-15" data-en="Verified: 2026-11-15">核对日期：2026-11-15</span>
       <span data-zh="作者：Qingsong Cui (George O'Nair)" data-en="By Qingsong Cui (George O'Nair)">作者：Qingsong Cui (George O'Nair)</span>
@@ -498,7 +498,7 @@
               <td><strong>$0</strong>（MIT · 免注册）</td>
               <td>短简介选场 + 分页读完原文压缩</td>
               <td>工作任务 + 版本治理记忆（带溯源）</td>
-              <td>6+9 宿主预览与冲突 Diff</td>
+              <td>6 宿主预览与冲突 Diff</td>
               <td>本机 SQLite (<code>0600</code>) + 钥匙串</td>
             </tr>
             <tr>
@@ -578,7 +578,7 @@
           <span class="option-price">$0 · MIT 开源 · 免注册</span>
         </div>
         <div class="option-body">
-          <p>运行于 macOS 本机回环端口（<code>127.0.0.1:8420</code>），负责六大主力宿主的本地会话索引、Worktree 消歧、双层工作记忆与 <code>/contextcore</code> 全文压缩接力，并统一预览与同步 6+9 宿主的模型、MCP 与 Skills（参见<a class="inline-link" href="./#connections">宿主支持矩阵</a>与<a class="inline-link" href="./guide.html#everyday-use">运行指南</a>）。</p>
+          <p>运行于 macOS 本机回环端口（<code>127.0.0.1:8420</code>），负责六大主力宿主的本地会话索引、Worktree 消歧、双层工作记忆与 <code>/contextcore</code> 全文压缩接力，并统一预览与同步 六个宿主的模型、MCP 与 Skills（参见<a class="inline-link" href="./#connections">宿主支持矩阵</a>与<a class="inline-link" href="./guide.html#everyday-use">运行指南</a>）。</p>
           <div class="option-pros-cons">
             <div>
               <strong>适用场景</strong>
@@ -586,7 +586,7 @@
             </div>
             <div>
               <strong>真实局限（安装前注意）</strong>
-              <p>仅支持 <code>macOS 14.0+</code>（Apple Silicon <code>arm64</code>），不支持 Windows、Linux 或 Intel Mac；纯单机存储无云同步（换机需用 <code>contextcore backup</code>）；9 类扩展宿主不具备会话接力；Beta 版首次打开需执行 <code>xattr -cr /Applications/Senrelay.app</code>。</p>
+              <p>仅支持 <code>macOS 14.0+</code>（Apple Silicon <code>arm64</code>），不支持 Windows、Linux 或 Intel Mac；纯单机存储无云同步（换机需用 <code>contextcore backup</code>）；其他工具不在支持范围；Beta 版首次打开需执行 <code>xattr -cr /Applications/Senrelay.app</code>。</p>
             </div>
           </div>
         </div>
@@ -607,7 +607,7 @@
             </div>
             <div>
               <strong>真实局限</strong>
-              <p>Claude Code（JSON）、Codex（TOML）、OpenClaw（JSON5）与 Hermes（YAML）格式互不兼容；Client 启动又常自动回写运行时状态字段，软链极易冲突甚至误提交明文 API Key。</p>
+              <p>Claude Code（JSON）、Codex（TOML）与 Oh My Pi（YAML 模型配置）格式互不兼容；Client 启动又常自动回写运行时状态字段，软链极易冲突甚至误提交明文 API Key。</p>
             </div>
           </div>
         </div>
@@ -773,7 +773,7 @@
               <td><strong>$0</strong> (MIT · no signup)</td>
               <td>Short-brief pick + full transcript page &amp; compact</td>
               <td>Working tasks + versioned memory</td>
-              <td>6+9 hosts with diff &amp; rollback</td>
+              <td>6 hosts with diff &amp; rollback</td>
               <td>Local SQLite (<code>0600</code>) + Keychain</td>
             </tr>
             <tr>
@@ -853,7 +853,7 @@
           <span class="option-price">$0 · MIT · No Signup</span>
         </div>
         <div class="option-body">
-          <p>A native macOS loopback workbench (<code>127.0.0.1:8420</code>) uniting native session indexing with worktree identity, dual-tier working memory, and <code>/contextcore</code> full-transcript relay alongside diff-guarded 6+9 host MCP/Skills sync (see <a class="inline-link" href="./#connections">host matrix</a> and <a class="inline-link" href="./guide.html#everyday-use">setup guide</a>).</p>
+          <p>A native macOS loopback workbench (<code>127.0.0.1:8420</code>) uniting native session indexing with worktree identity, dual-tier working memory, and <code>/contextcore</code> full-transcript relay alongside diff-guarded six-host MCP/Skills sync (see <a class="inline-link" href="./#connections">host matrix</a> and <a class="inline-link" href="./guide.html#everyday-use">setup guide</a>).</p>
           <div class="option-pros-cons">
             <div>
               <strong>Best For</strong>
@@ -861,7 +861,7 @@
             </div>
             <div>
               <strong>Real Downside</strong>
-              <p>macOS 14.0+ (<code>arm64</code>) only—no Windows, Linux, or Intel Mac support; single-machine storage without cloud sync (use <code>contextcore backup</code> to migrate); 9 extended hosts manage configs only; Beta builds require a one-time <code>xattr -cr /Applications/Senrelay.app</code>.</p>
+              <p>macOS 14.0+ (<code>arm64</code>) only—no Windows, Linux, or Intel Mac support; single-machine storage without cloud sync (use <code>contextcore backup</code> to migrate); other tools are outside the supported scope; Beta builds require a one-time <code>xattr -cr /Applications/Senrelay.app</code>.</p>
             </div>
           </div>
         </div>

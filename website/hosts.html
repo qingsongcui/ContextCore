@@ -6,15 +6,15 @@
   <meta name="theme-color" content="#121412">
   <meta name="robots" content="noindex, nofollow">
   <title>Claude Code、Cursor、Codex MCP 配置与路径指南 — Senrelay</title>
-  <meta name="description" content="汇总 Claude Code、Cursor、Codex 的 MCP 配置路径、JSON 与 TOML 格式及 15 类宿主支持范围。">
+  <meta name="description" content="汇总 Claude Code、Cursor、Codex 的 MCP 配置路径、JSON 与 TOML 格式及 6 类宿主支持范围。">
   <meta property="og:type" content="article">
   <meta property="og:locale" content="zh_CN">
   <meta property="og:site_name" content="Senrelay · 续境">
   <meta property="og:title" content="Claude Code、Cursor、Codex MCP 配置与路径指南 — Senrelay">
-  <meta property="og:description" content="汇总 Claude Code、Cursor、Codex 的 MCP 配置路径、JSON 与 TOML 格式及 15 类宿主支持范围。">
+  <meta property="og:description" content="汇总 Claude Code、Cursor、Codex 的 MCP 配置路径、JSON 与 TOML 格式及 6 类宿主支持范围。">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Claude Code、Cursor、Codex MCP 配置与路径指南 — Senrelay">
-  <meta name="twitter:description" content="汇总 Claude Code、Cursor、Codex 的 MCP 配置路径、JSON 与 TOML 格式及 15 类宿主支持范围。">
+  <meta name="twitter:description" content="汇总 Claude Code、Cursor、Codex 的 MCP 配置路径、JSON 与 TOML 格式及 6 类宿主支持范围。">
   <!-- deployment-metadata -->
   <link rel="icon" href="./favicon.ico" sizes="48x48">
   <link rel="icon" href="./assets/icon-192.png" type="image/png" sizes="192x192">
@@ -253,9 +253,9 @@
 
 <main id="main" class="wrap guide-page">
   <div class="guide-header">
-    <div class="eyebrow"><span class="live-dot"></span> HOST CONFIG REFERENCE / 6 CORE + 9 EXTENDED <span class="tiny-line"></span></div>
-    <h1 data-zh="Claude Code、Cursor、Codex MCP 配置与 15 类宿主路径指南" data-en="Claude Code, Cursor &amp; Codex MCP Configuration and Host Paths">Claude Code、Cursor、Codex MCP 配置与 15 类宿主路径指南</h1>
-    <p class="guide-lead" data-zh="不同编程工具把 MCP 服务器、服务商模型、Skills 与指令规则分别存在 JSON、TOML、JSON5 和 YAML 中，根键名也各不相同。本文列出 6 类核心接力宿主与 9 类扩展配置宿主的真实磁盘路径与写入保护规则，并说明 Senrelay（续境，GitHub 仓库 qingsongcui/ContextCore）如何做格式转换而不破坏手动注释与密钥。" data-en="AI coding clients scatter MCP endpoints, providers, Skills, and instruction files across incompatible JSON, TOML, JSON5, and YAML schemas. This reference maps every verified file path and write boundary across 6 core relay hosts and 9 extended config hosts supported by Senrelay (GitHub repository qingsongcui/ContextCore).">不同编程工具把 MCP 服务器、服务商模型、Skills 与指令规则分别存在 JSON、TOML、JSON5 和 YAML 中，根键名也各不相同。本文列出 6 类核心接力宿主与 9 类扩展配置宿主的真实磁盘路径与写入保护规则，并说明 Senrelay（续境，GitHub 仓库 qingsongcui/ContextCore）如何做格式转换而不破坏手动注释与密钥。</p>
+    <div class="eyebrow"><span class="live-dot"></span> HOST CONFIG REFERENCE / 6 CORE CONTEXT HOSTS <span class="tiny-line"></span></div>
+    <h1 data-zh="Claude Code、Cursor、Codex MCP 配置与六大宿主路径指南" data-en="Claude Code, Cursor &amp; Codex MCP Configuration and Six Host Paths">Claude Code、Cursor、Codex MCP 配置与六大宿主路径指南</h1>
+    <p class="guide-lead" data-zh="不同编程工具把 MCP 服务器、服务商模型、Skills 与指令规则分别存在 JSON、TOML、JSON5 和 YAML 中，根键名也各不相同。本文列出六个核心上下文宿主的真实磁盘路径与写入保护规则，并说明 Senrelay（续境，GitHub 仓库 qingsongcui/ContextCore）如何做格式转换而不破坏手动注释与密钥。" data-en="AI coding clients scatter MCP endpoints, providers, Skills, and instruction files across incompatible JSON, TOML, JSON5, and YAML schemas. This reference maps every verified file path and write boundary across the six core context hosts supported by Senrelay (GitHub repository qingsongcui/ContextCore).">不同编程工具把 MCP 服务器、服务商模型、Skills 与指令规则分别存在 JSON、TOML、JSON5 和 YAML 中，根键名也各不相同。本文列出六个核心上下文宿主的真实磁盘路径与写入保护规则，并说明 Senrelay（续境，GitHub 仓库 qingsongcui/ContextCore）如何做格式转换而不破坏手动注释与密钥。</p>
     <div class="guide-meta-bar">
       <span data-zh="核对日期：2026-11-15" data-en="Verified: 2026-11-15">核对日期：2026-11-15</span>
       <span data-zh="协议与定价：$0 · MIT 开源（macOS Apple Silicon）" data-en="License &amp; Price: $0 · MIT Open Source (Apple Silicon macOS)">协议与定价：$0 · MIT 开源（macOS Apple Silicon）</span>
@@ -276,8 +276,8 @@
     <div class="callout" role="note">
       <div class="callout-title">先掌握三个配置事实</div>
       <div class="callout-list">
-        <p><strong>键名与格式并不通用</strong>Claude Code 与 Cursor 用 JSON 里的 <code>mcpServers</code>，Codex 用 TOML 里的 <code>[mcp_servers.*]</code>，OpenCode 用 <code>opencode.json</code> 中的 <code>mcp</code>，而 OpenClaw 直接不支持原生 MCP 同步——不能拿软链接硬套。</p>
-        <p><strong>6 核 + 9 扩严格分层</strong>6 个核心宿主可接入本地会话索引与 <code>/contextcore</code> 全文接力。实际验收进度见<a class="inline-link" href="./relay-workflow.html#relay-evidence">接力验证范围</a>；其余 9 个扩展宿主只提供带预览差异与回滚快照的配置管理，不夸大对接力能力的覆盖范围（见<a class="inline-link" href="./compare.html">5 种方案对比</a>）。</p>
+        <p><strong>键名与格式并不通用</strong>Claude Code 与 Cursor 用 JSON 里的 <code>mcpServers</code>，Codex 用 TOML 里的 <code>[mcp_servers.*]</code>，OpenCode 用 <code>opencode.json</code> 中的 <code>mcp</code>，Antigravity 的远程服务地址字段叫 <code>serverUrl</code>——不能拿软链接硬套。</p>
+        <p><strong>只支持六个核心宿主</strong>Claude Code、Codex、Cursor、Antigravity、Oh My Pi 与 OpenCode 可接入本地会话索引与 <code>/contextcore</code> 全文接力。实际验收进度见<a class="inline-link" href="./relay-workflow.html#relay-evidence">接力验证范围</a>；其他工具不在当前支持范围内。</p>
         <p><strong>单机与密钥边界</strong>面向 Apple Silicon（<code>arm64</code>）macOS 14.0+，不支持 Windows 或 Linux。API Key 留在 macOS 系统钥匙串中，公开与导出配置时自动剔除密钥。</p>
       </div>
     </div>
@@ -328,7 +328,7 @@
               <td>模型在桌面端菜单自行选择；工作台不改写其私有认证缓存。</td>
             </tr>
             <tr>
-              <th scope="row">OMP (Oh My Pi)<br><small>CLI</small></th>
+              <th scope="row">Oh My Pi<br><small>CLI</small></th>
               <td><code>~/.omp/agent/mcp.json</code><br><small>JSON · 根键 <code>mcpServers</code></small></td>
               <td><code>~/.omp/agent/models.yml</code><br><code>~/.omp/agent/config.yml</code><br><code>~/.omp/agent/hooks/pre/contextcore.ts</code></td>
               <td><code>~/.omp/agent/commands/contextcore.md</code><br><code>~/.omp/agent/AGENTS.md</code></td>
@@ -346,90 +346,7 @@
       </div>
     </section>
 
-    <section class="guide-section" id="extended-hosts">
-      <span class="section-kicker">02 · NINE EXTENDED CONFIG HOSTS</span>
-      <h2>九类扩展宿主：仅管理配置与快照，不做会话接力</h2>
-      <p>以下 9 个宿主在 Senrelay 工作台中属于「扩展配置目标」，提供<strong>配置预览、格式转换与写前快照回滚</strong>，但<strong>不采集它们的会话日志，也不支持 <code>/contextcore</code> 对话接力</strong>。每项写入都在支持的能力子集内按宿主原生格式校验：</p>
-      <div class="host-matrix-wrap">
-        <table class="host-matrix-table">
-          <caption>表 2 · 九类扩展配置宿主的配置文件路径与边界限制</caption>
-          <thead>
-            <tr>
-              <th>扩展宿主</th>
-              <th>MCP 配置路径与格式</th>
-              <th>模型 / 服务商文件</th>
-              <th>Skills / 规则路径</th>
-              <th>明确拒绝或不适用范围</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">Claude Desktop</th>
-              <td><code>~/Library/Application Support/Claude/claude_desktop_config.json</code><br><small>JSON · <code>mcpServers</code></small></td>
-              <td>无（桌面端自行管理）</td>
-              <td>无独立 Skill / Prompt 目录</td>
-              <td>只同步 MCP；不支持提示词与会话接力。</td>
-            </tr>
-            <tr>
-              <th scope="row">Gemini CLI</th>
-              <td><code>~/.gemini/settings.json</code><br><small>JSON · <code>mcpServers</code></small></td>
-              <td>无统一提供商写入</td>
-              <td>无托管 Skill / Prompt 同步</td>
-              <td>仅提供本地 MCP 条目与快照管理。</td>
-            </tr>
-            <tr>
-              <th scope="row">Grok Build CLI</th>
-              <td><code>~/.grok/config.toml</code><br><small>TOML · <code>mcp_servers</code></small></td>
-              <td>仅读取服务商区块</td>
-              <td><code>~/.grok/skills</code><br><code>~/.grok/AGENTS.md</code></td>
-              <td>不支持从外部强行改写全局默认模型。</td>
-            </tr>
-            <tr>
-              <th scope="row">Kimi Code CLI</th>
-              <td><code>~/.kimi-code/mcp.json</code><br><small>JSON · <code>mcpServers</code></small></td>
-              <td><code>~/.kimi-code/config.toml</code><br><small>TOML</small></td>
-              <td><code>~/.kimi-code/skills</code><br><code>~/.kimi-code/AGENTS.md</code></td>
-              <td>MCP 与服务商分文件存储，无会话捕获。</td>
-            </tr>
-            <tr>
-              <th scope="row">MiniMax Code</th>
-              <td><code>~/.minimax/mcp.json</code><br><small>JSON · <code>mcpServers</code></small></td>
-              <td><code>~/.minimax/config.yaml</code><br><small>YAML</small></td>
-              <td><code>~/.minimax/skills</code><br><code>~/.minimax/AGENTS.md</code></td>
-              <td>JSON 与 YAML 双文件同步，无会话捕获。</td>
-            </tr>
-            <tr>
-              <th scope="row">Pi CLI</th>
-              <td><code>~/.pi/agent/mcp.json</code><br><small>JSON · <code>mcpServers</code></small></td>
-              <td><code>~/.pi/agent/models.json</code><br><code>~/.pi/agent/settings.json</code></td>
-              <td><code>~/.pi/agent/skills</code><br><code>~/.pi/agent/AGENTS.md</code></td>
-              <td>与 OMP 彻底隔离；如检测到手写的原生 JSON5 配置文件会拒绝覆盖写回。</td>
-            </tr>
-            <tr>
-              <th scope="row">Hermes Agent</th>
-              <td><code>~/.hermes/config.yaml</code><br><small>YAML · <code>mcp_servers</code></small></td>
-              <td><code>~/.hermes/config.yaml</code><br><small><code>custom_providers</code></small></td>
-              <td><code>~/.hermes/skills</code><br><code>~/.hermes/SOUL.md</code></td>
-              <td>提示词路径使用 <code>SOUL.md</code> 而非 <code>AGENTS.md</code>。</td>
-            </tr>
-            <tr>
-              <th scope="row">OpenClaw</th>
-              <td><strong>不支持原生 MCP</strong></td>
-              <td><code>~/.openclaw/openclaw.json</code><br><small>JSON5（保留注释）· <code>models.providers</code></small></td>
-              <td><code>~/.openclaw/skills</code><br><code>~/.openclaw/AGENTS.md</code></td>
-              <td>向 OpenClaw 请求写入 MCP 会被显式拒绝；支持保留 JSON5 注释修改模型。</td>
-            </tr>
-            <tr>
-              <th scope="row">agy (Antigravity CLI)</th>
-              <td><code>~/.gemini/config/mcp_config.json</code><br><small>JSON · <code>mcpServers</code></small></td>
-              <td>运行环境变量（<code>GEMINI_API_KEY</code>、<code>GOOGLE_GEMINI_BASE_URL</code>）与私有 <code>.gemini/antigravity-cli/settings.json</code></td>
-              <td><code>~/.gemini/config/skills</code><br><code>~/.gemini/config/AGENTS.md</code></td>
-              <td>与 Antigravity Desktop 独立配置管理；凭据留在本机环境变量而不写明文。</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+
 
     <section class="guide-section" id="safety-model">
       <span class="section-kicker">03 · WRITE GUARDS &amp; DISAMBIGUATION</span>
@@ -475,12 +392,12 @@ curl -s http://127.0.0.1:8420/health</code></pre>
       <h2>宿主配置常见问题</h2>
       <div class="guide-faq">
         <details>
-          <summary>为什么 9 类扩展宿主无法使用 /contextcore 跨 Agent 接力？<span aria-hidden="true">+</span></summary>
-          <p>每个工具的本地对话存储结构各异。Claude Code、Codex、Cursor、Antigravity、OMP 与 OpenCode 六大核心宿主提供对话索引与 <code>/contextcore</code> 接力，具体历史来源、记录覆盖和 Worktree 信息随宿主而异；其余 9 个扩展宿主仅接入配置格式转换与写前快照，官网不会将其包装为已打通接力。</p>
+          <summary>Senrelay 支持哪些宿主？<span aria-hidden="true">+</span></summary>
+          <p>当前只支持 Claude Code、Codex、Cursor、Antigravity、Oh My Pi 与 OpenCode 六个上下文宿主；其他工具不在支持范围内。</p>
         </details>
         <details>
-          <summary>OpenCode 和 OpenClaw 在配置同步时最容易踩什么坑？<span aria-hidden="true">+</span></summary>
-          <p>OpenCode 的 <code>~/.config/opencode/opencode.json</code> 使用顶层 <code>mcp</code> 对象而非其他工具常见的 <code>mcpServers</code>；而 OpenClaw（<code>~/.openclaw/openclaw.json</code>）使用带注释的 JSON5 存储 <code>models.providers</code> 且不支持原生 MCP 同步，向其请求同步 MCP 会被直接拒绝。</p>
+          <summary>OpenCode 的 MCP 配置为什么和其他工具不同？<span aria-hidden="true">+</span></summary>
+          <p>OpenCode 的 <code>~/.config/opencode/opencode.json</code> 使用顶层 <code>mcp</code> 对象，而不是其他工具常见的 <code>mcpServers</code>。</p>
         </details>
         <details>
           <summary>修改过 ~/.codex/config.toml 或 ~/.claude.json 会不会丢手动配置？<span aria-hidden="true">+</span></summary>
@@ -509,8 +426,8 @@ curl -s http://127.0.0.1:8420/health</code></pre>
     <div class="callout" role="note">
       <div class="callout-title">Three Key Rules First</div>
       <div class="callout-list">
-        <p><strong>No Universal Schema or Key</strong>Claude Code and Cursor expect JSON <code>mcpServers</code>, Codex uses TOML <code>[mcp_servers.*]</code>, OpenCode nests under <code>mcp</code> inside <code>opencode.json</code>, and OpenClaw rejects native MCP writes altogether—making raw symlinks brittle.</p>
-        <p><strong>Strict 6-Core vs. 9-Extended Split</strong>Six core hosts can connect to the transcript index and <code>/contextcore</code> relay. See <a class="inline-link" href="./relay-workflow.html#relay-evidence">relay verification by host</a>. The 9 extended hosts support previewed config translation and rollback snapshots only (see <a class="inline-link" href="./compare.html">the 5-way comparison</a>).</p>
+        <p><strong>No Universal Schema or Key</strong>Claude Code and Cursor expect JSON <code>mcpServers</code>, Codex uses TOML <code>[mcp_servers.*]</code>, OpenCode nests under <code>mcp</code> inside <code>opencode.json</code>, and Antigravity names a remote server address <code>serverUrl</code>—making raw symlinks brittle.</p>
+        <p><strong>Six Supported Hosts Only</strong>Claude Code, Codex, Cursor, Antigravity, Oh My Pi, and OpenCode can connect to the transcript index and <code>/contextcore</code> relay. See <a class="inline-link" href="./relay-workflow.html#relay-evidence">relay verification by host</a>; other tools are outside the supported scope.</p>
         <p><strong>Apple Silicon Loopback &amp; Keychain</strong>Built strictly for Apple Silicon (<code>arm64</code>) macOS 14.0+—not Windows or Linux. API credentials remain in macOS Keychain and are stripped automatically from exports.</p>
       </div>
     </div>
@@ -561,7 +478,7 @@ curl -s http://127.0.0.1:8420/health</code></pre>
               <td>Models are selected inside the Desktop menu; Senrelay never rewrites private Desktop auth caches.</td>
             </tr>
             <tr>
-              <th scope="row">OMP (Oh My Pi)<br><small>CLI</small></th>
+              <th scope="row">Oh My Pi<br><small>CLI</small></th>
               <td><code>~/.omp/agent/mcp.json</code><br><small>JSON · key <code>mcpServers</code></small></td>
               <td><code>~/.omp/agent/models.yml</code><br><code>~/.omp/agent/config.yml</code><br><code>~/.omp/agent/hooks/pre/contextcore.ts</code></td>
               <td><code>~/.omp/agent/commands/contextcore.md</code><br><code>~/.omp/agent/AGENTS.md</code></td>
@@ -579,90 +496,7 @@ curl -s http://127.0.0.1:8420/health</code></pre>
       </div>
     </section>
 
-    <section class="guide-section" id="extended-hosts">
-      <span class="section-kicker">02 · NINE EXTENDED CONFIG HOSTS</span>
-      <h2>9 Extended Hosts: Snapshot-Protected Config Sync Only</h2>
-      <p>These nine clients are strictly config-management targets in Senrelay: you get <strong>previewed writes, native format translation, and rollback snapshots</strong>, but <strong>no transcript capture and no <code>/contextcore</code> relay</strong>. Unsupported write requests fail closed rather than silently mangling host files:</p>
-      <div class="host-matrix-wrap">
-        <table class="host-matrix-table">
-          <caption>Table 2 · Verified Config Paths &amp; Explicit Exclusions Across 9 Extended Hosts</caption>
-          <thead>
-            <tr>
-              <th>Extended Host</th>
-              <th>MCP Path &amp; Format</th>
-              <th>Model / Provider File</th>
-              <th>Skills / Prompt Paths</th>
-              <th>Explicit Constraints</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">Claude Desktop</th>
-              <td><code>~/Library/Application Support/Claude/claude_desktop_config.json</code><br><small>JSON · <code>mcpServers</code></small></td>
-              <td>None (managed in Desktop app)</td>
-              <td>No managed skill/prompt directory</td>
-              <td>Syncs MCP endpoints only; no prompts or session relay.</td>
-            </tr>
-            <tr>
-              <th scope="row">Gemini CLI</th>
-              <td><code>~/.gemini/settings.json</code><br><small>JSON · <code>mcpServers</code></small></td>
-              <td>No provider rewrite</td>
-              <td>No managed skill/prompt directory</td>
-              <td>Local MCP entries and snapshots only.</td>
-            </tr>
-            <tr>
-              <th scope="row">Grok Build CLI</th>
-              <td><code>~/.grok/config.toml</code><br><small>TOML · <code>mcp_servers</code></small></td>
-              <td>Provider blocks read natively</td>
-              <td><code>~/.grok/skills</code><br><code>~/.grok/AGENTS.md</code></td>
-              <td>Global default model override is unsupported.</td>
-            </tr>
-            <tr>
-              <th scope="row">Kimi Code CLI</th>
-              <td><code>~/.kimi-code/mcp.json</code><br><small>JSON · <code>mcpServers</code></small></td>
-              <td><code>~/.kimi-code/config.toml</code><br><small>TOML</small></td>
-              <td><code>~/.kimi-code/skills</code><br><code>~/.kimi-code/AGENTS.md</code></td>
-              <td>Split JSON MCP + TOML provider files; config sync only.</td>
-            </tr>
-            <tr>
-              <th scope="row">MiniMax Code</th>
-              <td><code>~/.minimax/mcp.json</code><br><small>JSON · <code>mcpServers</code></small></td>
-              <td><code>~/.minimax/config.yaml</code><br><small>YAML</small></td>
-              <td><code>~/.minimax/skills</code><br><code>~/.minimax/AGENTS.md</code></td>
-              <td>JSON MCP + YAML provider files; config sync only.</td>
-            </tr>
-            <tr>
-              <th scope="row">Pi CLI</th>
-              <td><code>~/.pi/agent/mcp.json</code><br><small>JSON · <code>mcpServers</code></small></td>
-              <td><code>~/.pi/agent/models.json</code><br><code>~/.pi/agent/settings.json</code></td>
-              <td><code>~/.pi/agent/skills</code><br><code>~/.pi/agent/AGENTS.md</code></td>
-              <td>Strictly separate from OMP; refuses overwriting existing hand-authored JSON5 configs.</td>
-            </tr>
-            <tr>
-              <th scope="row">Hermes Agent</th>
-              <td><code>~/.hermes/config.yaml</code><br><small>YAML · <code>mcp_servers</code></small></td>
-              <td><code>~/.hermes/config.yaml</code><br><small><code>custom_providers</code></small></td>
-              <td><code>~/.hermes/skills</code><br><code>~/.hermes/SOUL.md</code></td>
-              <td>Global instructions target <code>SOUL.md</code> instead of <code>AGENTS.md</code>.</td>
-            </tr>
-            <tr>
-              <th scope="row">OpenClaw</th>
-              <td><strong>No native MCP sync</strong></td>
-              <td><code>~/.openclaw/openclaw.json</code><br><small>JSON5 (comments preserved) · <code>models.providers</code></small></td>
-              <td><code>~/.openclaw/skills</code><br><code>~/.openclaw/AGENTS.md</code></td>
-              <td>Rejects MCP sync attempts; preserves JSON5 comments during model/provider updates.</td>
-            </tr>
-            <tr>
-              <th scope="row">agy (Antigravity CLI)</th>
-              <td><code>~/.gemini/config/mcp_config.json</code><br><small>JSON · <code>mcpServers</code></small></td>
-              <td>Process env (<code>GEMINI_API_KEY</code>, <code>GOOGLE_GEMINI_BASE_URL</code>) &amp; private <code>.gemini/antigravity-cli/settings.json</code></td>
-              <td><code>~/.gemini/config/skills</code><br><code>~/.gemini/config/AGENTS.md</code></td>
-              <td>Separate target from Antigravity Desktop; credentials stay in env rather than plaintext files.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+
 
     <section class="guide-section" id="safety-model">
       <span class="section-kicker">03 · WRITE GUARDS &amp; DISAMBIGUATION</span>
@@ -694,7 +528,7 @@ curl -s http://127.0.0.1:8420/health</code></pre>
       <div class="boundary-list">
         <div class="boundary-card">
           <h3>Pricing &amp; Platform Boundaries</h3>
-          <p><strong>$0</strong> under the MIT License with zero signup. Built strictly for <code>macOS 14.0+</code> on Apple Silicon (<code>arm64</code>)—not suitable for Windows, Linux, Intel Macs, multi-machine cloud sync, or transcript relay on the 9 config-only extended hosts.</p>
+          <p><strong>$0</strong> under the MIT License with zero signup. Built strictly for <code>macOS 14.0+</code> on Apple Silicon (<code>arm64</code>)—not suitable for Windows, Linux, Intel Macs, multi-machine cloud sync, or transcript relay on unsupported tools.</p>
         </div>
         <div class="boundary-card">
           <h3>Maintainer &amp; Verification</h3>
@@ -708,12 +542,12 @@ curl -s http://127.0.0.1:8420/health</code></pre>
       <h2>Host Configuration FAQ</h2>
       <div class="guide-faq">
         <details>
-          <summary>Why are the 9 extended hosts excluded from /contextcore session relay?<span aria-hidden="true">+</span></summary>
-          <p>Each agent stores transcripts differently. Only Claude Code, Codex, Cursor, Antigravity, OMP, and OpenCode have verified session capture, worktree disambiguation, and paged transcript reading; the 9 extended targets offer previewed config sync and snapshots only.</p>
+          <summary>Which hosts does Senrelay support?<span aria-hidden="true">+</span></summary>
+          <p>Senrelay supports Claude Code, Codex, Cursor, Antigravity, Oh My Pi, and OpenCode only. Other tools are outside the supported scope.</p>
         </details>
         <details>
-          <summary>What are the biggest schema gotchas in OpenCode and OpenClaw?<span aria-hidden="true">+</span></summary>
-          <p>OpenCode stores servers inside top-level <code>mcp</code> inside <code>~/.config/opencode/opencode.json</code> instead of <code>mcpServers</code>. OpenClaw uses comment-preserving JSON5 (<code>~/.openclaw/openclaw.json</code>) for <code>models.providers</code> and explicitly rejects native MCP sync requests.</p>
+          <summary>What are the biggest schema gotchas in OpenCode and Antigravity?<span aria-hidden="true">+</span></summary>
+          <p>OpenCode stores servers inside top-level <code>mcp</code> inside <code>~/.config/opencode/opencode.json</code> instead of <code>mcpServers</code>. Antigravity reads <code>~/.gemini/config/mcp_config.json</code> and names a remote server address <code>serverUrl</code> rather than <code>url</code>.</p>
         </details>
         <details>
           <summary>Can syncing overwrite manual edits I made in ~/.claude.json or ~/.codex/config.toml?<span aria-hidden="true">+</span></summary>

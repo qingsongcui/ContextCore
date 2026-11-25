@@ -469,7 +469,7 @@ function buildCompareSchema({ lang, pageUrl, homeUrl, headline, description, faq
               position: 3,
               url: optionUrl(3),
               name: `${brand.name} (ContextCore Local macOS Multi-Agent Workbench)`,
-              description: '$0 MIT single-Mac (macOS 14.0+ arm64) workbench combining /contextcore full-transcript relay, shared memory, and 6+9 host MCP/Skills sync.',
+              description: '$0 MIT single-Mac (macOS 14.0+ arm64) workbench combining /contextcore full-transcript relay, shared memory, and 6 host MCP/Skills sync.',
               item: { '@type': 'SoftwareApplication', '@id': appId, name: displayName },
             },
             {
@@ -507,7 +507,7 @@ function buildCompareSchema({ lang, pageUrl, homeUrl, headline, description, faq
               position: 3,
               url: optionUrl(3),
               name: `${zhFullName}（ContextCore 本机多 Agent 接力与配置工作台）`,
-              description: '$0 MIT 开源单机 macOS 14.0+ arm64 工作台，整合 /contextcore 全文接力、伴生共享记忆与 6+9 宿主 MCP/Skills 同步。',
+              description: '$0 MIT 开源单机 macOS 14.0+ arm64 工作台，整合 /contextcore 全文接力、伴生共享记忆与 6 宿主 MCP/Skills 同步。',
               item: { '@type': 'SoftwareApplication', '@id': appId, name: displayName },
             },
             {
@@ -1293,8 +1293,6 @@ const pricingMdContent = `# ${brand.name} (${brand.chineseName} · ContextCore) 
   - \`/contextcore\` short-brief candidate selection and sequential \`read_conversation_messages\` full-transcript in-context compaction (\`must_not_execute=true\` read-only stand-by on number-only selection).
   - Dual-tier working memory (\`working_tasks\` + 6 categories of version-governed source-linked memories), \`AGENTS.md\` preview, and document imports (\`MD\`, \`TXT\`, \`JSON\`, \`PDF\`, \`DOCX\`, \`DOC\`).
   - Provider presets, latency checks, Keychain secret isolation, and multi-host MCP / Skills / prompt sync with automatic rollback snapshots and external-edit Diff guards.
-- **9 Extended Configuration Hosts (\`Claude Desktop\`, \`Gemini CLI\`, \`Grok Build\`, \`Kimi Code\`, \`MiniMax Code\`, \`Pi\`, \`Hermes\`, \`OpenClaw\`, \`agy\`)**:
-  - Previewed configuration writes, format conversion (\`JSON\`, \`JSON5\`, \`TOML\`, \`YAML\`), and rollback snapshots only (no session capture or \`/contextcore\` conversation relay).
 
 ## When NOT to Use ${brand.name}
 
@@ -1302,7 +1300,7 @@ const pricingMdContent = `# ${brand.name} (${brand.chineseName} · ContextCore) 
 2. **Multi-device cloud memory sync or hosted team SaaS**: Pair \`AGENTS.md\` with a cloud/self-hosted Memory MCP server (e.g., Mem0 / OpenMemory).
 3. **Single-IDE workflows where you never switch agent harnesses**: Use a single IDE with an LLM router.
 
-See the full [5-Way Comparison & Stack Picker](${compareEnRef}) and [15-Host Config Reference](${hostsEnRef}).
+See the full [5-Way Comparison & Stack Picker](${compareEnRef}) and [Host Config Reference](${hostsEnRef}).
 `;
 await writeFile(path.join(out, 'pricing.md'), pricingMdContent);
 
@@ -1320,7 +1318,7 @@ ${brand.name} (${brand.chineseName}) runs natively on macOS 14.0+ (Sonoma or lat
 
 - **Cross-Agent Conversation Relay (\`/contextcore\`)**: Type \`/contextcore\` (or say "接着做" / "接力" / "continue" / "relay") inside any of the 6 core context hosts—Claude Code, Codex, Cursor, Antigravity, Oh My Pi (OMP), or OpenCode—to inspect short recognizable candidate briefs with native session and worktree identity without calling a model. Upon selection, \`relay_conversation\` returns \`transcript_paging\` so the receiving agent pages through the full transcript via \`read_conversation_messages\` (bounded per MCP page to ~48KB) and compacts the entire conversation directly in context instead of emitting lossy handoff cards. Number-only replies set \`must_not_execute=true\` to brief and stand by; attaching a concrete task continues execution immediately.
 - **Dual-Tier Working Memory & Companion Auto-Memory**: Companion MCP tools and Skills maintain active working tasks (\`working_tasks\`) and source-backed lesson promotions alongside six categories of version-governed long-term memories (Preferences, Background, Constraints, Tasks, Lessons, References) with exact conversation-turn provenance and a concise receipt, \`outdated\` lifecycle and supersession version guards, core-rule pinning, conflict inbox review, directory-free project creation, \`AGENTS.md\` handbook preview, and multi-format document imports (Markdown, TXT, JSON, PDF, DOCX, DOC).
-- **Unified Multi-Host Configuration Management**: Switch across 6 core context hosts and 9 extended configuration hosts from a permanent top bar, run One-Click Connect (configuring the \`contextcore\` server at \`http://127.0.0.1:8420/mcp/\`), apply provider presets, test endpoint latency, isolate API keys in macOS Keychain, and sync MCP servers, Skills, and system prompts with automatic rollback snapshots, external-edit Diff protection, and zero silent Skill overwrites during startup or local config import.
+- **Unified Multi-Host Configuration Management**: Switch across the six supported context hosts from a permanent top bar, run One-Click Connect (configuring the \`contextcore\` server at \`http://127.0.0.1:8420/mcp/\`), apply provider presets, test endpoint latency, isolate API keys in macOS Keychain, and sync MCP servers, Skills, and system prompts with automatic rollback snapshots, external-edit Diff protection, and zero silent Skill overwrites during startup or local config import.
 
 ## System Requirements, Pricing & Real Boundaries (Checked on 2026-11-15)
 
@@ -1330,7 +1328,6 @@ ${brand.name} (${brand.chineseName}) runs natively on macOS 14.0+ (Sonoma or lat
 - **Known Limitations (When NOT to Use ${brand.name})**:
   1. **No Windows, Linux, or Intel Mac support**: Requires macOS 14.0+ on Apple Silicon (\`arm64\`).
   2. **Single-machine local architecture only**: Runs strictly on \`127.0.0.1:8420\` without multi-device cloud sync or hosted team SaaS collaboration.
-  3. **9 Extended Hosts are config-only**: Session capture, auto-memory, and \`/contextcore\` relay work on the 6 Core Context Hosts only.
   4. **Public Beta ad-hoc signing**: Requires a one-time \`xattr -cr /Applications/Senrelay.app\` command on first launch before Apple Developer ID notarization is added.
 - **Privacy, Storage & Creator**: Loopback-only HTTP/MCP service (\`127.0.0.1:8420\`, dev \`127.0.0.1:18420\`), local SQLite + FTS5 full-text search (\`~/Library/Application Support/ContextCore\`, directory mode \`0700\`, DB mode \`0600\`), online SQLite backups (\`contextcore backup\`), and macOS Keychain secret isolation. Created and maintained by **Qingsong Cui (George O'Nair)** (\`https://github.com/qingsongcui\` · \`https://x.com/George_ONair\`).
 
@@ -1338,7 +1335,7 @@ ${brand.name} (${brand.chineseName}) runs natively on macOS 14.0+ (Sonoma or lat
 
 - [English Homepage](${homeEnRef}) ([Markdown Mirror](${homeMdHref})): Primary static English product overview, host capability matrix, and FAQ.
 - [Pricing, License & System Requirements (Markdown)](${pricingMdUrl}): Machine-readable $0 MIT pricing, BYOK policy, Apple Silicon requirements, and scope limits.
-- [English Host Config Reference (15 AI Agents)](${hostsEnRef}) ([Markdown Mirror](${hostsMdHref})): Verified MCP, Skills, and instruction paths across 6 core and 9 extended agents (JSON, TOML, JSON5, YAML) plus safety boundaries.
+- [English Host Config Reference (6 Agents)](${hostsEnRef}) ([Markdown Mirror](${hostsMdHref})): Verified MCP, Skills, and instruction paths across 6 core and 9 extended agents (JSON, TOML, JSON5, YAML) plus safety boundaries.
 - [English Cross-Agent Relay Workflow](${relayEnRef}) ([Markdown Mirror](${relayMdHref})): Step-by-step workflow to continue Claude Code sessions in Codex or Cursor with short briefs, paged reading, and stand-by safeguards.
 - [Claude Code Memory & Context](${site ? new URL('claude-code-memory.html', site).href : './claude-code-memory.html'}): Memory, instructions and cross-agent continuation.
 - [MCP JSON to TOML Guide](${site ? new URL('mcp-json-vs-toml-config-guide.html', site).href : './mcp-json-vs-toml-config-guide.html'}): Claude Code, Cursor and Codex configuration examples.
@@ -1347,11 +1344,11 @@ ${brand.name} (${brand.chineseName}) runs natively on macOS 14.0+ (Sonoma or lat
 - [English Setup & Workflow Guide](${guideEnRef}) ([Markdown Mirror](${guideMdHref})): ZIP download, first launch (\`xattr -cr\`), source build, and daily workflows.
 - [English 5-Way Comparison & Stack Picker](${compareEnRef}) ([Markdown Mirror](${compareMdHref})): Objective comparison of \`CLAUDE.md\`/\`AGENTS.md\`, Cloud Memory MCP, ${brand.name}, Dotfiles scripts, and single-IDE routers (with interactive picker & real downsides).
 - [Chinese Homepage (中文首页)](${homeZhRef}) ([Markdown Mirror](${zhHomeMdHref})): 简体中文产品概览、能力矩阵与常见问题。
-- [Chinese Host Config Reference (15 宿主配置路径指南)](${hostsZhRef}): 6 类核心接力宿主与 9 类扩展宿主的 MCP/Skills/规则文件路径与写前保护边界。
+- [Chinese Host Config Reference (六大宿主配置路径指南)](${hostsZhRef}): 六个核心上下文宿主的 MCP/Skills/规则文件路径与写前保护边界。
 - [Chinese Cross-Agent Relay Workflow (跨 Agent 接力流程)](${relayZhRef}): Claude Code 切 Codex/Cursor 的六步接力协议、短简介选号与双层记忆协同。
 - [Chinese Setup & Workflow Guide (中文运行指南)](${guideZhRef}): 本地安装、首次启动、源码运行与三大工作流指南。
 - [Chinese 5-Way Comparison & Stack Picker (5 种方案客观对比)](${compareZhRef}): 跨 AI 编程助手共享上下文、记忆与同步 MCP 的 5 种方案深度横评与按环境交互选型。
-- [Extended LLM Reference](${llmsFullUrl}): Complete full-transcript relay & compaction specification, 6+9 host support matrix, CLI commands, and bilingual FAQ.
+- [Extended LLM Reference](${llmsFullUrl}): Complete full-transcript relay & compaction specification, 6 host support matrix, CLI commands, and bilingual FAQ.
 - [GitHub Repository](${brand.github}): Source code, architecture contracts, and automated verification gates.
 - [Release v${RELEASE_VERSION}](${releaseTagHref}): [Download the macOS ZIP](${releaseDownloadUrl}) and review \`SHA256SUMS\`.
 - [License](${brand.github}/blob/main/LICENSE): MIT License.
@@ -1374,7 +1371,7 @@ The relay protocol has six steps:
    - **Number- or ID-only reply** (e.g. \`1\`): Enforces \`must_not_execute=true\`; the receiving agent reports its compacted full-conversation summary and waits for your next prompt without editing files or running destructive commands.
    - **Number + explicit task reply** (e.g. \`1, finish the unit tests\`): Continues immediately using the full compacted context and preserved constraints.
 
-## Host Support Matrix (6 Core Context Hosts + 9 Extended Configuration Hosts)
+## Host Support Matrix (Six Core Context Hosts)
 
 ${brand.name} strictly separates configuration file writes, synthetic/local tests, and live host process reloads:
 
@@ -1386,15 +1383,6 @@ ${brand.name} strictly separates configuration file writes, synthetic/local test
 | Core Context Host | Antigravity | Desktop | Supported (separate from \`agy\` CLI) | Providers, MCP, Skills, rules, snapshots & diff guard |
 | Core Context Host | OMP (Oh My Pi) | CLI | Supported (separate from \`Pi\`) | Providers, MCP, Skills, prompts, snapshots & diff guard |
 | Core Context Host | OpenCode | CLI | Supported | Providers, MCP, Skills, prompts, snapshots & diff guard |
-| Extended Config Host | Claude Desktop | Desktop | Not supported (config only) | Declared MCP JSON path; direct remote MCP & model activation rejected as unverified |
-| Extended Config Host | Gemini CLI | CLI | Not supported (config only) | Declared \`.gemini/settings.json\` MCP path; model activation rejected as unverified |
-| Extended Config Host | Grok Build | CLI | Not supported (config only) | Native TOML MCP entry; changing global default model unsupported |
-| Extended Config Host | Kimi Code | CLI | Not supported (config only) | Renders MCP & appends provider without altering existing default (requires context window) |
-| Extended Config Host | MiniMax Code | CLI | Not supported (config only) | Maps MCP entry & writes provider keeping native default; rejects over-long prompts |
-| Extended Config Host | Pi | CLI | Not supported (config only; separate from OMP) | Renders MCP & provider; refuses to rewrite existing JSON5 |
-| Extended Config Host | Hermes | CLI | Not supported (config only) | Renders YAML MCP & named provider; supports activation preview |
-| Extended Config Host | OpenClaw | CLI | Not supported (config only) | Writes provider JSON5 preserving comments; native MCP sync unsupported |
-| Extended Config Host | agy | CLI | Not supported (config only; separate from Antigravity Desktop) | Renders MCP; provider credentials stay in process env/private profile |
 
 ## Installation, Source Development & CLI Reference
 
@@ -1452,7 +1440,7 @@ Registered hosts connect to local \`http://127.0.0.1:8420/mcp/\` (source dev por
 |---|---|---|---|---|---|---|
 | 1. \`CLAUDE.md\` / \`AGENTS.md\` | Win / Mac / Linux | $0 | Static rules only | Manual Markdown | Does not sync globals | Git repo |
 | 2. Cloud / Docker Memory MCP | All OSes | $0 self-host / Cloud plans | Fragment search only | Semantic facts only | Manual per-host setup | Cloud or Docker |
-| 3. ${brand.name} (ContextCore) | macOS 14.0+ arm64 | $0 (MIT · no signup) | Short-brief pick + full transcript page & compact | Working tasks + versioned memory | 6+9 hosts with diff & rollback | Local SQLite (\`0600\`) + Keychain |
+| 3. ${brand.name} (ContextCore) | macOS 14.0+ arm64 | $0 (MIT · no signup) | Short-brief pick + full transcript page & compact | Working tasks + versioned memory | 6 hosts with diff & rollback | Local SQLite (\`0600\`) + Keychain |
 | 4. Dotfiles / GNU Stow | macOS / Linux | $0 (DIY) | No | No | Fragile across JSON/TOML/JSON5 | Dotfiles repo |
 | 5. Single IDE + Router | Depends on IDE | IDE plan + tokens | Within same app only | Depends on single IDE | Single host only | Local + router API |
 
@@ -1462,8 +1450,8 @@ Registered hosts connect to local \`http://127.0.0.1:8420/mcp/\` (source dev por
 ## 中文核心摘要（${brand.name} · ${brand.chineseName} / ContextCore）
 
 - **实体定义**：${brand.name}（中文名「${brand.chineseName}」，开源仓库 \`ContextCore\`，宿主 MCP 键名为 \`contextcore\`，不适用 \`senrelay-mcp\`）是免费开源（**$0 · MIT 协议 · 免注册**）的 \`macOS 14.0+\` Apple Silicon（\`arm64\`）本机工作台，仅绑定 \`127.0.0.1:8420\`。
-- **核心场景覆盖**：**跨 Agent 对话接力**（在 Claude Code、Codex、Cursor、Antigravity、OMP、OpenCode 中输入 \`/contextcore\` 或说「接力」，按短简介选场后通过 \`read_conversation_messages\` 分页读完完整原文并原地压缩；仅选序号设 \`must_not_execute=true\` 只读待命）、**共享记忆与工作任务**（双层机制与六类带出处长期记忆、版本留痕与核心规则置顶），以及 **MCP 管理与多宿主配置同步**（6 大主力 + 9 类扩展宿主的 JSON/TOML/JSON5/YAML 预览写入、钥匙串密钥隔离、快照回滚与外部修改 Diff 提醒）。
-- **明确不适用场景**：不支持 Windows、Linux 或 Intel（\`x86_64\`）Mac；无多设备云同步（换机需用 \`contextcore backup\`）；9 类扩展宿主仅管配置不做对话接力；Public Beta 首次启动需执行 \`xattr -cr /Applications/Senrelay.app\`。
+- **核心场景覆盖**：**跨 Agent 对话接力**（在 Claude Code、Codex、Cursor、Antigravity、Oh My Pi、OpenCode 中输入 \`/contextcore\` 或说「接力」，按短简介选场后通过 \`read_conversation_messages\` 分页读完完整原文并原地压缩；仅选序号设 \`must_not_execute=true\` 只读待命）、**共享记忆与工作任务**（双层机制与六类带出处长期记忆、版本留痕与核心规则置顶），以及 **MCP 管理与多宿主配置同步**（六个核心宿主的 JSON/TOML 预览写入、钥匙串密钥隔离、快照回滚与外部修改 Diff 提醒）。
+- **明确不适用场景**：不支持 Windows、Linux 或 Intel（\`x86_64\`）Mac；无多设备云同步（换机需用 \`contextcore backup\`）；其他工具不在支持范围；Public Beta 首次启动需执行 \`xattr -cr /Applications/Senrelay.app\`。
 `;
 
 await writeFile(path.join(out, 'llms.txt'), llmsContent);

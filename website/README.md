@@ -34,7 +34,7 @@ npm --prefix website run check
 
 ## Content & Architecture Boundaries
 
-Content describes cross-agent `/contextcore` continuation across six core context hosts (Claude Code, Codex, Cursor, Antigravity, OMP, OpenCode) using short-brief discovery, bounded sequential transcript paging (`read_conversation_messages`), in-context compaction (`must_not_execute=true` on number-only selection), dual-tier working memory (`working_tasks` + versioned long-term memories with provenance), multi-host config sync (6 core + 9 extended hosts under the `contextcore` MCP key on `127.0.0.1:8420/mcp/`), and optional local semantic retrieval. The marketing pages (`index.html`, `guide.html`, `compare.html`, and static `/en/*` equivalents) disclose real limits (`$0` MIT, `macOS 14.0+ arm64` only, single-machine loopback, first-launch `xattr -cr`) and must not fabricate usage metrics, installers, or live host telemetry.
+Content describes cross-agent `/contextcore` continuation across six core context hosts (Claude Code, Codex, Cursor, Antigravity, OMP, OpenCode) using short-brief discovery, bounded sequential transcript paging (`read_conversation_messages`), in-context compaction (`must_not_execute=true` on number-only selection), dual-tier working memory (`working_tasks` + versioned long-term memories with provenance), multi-host config sync (six core hosts under the `contextcore` MCP key on `127.0.0.1:8420/mcp/`), and optional local semantic retrieval. The marketing pages (`index.html`, `guide.html`, `compare.html`, and static `/en/*` equivalents) disclose real limits (`$0` MIT, `macOS 14.0+ arm64` only, single-machine loopback, first-launch `xattr -cr`) and must not fabricate usage metrics, installers, or live host telemetry.
 
 The recorded verification baseline in the repository covers four live-host continuation loops (Codex CLI, OMP CLI, Antigravity Desktop, OpenCode) and two protocol loops (Cursor, Claude Code), while config schema serialization and snapshots are tested across declared hosts. Models/accounts/tools/Skills/instructions, project combinations, and migration behavior remain scoped per host format rather than universal parity.
 
@@ -46,10 +46,10 @@ Styles are sourced under `assets/css/` and bundled by `scripts/css-bundle.mjs`; 
 
 ## Pages and Bilingual Coverage
 
-- `index.html` (`en/index.html` via `assets/i18n.js`): Product showcase, 6-step full-transcript relay architecture, dual-tier memory workspace, 6+9 host matrix, official dated Fact Sheet (`#fact-sheet`), and 9-item native `<details>` FAQ.
+- `index.html` (`en/index.html` via `assets/i18n.js`): Product showcase, 6-step full-transcript relay architecture, dual-tier memory workspace, 6-host matrix, official dated Fact Sheet (`#fact-sheet`), and 9-item native `<details>` FAQ.
 - `guide.html` (`en/guide.html`): Apple Silicon macOS install (explicit published macOS ZIP / checksum / ad-hoc first-launch steps), source dev mode, MCP key (`contextcore` on `/mcp/`) vs `/contextcore` skill, security boundaries, and 3-item troubleshooting FAQ (`FAQPage` schema).
 - `compare.html` (`en/compare.html`): Honest 5-option comparison (`AGENTS.md`, Cloud/Docker Memory MCP, Senrelay ranked #3, Dotfiles, Single IDE) with interactive setup picker, `#option-1`..`#option-5` ItemList schema, and 6-item decision FAQ.
-- `llms.txt` & `llms-full.txt`: Pure-English summary header plus full-transcript relay specification, 6+9 host matrix, 5-way comparison table, and Chinese core summary (`续境` / `ContextCore`).
+- `llms.txt` & `llms-full.txt`: Pure-English summary header plus full-transcript relay specification, 6-host matrix, 5-way comparison table, and Chinese core summary (`续境` / `ContextCore`).
 - `zh/index.md`: Simplified Chinese homepage Markdown mirror generated from `zh/index.html`; linked from the Chinese homepage head, `llms.txt` and `llms-full.txt`.
 - `about.html` / `privacy.html` / `contact.html` / `security.html` (and `/zh/` editions): author, website analytics vs local-app data, GitHub contact routes, and private vulnerability reporting.
 

@@ -34,7 +34,7 @@ https://github.com/user-attachments/assets/c5c3e97b-0226-43bb-bff7-3eeed605c0bd
 - **什么情况下不适合使用（When NOT to use）**：
   1. 你使用 **Windows、Linux 或 Intel（`x86_64`）Mac**：当前仅支持 **macOS 14.0+ Apple Silicon（`arm64`）**。
   2. 你强需求 **跨设备云端同步、团队云托管共享记忆或远程网页访问**：本系统严格绑定本机回环地址 `127.0.0.1:8420`（开发态 `18420`），无任何云后台。
-  3. 你期望为 **九类扩展宿主**（`Claude Desktop`、`Gemini CLI`、`Grok Build`、`Kimi Code`、`MiniMax Code`、`Pi`、`Hermes`、`OpenClaw`、`agy`）开启会话采集或 `/contextcore` 跨助手接力：上述 9 类仅支持在「Agent 管理」中预览与写入配置文件，不含会话接力与自动记忆。
+  3. 你需要支持六个上下文宿主以外的工具：这些工具不在当前支持范围内。
   4. 你要求 **完全免终端指令的双击零弹窗安装**：公开测试版采用 ad-hoc 签名、暂未执行 Apple 公证，首次安装后需执行一次 `xattr -cr /Applications/Senrelay.app`。
 
 ### 下载 ZIP 安装 Beta.6

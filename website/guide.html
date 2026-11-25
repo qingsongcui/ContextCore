@@ -260,7 +260,7 @@
     <div class="callout" role="note">
       <div class="callout-title">三项核心能力</div>
       <div class="callout-list">
-        <p><strong>多宿主配置管理</strong>在常驻顶栏切换 Claude Code、Codex、Cursor、Antigravity、OMP、OpenCode 与扩展宿主（详见<a class="inline-link" href="./#connections">支持矩阵</a>），以 <code>contextcore</code> 接入 <code>/mcp/</code> 服务并同步服务商、MCP、Skills 与提示词。每次写入自动留存快照，外部手改时弹出差异确认。</p>
+        <p><strong>多宿主配置管理</strong>在常驻顶栏切换 Claude Code、Codex、Cursor、Antigravity、Oh My Pi、OpenCode 与扩展宿主（详见<a class="inline-link" href="./#connections">支持矩阵</a>），以 <code>contextcore</code> 接入 <code>/mcp/</code> 服务并同步服务商、MCP、Skills 与提示词。每次写入自动留存快照，外部手改时弹出差异确认。</p>
         <p><strong>双层自动记忆与工作台</strong>对话中伴生维护工作任务（<code>working_tasks</code>）与带版本的长期记忆，保留原话出处并支持核心规则置顶、<code>AGENTS.md</code> 导出与多格式资料导入。</p>
         <p><strong>跨 Agent 全文接力</strong>在新 Agent 输入 <code>/contextcore</code> 或「接力」，先通过短简介认出会话，再分页读完完整原文并在上下文中直接压缩（仅选序号先待命，附带任务则继续执行，详见<a class="inline-link" href="./#handoff">工程保障说明</a>）。</p>
       </div>
@@ -331,7 +331,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
       <div class="pillar-grid">
         <div class="boundary-card">
           <h3>多宿主配置切换与同步</h3>
-          <p>在「Agent 管理」顶栏切换 Claude Code、Codex、Cursor、Antigravity、OMP 或 OpenCode 后点击「一键接入续境」，即可按 <code>contextcore</code> 键名接入 <code>http://127.0.0.1:8420/mcp/</code> 并配齐历史路径与伴生组件；支持服务商预设、端点测速、MCP/Skills 同步及写前快照。</p>
+          <p>在「Agent 管理」顶栏切换 Claude Code、Codex、Cursor、Antigravity、Oh My Pi 或 OpenCode 后点击「一键接入续境」，即可按 <code>contextcore</code> 键名接入 <code>http://127.0.0.1:8420/mcp/</code> 并配齐历史路径与伴生组件；支持服务商预设、端点测速、MCP/Skills 同步及写前快照。</p>
         </div>
         <div class="boundary-card">
           <h3>双层记忆与版本治理</h3>
@@ -365,7 +365,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
       <div class="boundary-list">
         <div class="boundary-card">
           <h3>适用边界与定价（2026-11-15 核对）</h3>
-          <p>定价为 <strong>$0</strong>（MIT 开源协议，免注册），当前版本 <code>v1.0.0-beta.6</code>。不适用场景：不支持 Windows、Linux 或 Intel Mac；纯单机回环运行（<code>127.0.0.1:8420</code>），无云同步；九类扩展宿主仅管理配置文件（详见<a class="inline-link" href="./#fact-sheet">首页核对表</a>与<a class="inline-link" href="./compare.html">5 种方案对比</a>）。</p>
+          <p>定价为 <strong>$0</strong>（MIT 开源协议，免注册），当前版本 <code>v1.0.0-beta.6</code>。不适用场景：不支持 Windows、Linux 或 Intel Mac；纯单机回环运行（<code>127.0.0.1:8420</code>），无云同步；其他工具不在支持范围（详见<a class="inline-link" href="./#fact-sheet">首页核对表</a>与<a class="inline-link" href="./compare.html">5 种方案对比</a>）。</p>
         </div>
         <div class="boundary-card">
           <h3>作者与许可协议</h3>
@@ -400,7 +400,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
     <div class="callout" role="note">
       <div class="callout-title">Core Capabilities</div>
       <div class="callout-list">
-        <p><strong>Multi-Host Configuration</strong>Switch across Claude Code, Codex, Cursor, Antigravity, OMP, OpenCode, and extended config targets (see the <a class="inline-link" href="./#connections">support matrix</a>), register the local <code>contextcore</code> <code>/mcp/</code> server via One-Click Connect, and sync providers, MCP tools, Skills, and prompts with rollback snapshots and conflict diffs.</p>
+        <p><strong>Multi-Host Configuration</strong>Switch across Claude Code, Codex, Cursor, Antigravity, Oh My Pi, and OpenCode (see the <a class="inline-link" href="./#connections">support matrix</a>), register the local <code>contextcore</code> <code>/mcp/</code> server via One-Click Connect, and sync providers, MCP tools, Skills, and prompts with rollback snapshots and conflict diffs.</p>
         <p><strong>Dual-Tier Auto-Memory</strong>Companion tools track working tasks (<code>working_tasks</code>) and versioned long-term memories with transcript source links, rule pinning, <code>AGENTS.md</code> generation, and document imports.</p>
         <p><strong>Full-Transcript Relay</strong>Type <code>/contextcore</code> or say "Relay" in a connected core host to pick a conversation from short briefs, then page through the full transcript and compact it in context (stand-by on number-only selection, or continue with a task; see <a class="inline-link" href="./#handoff">relay safeguards</a>).</p>
       </div>
@@ -465,7 +465,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
       <div class="pillar-grid">
         <div class="boundary-card">
           <h3>Multi-Host Config &amp; Sync</h3>
-          <p>Select Claude Code, Codex, Cursor, Antigravity, OMP, or OpenCode in Agent Management and click One-Click Connect to register <code>contextcore</code> (<code>http://127.0.0.1:8420/mcp/</code>), history paths, and companion skills; switch presets, test latency, and sync MCP, Skills, and prompts with rollback snapshots.</p>
+          <p>Select Claude Code, Codex, Cursor, Antigravity, Oh My Pi, or OpenCode in Agent Management and click One-Click Connect to register <code>contextcore</code> (<code>http://127.0.0.1:8420/mcp/</code>), history paths, and companion skills; switch presets, test latency, and sync MCP, Skills, and prompts with rollback snapshots.</p>
         </div>
         <div class="boundary-card">
           <h3>Dual-Tier Memory &amp; Versioning</h3>
@@ -499,7 +499,7 @@ npm --prefix app/frontend run dev:isolated</code></pre>
       <div class="boundary-list">
         <div class="boundary-card">
           <h3>Fact Sheet &amp; Limits (Checked 2026-11-15)</h3>
-          <p>Pricing is <strong>$0</strong> (MIT License, no account required), current release <code>v1.0.0-beta.6</code>. Not suitable if you use Windows, Linux, or Intel Macs, need multi-device cloud sync, or need full relay on the 9 config-only extended hosts (see <a class="inline-link" href="./#fact-sheet">fact sheet</a> and <a class="inline-link" href="./compare.html">5-way comparison</a>).</p>
+          <p>Pricing is <strong>$0</strong> (MIT License, no account required), current release <code>v1.0.0-beta.6</code>. Not suitable if you use Windows, Linux, or Intel Macs, need multi-device cloud sync, or need support for tools outside the six supported hosts (see <a class="inline-link" href="./#fact-sheet">fact sheet</a> and <a class="inline-link" href="./compare.html">5-way comparison</a>).</p>
         </div>
         <div class="boundary-card">
           <h3>Creator &amp; License</h3>

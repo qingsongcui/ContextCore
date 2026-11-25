@@ -330,7 +330,7 @@ for (const [label, doc] of [['index.html', html], ['en/index.html', enHtml]]) {
 for (const [label, doc] of [['guide.html', guide], ['en/guide.html', enGuide], ['hosts.html', hosts], ['en/hosts.html', enHosts], ['relay-workflow.html', relay], ['en/relay-workflow.html', enRelay]]) {
   assert.ok(doc.includes(brand.releaseVersion), `current version ${brand.releaseVersion} appears in ${label}`);
   assert.ok(doc.includes('127.0.0.1:8420/mcp/') && doc.includes('contextcore'), `MCP endpoint & key contextcore documented in ${label}`);
-  for (const host of ['Claude Code', 'Codex', 'Cursor', 'Antigravity', 'OMP', 'OpenCode']) {
+  for (const host of ['Claude Code', 'Codex', 'Cursor', 'Antigravity', 'Oh My Pi', 'OpenCode']) {
     assert.ok(doc.includes(host), `core host ${host} appears in ${label}`);
   }
 }
@@ -357,8 +357,8 @@ for (const [label, schema] of [['Chinese', graph], ['English', enGraph]]) {
   assert.equal(software.downloadUrl, releaseDownloadUrl, `${label} schema download target`);
 }
 
-assert.ok(hosts.includes('~/.claude.json') && hosts.includes('~/.openclaw/openclaw.json') && hosts.includes('~/.config/opencode/opencode.json'), 'hosts.html verifies concrete config file paths');
-assert.ok(enHosts.includes('~/.claude.json') && enHosts.includes('~/.openclaw/openclaw.json') && enHosts.includes('~/.config/opencode/opencode.json'), 'en/hosts.html verifies concrete config file paths');
+assert.ok(hosts.includes('~/.claude.json') && hosts.includes('~/.config/opencode/opencode.json'), 'hosts.html verifies concrete config file paths');
+assert.ok(enHosts.includes('~/.claude.json') && enHosts.includes('~/.config/opencode/opencode.json'), 'en/hosts.html verifies concrete config file paths');
 assert.ok(relay.includes('must_not_execute=true') && relay.includes('read_conversation_messages'), 'relay-workflow.html covers relay tool contract');
 assert.ok(enRelay.includes('must_not_execute=true') && enRelay.includes('read_conversation_messages'), 'en/relay-workflow.html covers relay tool contract');
 for (const [homepage, workflow] of [[html, relay], [enHtml, enRelay]]) {
@@ -404,7 +404,7 @@ assert.ok(llmsFull.includes(releaseDownloadUrl), 'llms-full.txt links directly t
 assert.ok(!llms.includes('💡') && !llms.includes('📌'), 'no decorative emojis in llms.txt');
 assert.match(llmsFull, /must_not_execute=true/);
 assert.match(llmsFull, /read_conversation_messages/);
-assert.match(llmsFull, /Extended Config Host/);
+assert.match(llmsFull, /Core Context Host/);
 assert.match(llmsFull, /5-Way Comparison/);
 assert.match(llmsFull, /中文核心摘要/);
 assert.ok(!llmsFull.includes('1.0.0-beta.1'), 'llms-full.txt has no stale beta.1');

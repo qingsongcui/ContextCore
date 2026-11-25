@@ -2,7 +2,7 @@
 
 A native macOS app, browser workbench, and local background service that lets multiple AI coding assistants accumulate source-linked project memories, relay conversations across agents in a single command, and manage providers, MCP tools, Skills, and instructions in one place.
 
-[English](README.md) · [中文](README.zh-CN.md) · [Official Website](https://senrelay.com/) · [Setup Guide](https://senrelay.com/guide.html) · [15-Host Config Paths](https://senrelay.com/hosts.html) · [Cross-Agent Relay Workflow](https://senrelay.com/relay-workflow.html) · [5-Way Comparison](https://senrelay.com/compare.html) · [Public Beta Release (`v1.0.0-beta.6`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.6)
+[English](README.md) · [中文](README.zh-CN.md) · [Official Website](https://senrelay.com/) · [Setup Guide](https://senrelay.com/guide.html) · [Host Config Paths](https://senrelay.com/hosts.html) · [Cross-Agent Relay Workflow](https://senrelay.com/relay-workflow.html) · [5-Way Comparison](https://senrelay.com/compare.html) · [Public Beta Release (`v1.0.0-beta.6`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.6)
 
 > **100% Free & Open Source (`$0`, [MIT License](LICENSE)) · No Account Required · Apple Silicon `macOS 14.0+` (`arm64`) Local-First**
 >
@@ -34,7 +34,7 @@ The native macOS bundle ships a self-contained Python runtime, backend service (
 - **When NOT to use Senrelay**:
   1. You use **Windows, Linux, or an Intel (`x86_64`) Mac** — current builds support **macOS 14.0+ Apple Silicon (`arm64`)** only.
   2. You need **multi-device cloud sync, hosted team memory, or remote web access** — Senrelay runs strictly on local loopback (`127.0.0.1:8420`, dev `18420`) on a single Mac.
-  3. You expect **cross-host session capture or `/contextcore` relay for the 9 extended config hosts** (`Claude Desktop`, `Gemini CLI`, `Grok Build`, `Kimi Code`, `MiniMax Code`, `Pi`, `Hermes`, `OpenClaw`, `agy`) — those 9 hosts only support previewed configuration management.
+  3. You need configuration management or relay for a tool outside the six supported contexts: those tools are not supported.
   4. You require a **zero-prompt Apple-notarized installer** — Public Beta builds are ad-hoc signed, so first launch requires running `xattr -cr /Applications/Senrelay.app` once.
 
 ### Install Beta.6 from ZIP
@@ -79,7 +79,7 @@ When switching tools (for example after hitting quota or context limits), contin
 
 ### 4. Agent Management
 
-- **Top Host Switcher & One-Click Connect**: Select any core or extended host from the top bar; click **One-Click Connect** to configure authorized history paths, MCP tools, `/contextcore` slash-command Skills, and silent hooks in one step.
+- **Top Host Switcher & One-Click Connect**: Select any of the six supported hosts from the top bar; click **One-Click Connect** to configure authorized history paths, MCP tools, `/contextcore` slash-command Skills, and silent hooks in one step.
 - **One-Click Switch with Safe Snapshots**: Fill read-only provider presets, run live endpoint latency checks, and isolate API keys in macOS Keychain. Switching providers or toggling MCP / Skills / prompts saves automatic rollback snapshots with readback verification, opening a Diff review modal whenever external manual edits conflict.
 - **Multi-Host Sync & Routing Modes**: Sync shared MCP tools, Skills, and prompts across selected hosts (queuing Diff previews if any host has conflicts), and configure per-host Direct, Local Proxy Routing (with ordered fallback chains), or Model Aggregation modes.
 - **Skills Safety**: Defaults to independent file copies (`copy`), with managed per-file version symlinks (`symlink`) available in advanced mode; installing a Skill never executes scripts, and generic directory symlinks remain rejected.
