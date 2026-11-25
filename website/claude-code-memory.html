@@ -264,12 +264,24 @@
 
 <main id="main" class="wrap guide-page"><div class="guide-header"><h1 data-zh="Claude Code 记忆与上下文管理指南 — Senrelay 续境" data-en="Claude Code Memory &amp; Context Management — Senrelay">Claude Code 记忆与上下文管理指南 — Senrelay 续境</h1>
 <p class="guide-lead" data-zh="了解 Claude Code 记忆、项目规则与对话上下文的区别，并通过 Senrelay 在 Codex 或 Cursor 中接着处理已有任务。" data-en="Understand Claude Code memory, project instructions, and conversation context, then continue a task in Codex or Cursor with local, source-linked Senrelay memory.">了解 Claude Code 记忆、项目规则与对话上下文的区别，并通过 Senrelay 在 Codex 或 Cursor 中接着处理已有任务。</p>
-<p data-zh="更新于 2026-11-17 · Senrelay 维护者" data-en="Updated November 17, 2026 · Senrelay maintainers">更新于 2026-11-17 · Senrelay 维护者</p>
+<p data-zh="更新于 2026-11-25 · Senrelay 维护者" data-en="Updated November 25, 2026 · Senrelay maintainers">更新于 2026-11-25 · Senrelay 维护者</p>
 </div>
 <div data-guide-section="zh">
 <section class="guide-section" id="memory-context"><h2>Claude Code 记忆、规则文件和对话上下文各做什么？</h2>
 <p>项目规则记录编码约定和工作要求，对话原文记录具体报错、尝试与决策，工作记忆记录当前任务状态和可复用经验。理解当前问题通常需要同时参考这些资料。Senrelay 在本机保存可追溯来源的记忆，使用时可以回到原始记录核对。</p>
 <p>Claude Code 自身的记忆与规则用法见 <a class="inline-link" href="https://code.claude.com/docs/en/memory">Claude Code 官方记忆文档</a>。Senrelay 的跨助手接力还需目标助手接入本机服务。</p>
+</section>
+<section class="guide-section" id="where-memory-lives"><h2>Claude Code 的记忆存在哪里？</h2>
+<p>Claude Code 每次会话都从空白的上下文窗口开始。跨会话保留下来的知识来自两类文件：你自己写的 CLAUDE.md，以及 Claude 自己记下的自动记忆。</p>
+<ul>
+<li><code>~/.claude/CLAUDE.md</code>：个人指令，对所有项目生效。</li>
+<li><code>./CLAUDE.md</code> 或 <code>./.claude/CLAUDE.md</code>：团队共享的项目指令；仓库里的 <code>AGENTS.md</code> 也可以承担这个角色。</li>
+<li><code>./CLAUDE.local.md</code>：只对你自己、只对当前项目生效的个人指令，应加入 <code>.gitignore</code>。</li>
+<li><code>.claude/rules/*.md</code>：按主题拆分的规则文件，可以限定只对某些文件路径生效。</li>
+<li><code>~/.claude/projects/&lt;project&gt;/memory/</code>：自动记忆目录，包含一个 <code>MEMORY.md</code> 索引和每条记忆一个文件；会话开始时加载 <code>MEMORY.md</code> 的前 200 行或 25KB。</li>
+</ul>
+<p>启动时，Claude Code 会加载工作目录及其所有上级目录中的 CLAUDE.md；子目录里的 CLAUDE.md 在 Claude 处理该目录下的文件时才加载。CLAUDE.md 可以用 <code>@path/to/file</code> 引入其他文件，最多嵌套四层。用 <code>/init</code> 可以生成项目 CLAUDE.md 的初稿，用 <code>/memory</code> 可以查看已加载的文件并浏览自动记忆。每个 CLAUDE.md 建议控制在 200 行以内。</p>
+<p>这些文件描述的是“怎么工作”，并不保存对话本身：遇到过的报错、试过的方案、停在哪一步，都留在会话原文里。从 Claude Code 切到 Codex 或 Cursor 时，新助手看不到的正是这部分，也正是 Senrelay 负责接力的内容。</p>
 </section>
 
 <section class="guide-section" id="continue-work"><h2>从 Claude Code 切到 Codex 或 Cursor 继续任务</h2>
@@ -298,6 +310,18 @@
 <section class="guide-section" id="memory-context"><h2>What do Claude Code memory, instructions, and conversation context contain?</h2>
 <p>Project instructions describe coding conventions and working rules. Transcripts preserve errors, attempts, and decisions. Working memory records task state and reusable lessons. Senrelay keeps source-linked memories locally so an agent can check the original record when it needs more context.</p>
 <p>See the <a class="inline-link" href="https://code.claude.com/docs/en/memory">official Claude Code memory documentation</a> for its own memory and instruction features. Cross-agent continuation with Senrelay also requires connecting the receiving assistant to the local service.</p>
+</section>
+<section class="guide-section" id="where-memory-lives"><h2>Where does Claude Code store memory?</h2>
+<p>Claude Code starts every session with a fresh context window. Two kinds of files carry knowledge between sessions: CLAUDE.md files that you write, and auto memory that Claude writes for itself.</p>
+<ul>
+<li><code>~/.claude/CLAUDE.md</code>: personal instructions for every project.</li>
+<li><code>./CLAUDE.md</code> or <code>./.claude/CLAUDE.md</code>: team instructions shared with the project. A repository's <code>AGENTS.md</code> can serve the same role.</li>
+<li><code>./CLAUDE.local.md</code>: personal instructions for one project. Add it to <code>.gitignore</code>.</li>
+<li><code>.claude/rules/*.md</code>: rule files split by topic, optionally scoped to specific file paths.</li>
+<li><code>~/.claude/projects/&lt;project&gt;/memory/</code>: auto memory, with a <code>MEMORY.md</code> index and one file per memory. The first 200 lines or 25KB of <code>MEMORY.md</code> load at the start of a session.</li>
+</ul>
+<p>At launch, Claude Code loads CLAUDE.md files from the working directory and every directory above it. A CLAUDE.md in a subdirectory loads when Claude works with files in that directory. A CLAUDE.md can pull in other files with <code>@path/to/file</code>, up to four hops deep. Run <code>/init</code> to draft a project CLAUDE.md, and <code>/memory</code> to see which files are loaded and to browse auto memory. Keep each CLAUDE.md under about 200 lines.</p>
+<p>These files describe how to work. They do not hold the conversation itself: the errors you hit, what you tried and where you stopped stay in the session transcript. That is what another assistant cannot see when you switch from Claude Code to Codex or Cursor, and it is what Senrelay relays.</p>
 </section>
 
 <section class="guide-section" id="continue-work"><h2>Continue Claude Code work in Codex or Cursor</h2>

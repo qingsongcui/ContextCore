@@ -2,7 +2,7 @@
 
 macOS 原生桌面 App、浏览器工作台与本机常驻服务，让多个 AI 编程助手围绕同一项目沉淀带来源记忆、一句话跨助手接力对话，并在一处统管模型服务商、MCP、Skills 与使用规则。
 
-[English](README.md) · [中文](README.zh-CN.md) · [产品官网](https://senrelay.com/zh/) · [宿主配置路径](https://senrelay.com/zh/hosts.html) · [跨 Agent 接力流程](https://senrelay.com/zh/relay-workflow.html) · [使用指南](https://senrelay.com/zh/guide.html) · [五方横评与选型](https://senrelay.com/zh/compare.html) · [下载公开测试版 (`v1.0.0-beta.7`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.7)
+[English](README.md) · [中文](README.zh-CN.md) · [产品官网](https://senrelay.com/zh/) · [宿主配置路径](https://senrelay.com/zh/hosts.html) · [跨 Agent 接力流程](https://senrelay.com/zh/relay-workflow.html) · [使用指南](https://senrelay.com/zh/guide.html) · [五方横评与选型](https://senrelay.com/zh/compare.html) · [Claude Code 记忆指南](https://senrelay.com/zh/claude-code-memory.html) · [MCP JSON 与 TOML 配置指南](https://senrelay.com/zh/mcp-json-vs-toml-config-guide.html) · [下载公开测试版 (`v1.0.0-beta.7`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.7)
 
 > **100% 免费开源（`$0`，[MIT 协议](LICENSE)）· 无需注册账号 · 仅限 macOS 14.0+ Apple Silicon (`arm64`) 本机运行**
 >

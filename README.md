@@ -2,7 +2,7 @@
 
 A native macOS app, browser workbench, and local background service that lets multiple AI coding assistants accumulate source-linked project memories, relay conversations across agents in a single command, and manage providers, MCP tools, Skills, and instructions in one place.
 
-[English](README.md) · [中文](README.zh-CN.md) · [Official Website](https://senrelay.com/) · [Setup Guide](https://senrelay.com/guide.html) · [Host Config Paths](https://senrelay.com/hosts.html) · [Cross-Agent Relay Workflow](https://senrelay.com/relay-workflow.html) · [5-Way Comparison](https://senrelay.com/compare.html) · [Public Beta Release (`v1.0.0-beta.7`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.7)
+[English](README.md) · [中文](README.zh-CN.md) · [Official Website](https://senrelay.com/) · [Setup Guide](https://senrelay.com/guide.html) · [Host Config Paths](https://senrelay.com/hosts.html) · [Cross-Agent Relay Workflow](https://senrelay.com/relay-workflow.html) · [5-Way Comparison](https://senrelay.com/compare.html) · [Claude Code Memory Guide](https://senrelay.com/claude-code-memory.html) · [MCP JSON vs TOML Config Guide](https://senrelay.com/mcp-json-vs-toml-config-guide.html) · [Public Beta Release (`v1.0.0-beta.7`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.7)
 
 > **100% Free & Open Source (`$0`, [MIT License](LICENSE)) · No Account Required · Apple Silicon `macOS 14.0+` (`arm64`) Local-First**
 >
