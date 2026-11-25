@@ -35,7 +35,7 @@ Beta reference. Items here are current limits or incomplete acceptance, not a pr
 
 ## Packaging and verification boundaries
 
-- Public package version is `1.0.0-beta.6` → Python wheel `1.0.0b6` → native short version `1.0.0` plus numeric build number (`app/scripts/release_versions.py`).
+- Public package version is `1.0.0-beta.7` → Python wheel `1.0.0b7` → native short version `1.0.0` plus numeric build number (`app/scripts/release_versions.py`).
 - Per-surface limits are listed in [support-matrix](support-matrix.md). Historical live-host grades in [evidence](evidence.md) describe recorded reference runs and do not certify an untested user environment.
 - Clean-Mac Gatekeeper install, upgrade from older user installations, sleep/reboot autostart, and uninstall-with-data-kept require physical clean-device acceptance (`app/scripts/check_macos_install_lifecycle.py`).
 - Live external sessions (paid provider calls, official interactive OAuth, live Keychain lock/recovery, and all-host live memory writes) require separate user-consented account verification beyond automated pytest and Vitest suites.

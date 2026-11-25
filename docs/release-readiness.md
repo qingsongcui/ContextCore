@@ -2,7 +2,13 @@
 
 Requirements: [public specification](SPECIFICATION.md). Verification summary and historical observations: [evidence register](evidence.md). Operational commands: [application guide](../app/README.md).
 
-**Public release: `1.0.0-beta.6` (macOS 14.0+ on Apple Silicon, ad-hoc signed).** The [release tag and asset receipts](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.6) identify source commit `8d9e2a4`. The download named `Senrelay-macOS.zip` is native build 15. Its SHA-256 is `0064b908a0573102eb02ae123e0ad250bd8b8118dc7dff7017e8217c9f1ed152`.
+**Public release: `1.0.0-beta.7` (macOS 14.0+ on Apple Silicon, ad-hoc signed).** The [release tag and asset receipts](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.7) identify the source commit. The download named `Senrelay-macOS.zip` is native build 17. Its SHA-256 is `743a8b88d20df5c1eb80eb5bdd1b1118784d73abef96a52693a7eaa0e38283d4`.
+
+## Beta.7 verification
+
+Beta.7 supports exactly six Agents (D065) and keeps sibling sessions in shared Cursor and OpenCode databases apart. Before tagging, the release tree passed the backend suite (1,741 passed, 1 skipped), the frontend suite (272 Vitest tests, lint, types, build, 1,935 bilingual UI keys), and the website build and checks. The build-17 bundle passed `verify_bundle.py`, `verify_archive.py`, `verify_hook_distribution.py`, `verify_data_lifecycle.py` and `check_release_readiness.py` in isolated HOME and data directories. The tag's release CI runs the same gates and attaches its own native candidate.
+
+The startup migration was run against an online backup copy of the maintainer database, not the live file: both migration flags were set, SQLite `quick_check` returned ok, every stored host field held one of the six ids, `/hosts` listed six Agents, and a resource previously assigned to a removed host saved again. A second start changed nothing. This does not replace a clean-Mac Gatekeeper check, Apple notarization, or per-surface live host acceptance.
 
 ## Beta.6 verification
 

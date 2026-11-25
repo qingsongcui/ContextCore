@@ -184,7 +184,7 @@ wheels = [
 
 [[package]]
 name = "contextcore-backend"
-version = "1.0.0b6"
+version = "1.0.0b7"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },

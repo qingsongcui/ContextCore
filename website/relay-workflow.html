@@ -277,7 +277,7 @@
       <span class="section-kicker">01 · SIX-STEP RELAY PROTOCOL</span>
       <h2>六步接力协议：一条旧对话如何在新宿主里无缝续上</h2>
       <p id="relay-evidence">历史参考验收覆盖四个真实宿主（Codex CLI、Oh My Pi CLI、Antigravity Desktop、OpenCode）。Cursor Desktop 与 Claude Code 的续做停在协议验证。六个宿主的记忆写入均只有合成测试，当前版本与本机环境需分别核验。 <a class="inline-link" href="https://github.com/qingsongcui/ContextCore/blob/main/docs/evidence.md#recorded-host-continuation">历史验收明细</a></p>
-      <p>当 Claude Code 排查到一半遇到配额限制、或者你想换到 Codex CLI / Cursor / OpenCode 继续改源码时，无需打开浏览器手工导出 Markdown。只要本机常驻服务运行在 <code>127.0.0.1:8420</code> 且双端均已接入 <code>http://127.0.0.1:8420/mcp/</code>（键名 <code>contextcore</code>，配置路径见<a class="inline-link" href="./hosts.html">15 宿主配置路径指南</a>），接力按以下六步执行：</p>
+      <p>当 Claude Code 排查到一半遇到配额限制、或者你想换到 Codex CLI / Cursor / OpenCode 继续改源码时，无需打开浏览器手工导出 Markdown。只要本机常驻服务运行在 <code>127.0.0.1:8420</code> 且双端均已接入 <code>http://127.0.0.1:8420/mcp/</code>（键名 <code>contextcore</code>，配置路径见<a class="inline-link" href="./hosts.html">宿主配置路径指南</a>），接力按以下六步执行：</p>
       <ol>
         <li><strong>在原宿主正常对话</strong>：Senrelay 对六大核心宿主（Claude Code、Codex、Cursor、Antigravity、Oh My Pi、OpenCode）可索引已接入宿主的本地对话，并由伴生工具记录 <code>working_tasks</code> 与带原话出处的项目记忆。</li>
         <li><strong>在新宿主触发接力</strong>：打开 Codex CLI、Cursor 或 Oh My Pi，输入 <code>/contextcore</code>，或直接说「继续刚才的对话 / 接力」。</li>
@@ -375,11 +375,11 @@
       <div class="boundary-list">
         <div class="boundary-card">
           <h3>何时不应期待接力生效</h3>
-          <p><strong>$0</strong> MIT 开源（<code>v1.0.0-beta.6</code>），仅运行在 <code>macOS 14.0+</code> Apple Silicon（<code>arm64</code>）单机回环服务上。不支持 Windows、Linux 与 Intel Mac；无云同步；其他工具不在支持范围，无法参与接力。</p>
+          <p><strong>$0</strong> MIT 开源（<code>v1.0.0-beta.7</code>），仅运行在 <code>macOS 14.0+</code> Apple Silicon（<code>arm64</code>）单机回环服务上。不支持 Windows、Linux 与 Intel Mac；无云同步；其他工具不在支持范围，无法参与接力。</p>
         </div>
         <div class="boundary-card">
           <h3>仓库与同名项目消歧 + 安装步骤</h3>
-          <p><strong>Senrelay（续境）</strong>对应的官方仓库是 <a class="inline-link" href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">qingsongcui/ContextCore</a>，请与第三方项目 <code>context-core.dev</code> 及无关的 PyPI 包 <code>contextcore</code> 区分。请<a class="inline-link" data-macos-download href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.6/Senrelay-macOS.zip">下载 macOS Beta.6</a>（手动解压后运行 <code>xattr -cr /Applications/Senrelay.app</code>）。由 <strong>Qingsong Cui（George O'Nair）</strong>（<a class="inline-link" href="https://x.com/George_ONair" target="_blank" rel="noopener noreferrer">X @George_ONair</a>）维护，详情见<a class="inline-link" href="./guide.html">运行指南</a>。</p>
+          <p><strong>Senrelay（续境）</strong>对应的官方仓库是 <a class="inline-link" href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">qingsongcui/ContextCore</a>，请与第三方项目 <code>context-core.dev</code> 及无关的 PyPI 包 <code>contextcore</code> 区分。请<a class="inline-link" data-macos-download href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.7/Senrelay-macOS.zip">下载 macOS Beta.7</a>（手动解压后运行 <code>xattr -cr /Applications/Senrelay.app</code>）。由 <strong>Qingsong Cui（George O'Nair）</strong>（<a class="inline-link" href="https://x.com/George_ONair" target="_blank" rel="noopener noreferrer">X @George_ONair</a>）维护，详情见<a class="inline-link" href="./guide.html">运行指南</a>。</p>
         </div>
       </div>
     </section>
@@ -517,11 +517,11 @@ You: 1, run pytest -k webhook first and propose the minimal fix</code></pre>
       <div class="boundary-list">
         <div class="boundary-card">
           <h3>When Senrelay Is the Wrong Tool</h3>
-          <p><strong>$0</strong> under the MIT License (<code>v1.0.0-beta.6</code>), restricted strictly to single-machine <code>macOS 14.0+</code> on Apple Silicon (<code>arm64</code>). Not for Windows, Linux, Intel Macs, cloud multi-device sync, or transcript relay on unsupported tools.</p>
+          <p><strong>$0</strong> under the MIT License (<code>v1.0.0-beta.7</code>), restricted strictly to single-machine <code>macOS 14.0+</code> on Apple Silicon (<code>arm64</code>). Not for Windows, Linux, Intel Macs, cloud multi-device sync, or transcript relay on unsupported tools.</p>
         </div>
         <div class="boundary-card">
           <h3>Disambiguation &amp; Setup</h3>
-          <p><strong>Senrelay</strong> (<a class="inline-link" href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">github.com/qingsongcui/ContextCore</a>) is unrelated to <code>context-core.dev</code> and the PyPI <code>contextcore</code> package. <a class="inline-link" data-macos-download href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.6/Senrelay-macOS.zip">Download macOS Beta.6</a> and clear Beta quarantine with <code>xattr -cr /Applications/Senrelay.app</code>. Built by <strong>Qingsong Cui (George O'Nair)</strong> (<a class="inline-link" href="https://x.com/George_ONair" target="_blank" rel="noopener noreferrer">X @George_ONair</a>)—see the <a class="inline-link" href="./guide.html">Setup Guide</a>.</p>
+          <p><strong>Senrelay</strong> (<a class="inline-link" href="https://github.com/qingsongcui/ContextCore" target="_blank" rel="noopener noreferrer">github.com/qingsongcui/ContextCore</a>) is unrelated to <code>context-core.dev</code> and the PyPI <code>contextcore</code> package. <a class="inline-link" data-macos-download href="https://github.com/qingsongcui/ContextCore/releases/download/v1.0.0-beta.7/Senrelay-macOS.zip">Download macOS Beta.7</a> and clear Beta quarantine with <code>xattr -cr /Applications/Senrelay.app</code>. Built by <strong>Qingsong Cui (George O'Nair)</strong> (<a class="inline-link" href="https://x.com/George_ONair" target="_blank" rel="noopener noreferrer">X @George_ONair</a>)—see the <a class="inline-link" href="./guide.html">Setup Guide</a>.</p>
         </div>
       </div>
     </section>

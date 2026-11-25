@@ -2,7 +2,7 @@
 
 A native macOS app, browser workbench, and local background service that lets multiple AI coding assistants accumulate source-linked project memories, relay conversations across agents in a single command, and manage providers, MCP tools, Skills, and instructions in one place.
 
-[English](README.md) · [中文](README.zh-CN.md) · [Official Website](https://senrelay.com/) · [Setup Guide](https://senrelay.com/guide.html) · [Host Config Paths](https://senrelay.com/hosts.html) · [Cross-Agent Relay Workflow](https://senrelay.com/relay-workflow.html) · [5-Way Comparison](https://senrelay.com/compare.html) · [Public Beta Release (`v1.0.0-beta.6`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.6)
+[English](README.md) · [中文](README.zh-CN.md) · [Official Website](https://senrelay.com/) · [Setup Guide](https://senrelay.com/guide.html) · [Host Config Paths](https://senrelay.com/hosts.html) · [Cross-Agent Relay Workflow](https://senrelay.com/relay-workflow.html) · [5-Way Comparison](https://senrelay.com/compare.html) · [Public Beta Release (`v1.0.0-beta.7`)](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.7)
 
 > **100% Free & Open Source (`$0`, [MIT License](LICENSE)) · No Account Required · Apple Silicon `macOS 14.0+` (`arm64`) Local-First**
 >
@@ -28,7 +28,7 @@ The active product lives in `app/`. The [public specification](docs/SPECIFICATIO
 
 ## Desktop app, pricing, and when NOT to use
 
-The native macOS bundle ships a self-contained Python runtime, backend service (`1.0.0b6`), and frontend workbench; see [desktop build and verification](app/macos/README.md). Current public Beta candidates (`v1.0.0-beta.6`) target **Apple Silicon (`arm64`) on macOS 14.0+** and use ad-hoc signing (`Senrelay-macOS.zip` contains `Senrelay.app` only).
+The native macOS bundle ships a self-contained Python runtime, backend service (`1.0.0b7`), and frontend workbench; see [desktop build and verification](app/macos/README.md). Current public Beta candidates (`v1.0.0-beta.7`) target **Apple Silicon (`arm64`) on macOS 14.0+** and use ad-hoc signing (`Senrelay-macOS.zip` contains `Senrelay.app` only).
 
 - **Pricing & License**: **Free (`$0`, [MIT License](LICENSE))**, with no paid tiers, cloud account, or telemetry. You supply your own API keys stored locally in macOS Keychain.
 - **When NOT to use Senrelay**:
@@ -37,9 +37,9 @@ The native macOS bundle ships a self-contained Python runtime, backend service (
   3. You need configuration management or relay for a tool outside the six supported contexts: those tools are not supported.
   4. You require a **zero-prompt Apple-notarized installer** — Public Beta builds are ad-hoc signed, so first launch requires running `xattr -cr /Applications/Senrelay.app` once.
 
-### Install Beta.6 from ZIP
+### Install Beta.7 from ZIP
 
-1. Download `Senrelay-macOS.zip` from [`v1.0.0-beta.6`](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.6), extract it, and move `Senrelay.app` to `/Applications`;
+1. Download `Senrelay-macOS.zip` from [`v1.0.0-beta.7`](https://github.com/qingsongcui/ContextCore/releases/tag/v1.0.0-beta.7), extract it, and move `Senrelay.app` to `/Applications`;
 2. Run `xattr -cr /Applications/Senrelay.app` in Terminal (or allow it under **System Settings → Privacy & Security → Open Anyway**; source checkouts also include `app/macos/install-macos.sh`).
 
 > **Package naming note**: The `contextcore` CLI ships inside `Senrelay.app` and this source repository (`qingsongcui/ContextCore`). Do **not** run `pip install contextcore` — the `contextcore` package on PyPI is an unrelated third-party project.
@@ -137,7 +137,7 @@ app/backend/.venv/bin/contextcore generate-plist --data-dir "$HOME/.contextcore/
 
 ## Verification gates and boundaries
 
-The [Beta.6 verification record](docs/release-readiness.md#beta6-verification) identifies the current public release, its CI run, and the in-place upgrade checked on the maintainer Mac. The [Beta.4 verification record](docs/release-readiness.md#beta4-verification) keeps that earlier suite count. The [evidence register](docs/evidence.md) documents historical host results and the scope of each check.
+The [Beta.7 verification record](docs/release-readiness.md#beta7-verification) identifies the current public release, its CI run, and the in-place upgrade checked on the maintainer Mac. The [Beta.4 verification record](docs/release-readiness.md#beta4-verification) keeps that earlier suite count. The [evidence register](docs/evidence.md) documents historical host results and the scope of each check.
 
 
 ## Security

@@ -1,12 +1,12 @@
 # Public evidence register
 
-Source package version: `1.0.0-beta.6` (Python package `1.0.0b6`, native macOS short version `1.0.0` plus numeric build number). Surface limits are documented in [support-matrix](support-matrix.md). Requirements: [specification](SPECIFICATION.md). Delivery boundaries: [release readiness](release-readiness.md) and [known issues](known-issues.md).
+Source package version: `1.0.0-beta.7` (Python package `1.0.0b7`, native macOS short version `1.0.0` plus numeric build number). Surface limits are documented in [support-matrix](support-matrix.md). Requirements: [specification](SPECIFICATION.md). Delivery boundaries: [release readiness](release-readiness.md) and [known issues](known-issues.md).
 
 The sections below summarize **verified automated release gates** and **sanitized historical reference records** without publishing private transcripts, credentials, or raw machine dumps.
 
 ## Recorded automated verification gates (beta.2 baseline)
 
-Current public release checks are in [Beta.6 verification](release-readiness.md#beta6-verification). The [Beta.4 verification record](release-readiness.md#beta4-verification) keeps that earlier suite. The table below retains the Beta.2 evidence baseline. On 2026-11-17, the subsequent audit-fix source passed 1,678 backend tests (one opt-in benchmark skipped by default), the explicit 100k usage test file (4 tests), 210 frontend tests across 12 files, 1,523 bilingual keys, and 29 script tests. Its build-3 App passed bundle/archive, six-host hook, data-lifecycle, and bilingual native checks. Beta.3 changes package metadata and requires its own rebuilt artifact checks; the exact release commit, native build number, checksums, and verification scope are recorded in its release attachments and notes. Earlier artifact evidence is not a substitute for that final artifact.
+Current public release checks are in [Beta.7 verification](release-readiness.md#beta7-verification). The [Beta.4 verification record](release-readiness.md#beta4-verification) keeps that earlier suite. The table below retains the Beta.2 evidence baseline. On 2026-11-17, the subsequent audit-fix source passed 1,678 backend tests (one opt-in benchmark skipped by default), the explicit 100k usage test file (4 tests), 210 frontend tests across 12 files, 1,523 bilingual keys, and 29 script tests. Its build-3 App passed bundle/archive, six-host hook, data-lifecycle, and bilingual native checks. Beta.3 changes package metadata and requires its own rebuilt artifact checks; the exact release commit, native build number, checksums, and verification scope are recorded in its release attachments and notes. Earlier artifact evidence is not a substitute for that final artifact.
 
 | Historical verification gate (Beta.2) | Scope & result | Boundary |
 |---|---|---|

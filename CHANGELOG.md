@@ -2,6 +2,13 @@
 
 All notable changes to ContextCore will be documented in this file.
 
+## [1.0.0-beta.7] - 2026-11-24
+
+- Senrelay now supports exactly six Agents: Codex, Oh My Pi, Cursor, Antigravity, Claude Code and OpenCode. Each product has one entry; its desktop app and CLI share that entry and its configuration.
+- Remove the nine extra configuration targets (Pi, Grok Build, Kimi Code, MiniMax Code, Hermes, OpenClaw, Claude Desktop, Gemini CLI, agy). Files Senrelay previously wrote for them are left in place; manage them in those tools.
+- On first start, saved settings that referred to a separate Codex Desktop or Antigravity CLI entry move to Codex or Antigravity, and references to removed tools are dropped so older resources stay editable.
+- Keep sibling sessions in shared Cursor and OpenCode databases apart: an import no longer overwrites another session, and a deleted session is not re-imported.
+
 ## [1.0.0-beta.6] - 2026-11-22
 
 - Stop the local service from waiting forever when a Git checkout's `HEAD` is not a regular file, such as a named pipe. That checkout is reported without a branch instead of blocking memory startup.
